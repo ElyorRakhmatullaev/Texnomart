@@ -1,0 +1,13 @@
+{
+  "name": "texnomart",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:dashboard": "pnpm --filter dashboard dev",
+    "dev:promo": "pnpm --filter promo dev",
+    "build:dashboard": "pnpm --filter dashboard build",
+    "build:promo": "pnpm --filter promo build",
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev"
+  }
+}

@@ -1,0 +1,188 @@
+# Texnomart — Unified Design System
+
+Global design token reference for all Texnomart projects (Dashboard, Promo).
+Source of truth for colors, typography, spacing, and component styling.
+
+## Brand Colors
+
+| Token | Value | Usage |
+|---|---|---|
+| **Primary** | `#FFD60A` | Texnomart yellow — buttons, accents, highlights |
+| **Primary Foreground** | `#000000` | Text on yellow backgrounds |
+| **Background** | `#ffffff` | Page/app background |
+| **Foreground** | `oklch(0.145 0 0)` | Default text color |
+| **Card** | `#ffffff` | Card backgrounds |
+| **Muted** | `#ececf0` | Muted surfaces |
+| **Muted Foreground** | `#717182` | Secondary text |
+| **Accent** | `#e9ebef` | Accent surfaces |
+| **Destructive** | `#d4183d` | Error/destructive actions |
+| **Border** | `rgba(0, 0, 0, 0.1)` | Default borders |
+
+> Yellow is **accent only** — never a large background fill. On-yellow text is always dark (`#000000`).
+
+## Status Colors
+
+### Dashboard (Application Lifecycle)
+| Status | CSS Variable | Hex |
+|---|---|---|
+| New | `--status-new` | `#3B82F6` |
+| Scoring/Pending | `--status-pending` | `#F59E0B` |
+| In Progress | `--status-in-progress` | `#8B5CF6` |
+| Approved | `--status-approved` | `#10B981` |
+| Rejected | `--status-rejected` | `#EF4444` |
+| Cancelled | `--status-cancelled` | `#6B7280` |
+| Completed | `--status-completed` | `#059669` |
+| On Hold | `--status-on-hold` | `#F97316` |
+| Returned | `--status-returned` | `#EC4899` |
+| Expired | `--status-expired` | `#DC2626` |
+| Archived | `--status-archived` | `#9CA3AF` |
+
+### Promo (Semantic)
+| Status | CSS Variable | Hex |
+|---|---|---|
+| Success / Approved | `--status-success` | `#16A34A` |
+| Warning / In Review | `--status-warning` | `#F59E0B` |
+| Destructive / Rejected | `--status-destructive` | `#DC2626` |
+| Info / Handed Off | `--status-info` | `#2563EB` |
+| Neutral | `--status-neutral` | `#9CA3AF` |
+
+## Typography
+
+| Property | Value |
+|---|---|
+| **Font Family** | Inter (400, 500, 600, 700) |
+| **Base Size** | 16px (`--font-size: 16px`) |
+| **Font Source** | Google Fonts: `Inter:wght@400;500;600;700` |
+
+### Type Scale
+| Element | Size | Weight |
+|---|---|---|
+| H1 (page title) | `text-2xl` / 24px (md: 32px) | bold (700) |
+| H2 (section title) | `text-xl` / 20px | medium (500) |
+| H3 | `text-lg` / 18px | medium (500) |
+| H4 / label / button | `text-base` / 16px | medium (500) |
+| Body | `text-sm` / 14px | normal (400) |
+| Caption | `text-xs` / 12px | normal (400) |
+
+### Number Formatting
+- Currency: `toLocaleString("ru-RU")` + `" UZS"` or `" сум"`
+- Phone: `+998 XX XXX-XX-XX`
+- Dates: `date-fns` with `ru` locale
+- Tabular numbers: use `tabular-nums` CSS class
+
+## Spacing Scale
+
+```
+4px  → gap-1, p-1
+8px  → gap-2, p-2
+12px → gap-3, p-3
+16px → gap-4, p-4
+20px → gap-5, p-5
+24px → gap-6, p-6
+32px → gap-8, p-8
+40px → gap-10, p-10
+48px → gap-12, p-12
+```
+
+- **Page gutters**: 24px (desktop), 16px (mobile)
+- **Card padding**: 16-24px
+- **Section gaps**: 24px
+
+## Border Radius
+
+| Token | Value |
+|---|---|
+| `--radius` (base) | `0.625rem` (10px) |
+| `--radius-sm` | `calc(var(--radius) - 4px)` |
+| `--radius-md` | `calc(var(--radius) - 2px)` |
+| `--radius-lg` | `var(--radius)` |
+| `--radius-xl` | `calc(var(--radius) + 4px)` |
+
+## Card Styling
+
+- **Background**: `#ffffff`
+- **Border radius**: 10px (`--radius`)
+- **Shadow**: `0px 2px 4px rgba(204, 204, 204, 0.25)` (Dashboard) / flat (Promo)
+- **Border**: `rgba(0, 0, 0, 0.1)`
+
+## Chart Colors
+
+| Token | Value |
+|---|---|
+| `--chart-1` | `oklch(0.646 0.222 41.116)` |
+| `--chart-2` | `oklch(0.6 0.118 184.704)` |
+| `--chart-3` | `oklch(0.398 0.07 227.392)` |
+| `--chart-4` | `oklch(0.828 0.189 84.429)` |
+| `--chart-5` | `oklch(0.769 0.188 70.08)` |
+
+## Tech Stack (Shared)
+
+| Layer | Technology |
+|---|---|
+| **Styling** | Tailwind CSS v4 (`@tailwindcss/vite` plugin, `@import` syntax) |
+| **UI Kit** | shadcn/ui (Radix primitives) in `packages/ui/` |
+| **Icons** | Lucide React |
+| **Charts** | Recharts 2.x |
+| **Animations** | tw-animate-css |
+| **Build** | Vite 6 + pnpm workspace monorepo |
+| **Framework** | React 18 + TypeScript |
+
+## CSS Architecture
+
+Theme is defined via CSS custom properties in each project's `src/styles/theme.css`:
+
+```css
+:root {
+  --primary: #FFD60A;
+  --primary-foreground: #000000;
+  /* ... */
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  /* ... */
+}
+```
+
+Tailwind v4 reads these via `@theme inline` — no `tailwind.config.js` needed.
+
+## Responsive Breakpoints
+
+| Breakpoint | Width | Usage |
+|---|---|---|
+| `sm` | 640px | Small phones |
+| `md` | 768px | Tables → card lists transition |
+| `lg` | 1024px | Sidebar collapse, modal → sheet |
+| `xl` | 1280px | Full desktop layout |
+
+- Touch targets: minimum 44x44px below md
+- Tables become card lists below md
+- Modals become full-screen Sheets on mobile
+- Sidebar collapses to hamburger Sheet below lg
+
+## UI Patterns (Shared)
+
+| Pattern | Description |
+|---|---|
+| **A** | PageHeader — 64px, H1 + controls |
+| **B** | FilterBar — chips with popover filters |
+| **C** | DataTable — shadcn Table, sticky header |
+| **D** | Detail Page — full route `/entity/:id`, NEVER side drawer |
+| **D2** | Config Drawer — Sheet for settings only |
+| **E** | Create/Edit Modal — Dialog (full-screen Sheet on mobile) |
+| **F** | Frozen Columns — split-pane, NOT sticky on td |
+| **G** | Confirmation Dialog — typed confirmation |
+| **H** | Status Badge — consistent per domain |
+| **I** | Unified States — skeleton, empty, error |
+| **J** | Detail Sub-components — InfoRow, Timeline, Tabs |
+| **K** | Mobile Responsive — sm/md/lg/xl breakpoints |
+
+## Conventions
+
+- All UI text: **Russian** (Русский). Promo additionally uses bilingual labels (RU primary, EN secondary muted).
+- Colors in component code: exact hex via `style={{}}`, never Tailwind arbitrary classes like `bg-[#FFDD2D]`
+- Status badges: soft-tint (light bg + colored text + 1px colored border)
+- Loading: skeleton blocks, never spinners
+- Empty states: Lucide icon 48px + heading + description + CTA
+- shadcn/ui components from `packages/ui/` — DO NOT manually edit
