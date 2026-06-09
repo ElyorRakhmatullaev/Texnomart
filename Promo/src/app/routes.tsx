@@ -1,0 +1,143 @@
+import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
+import { useAuth } from "./components/auth/AuthContext";
+import { AppShell } from "./components/AppShell";
+import { ModulePlaceholder } from "./components/ModulePlaceholder";
+import { ShortCalendarPreview } from "./components/ShortCalendarPreview";
+import { LoginPage } from "./components/auth/LoginPage";
+import { Login2FAPage } from "./components/auth/Login2FAPage";
+import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
+import { ResetPasswordPage } from "./components/auth/ResetPasswordPage";
+
+function ProtectedLayout() {
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <AppShell />;
+}
+
+function GuestLayout() {
+  const { isAuthenticated } = useAuth();
+
+  if (isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <Outlet />;
+}
+
+// ── Module panels (placeholders for the bootstrap; real screens land in S1–S8) ──
+
+function ShortCalendarPage() {
+  return (
+    <ModulePlaceholder
+      title="Краткий промо-календарь"
+      description="Плановые акции, сроки, стадии согласования и готовность по КМ. Статусы авто-вычисляются и доступны только для чтения."
+    >
+      <ShortCalendarPreview />
+    </ModulePlaceholder>
+  );
+}
+
+function FullCalendarPage() {
+  return (
+    <ModulePlaceholder
+      title="Полный промо-календарь"
+      description="Детальный редактируемый грид: номенклатура, цены, рассрочки, компенсации и маркетинговые флаги."
+    />
+  );
+}
+
+function ApprovalsPage() {
+  return (
+    <ModulePlaceholder
+      title="Согласование"
+      description="Очередь проверки для старшего КМ и коммерческого директора, отправка КМ и поток «Не участвует»."
+    />
+  );
+}
+
+function ReportsPage() {
+  return (
+    <ModulePlaceholder
+      title="Отчёты смежным отделам"
+      description="Версионируемые отчёты только для чтения: маркетинг, закуп, аналитика. Ознакомление ≠ согласование."
+    />
+  );
+}
+
+function NotificationsPage() {
+  return (
+    <ModulePlaceholder
+      title="Уведомления"
+      description="Центр уведомлений: новые/изменённые данные, отмена акций, повторное согласование маркетинга."
+      showFilterBar={false}
+    />
+  );
+}
+
+function AuditPage() {
+  return (
+    <ModulePlaceholder
+      title="Аудит-лог"
+      description="Журнал действий и свод контрольных событий по акциям с отметками просрочки."
+    />
+  );
+}
+
+function PromoTypesPage() {
+  return (
+    <ModulePlaceholder
+      title="Настройки типов промо"
+      description="Гибкая настройка обязательных полей для типов промо. Доступно коммерческому директору и администратору."
+    />
+  );
+}
+
+function DetailPlaceholder({ title }: { title: string }) {
+  return (
+    <ModulePlaceholder title={title} showFilterBar={false} />
+  );
+}
+
+export const router = createBrowserRouter([
+  {
+    path: "/login",
+    Component: GuestLayout,
+    children: [
+      { index: true, Component: LoginPage },
+      { path: "2fa", Component: Login2FAPage },
+      { path: "forgot-password", Component: ForgotPasswordPage },
+      { path: "reset-password/:token", Component: ResetPasswordPage },
+    ],
+  },
+  {
+    path: "/",
+    Component: ProtectedLayout,
+    children: [
+      { index: true, element: <Navigate to="/short-calendar" replace /> },
+      { path: "short-calendar", Component: ShortCalendarPage },
+      {
+        path: "short-calendar/:promoId",
+        element: <DetailPlaceholder title="Акция — детальная страница" />,
+      },
+      { path: "full-calendar", Component: FullCalendarPage },
+      { path: "approvals", Component: ApprovalsPage },
+      {
+        path: "approvals/:id",
+        element: <DetailPlaceholder title="Заявка на согласование" />,
+      },
+      { path: "reports", Component: ReportsPage },
+      { path: "notifications", Component: NotificationsPage },
+      { path: "audit", Component: AuditPage },
+      { path: "promo-types", Component: PromoTypesPage },
+      {
+        path: "promo-types/:ruleId",
+        element: <DetailPlaceholder title="Правило типа промо" />,
+      },
+    ],
+  },
+]);

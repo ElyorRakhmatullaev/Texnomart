@@ -1,5 +1,6 @@
 packages:
   - 'Dashboard'
+  - 'Promo'
   - 'packages/*'
 
 allowBuilds:

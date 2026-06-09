@@ -5,6 +5,8 @@
   "scripts": {
     "dev:dashboard": "pnpm --filter dashboard dev",
     "build:dashboard": "pnpm --filter dashboard build",
+    "dev:promo": "pnpm --filter promo dev",
+    "build:promo": "pnpm --filter promo build",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev"
   }
