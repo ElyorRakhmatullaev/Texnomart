@@ -1,0 +1,19 @@
+{
+  "name": "@texnomart/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router": "^7.0.0"
+  },
+  "dependencies": {
+    "@texnomart/ui": "workspace:*",
+    "date-fns": "3.6.0",
+    "lucide-react": "0.487.0"
+  }
+}
