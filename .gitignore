@@ -6,3 +6,6 @@ dist/
 .DS_Store
 DumpStack.log
 DumpStack.log.tmp
+
+# Playwright MCP browser-test scratch output
+.playwright-mcp/
