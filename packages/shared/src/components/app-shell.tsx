@@ -11,6 +11,8 @@ import {
   ChevronRight,
   Menu,
   Bell,
+  Check,
+  UserCog,
 } from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
 import {
@@ -61,14 +63,16 @@ import type {
   BreadcrumbRoute,
   BreadcrumbItem,
   AppShellConfig,
+  RoleSwitcherConfig,
 } from "../types";
 import { useAuth } from "../auth/auth-context";
 
 interface AppSidebarProps {
   config: AppShellConfig;
+  activeRole: string;
 }
 
-function AppSidebarNav({ config }: AppSidebarProps) {
+function AppSidebarNav({ config, activeRole }: AppSidebarProps) {
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const location = useLocation();
@@ -91,7 +95,7 @@ function AppSidebarNav({ config }: AppSidebarProps) {
                   .filter(
                     (item) =>
                       !item.roles ||
-                      item.roles.includes(config.user.role)
+                      item.roles.includes(activeRole)
                   )
                   .map((item) => (
                     <SidebarMenuItem key={item.href}>
@@ -163,12 +167,16 @@ interface AppHeaderProps {
   }>;
   commandContent?: React.ReactNode;
   headerActions?: React.ReactNode;
+  roleSwitcher?: RoleSwitcherConfig;
+  activeRole: string;
 }
 
 function AppHeader({
   config,
   notifications = [],
   headerActions,
+  roleSwitcher,
+  activeRole,
 }: AppHeaderProps) {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -297,6 +305,16 @@ function AppHeader({
 
         {headerActions}
 
+        {roleSwitcher && (
+          <Badge
+            variant="outline"
+            className="hidden md:inline-flex max-w-[180px] truncate border-primary/40 bg-primary/10 text-foreground font-medium"
+            title={activeRole}
+          >
+            <span className="truncate">{activeRole}</span>
+          </Badge>
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="rounded-full">
@@ -307,9 +325,39 @@ function AppHeader({
               </Avatar>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Мой аккаунт</DropdownMenuLabel>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel>
+              <div className="flex flex-col">
+                <span>{config.user.name}</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {activeRole}
+                </span>
+              </div>
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {roleSwitcher && roleSwitcher.roles.length > 1 && (
+              <>
+                <DropdownMenuLabel className="flex items-center gap-2 text-xs font-normal text-muted-foreground">
+                  <UserCog className="size-3.5" />
+                  Активная роль
+                </DropdownMenuLabel>
+                <div className="max-h-56 overflow-y-auto">
+                  {roleSwitcher.roles.map((role) => (
+                    <DropdownMenuItem
+                      key={role}
+                      onClick={() => roleSwitcher.onChange(role)}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="truncate">{role}</span>
+                      {role === activeRole && (
+                        <Check className="size-4 shrink-0 text-foreground" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem onClick={() => navigate("/profile")}>
               Профиль
             </DropdownMenuItem>
@@ -419,6 +467,8 @@ interface AppShellProps {
   }>;
   commandContent?: React.ReactNode;
   headerActions?: React.ReactNode;
+  /** Optional role switcher for role-based apps; omit for single-role apps. */
+  roleSwitcher?: RoleSwitcherConfig;
   maxWidth?: string;
 }
 
@@ -427,9 +477,11 @@ export function AppShell({
   notifications,
   commandContent,
   headerActions,
+  roleSwitcher,
   maxWidth = "1400px",
 }: AppShellProps) {
   const location = useLocation();
+  const activeRole = roleSwitcher?.current ?? config.user.role;
 
   const breadcrumbs = React.useMemo(
     () => generateBreadcrumbs(location.pathname, config.breadcrumbRoutes),
@@ -439,13 +491,15 @@ export function AppShell({
   return (
     <SidebarProvider defaultOpen>
       <div className="flex h-screen w-full overflow-hidden">
-        <AppSidebarNav config={config} />
+        <AppSidebarNav config={config} activeRole={activeRole} />
         <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
           <AppHeader
             config={config}
             notifications={notifications}
             commandContent={commandContent}
             headerActions={headerActions}
+            roleSwitcher={roleSwitcher}
+            activeRole={activeRole}
           />
           <AppBreadcrumbs items={breadcrumbs} />
           <main className="flex-1 p-3 md:p-4 overflow-auto min-h-0 bg-gray-50 dark:bg-background">

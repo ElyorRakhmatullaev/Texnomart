@@ -27,6 +27,11 @@ export function formatCurrency(amount: number): string {
   return `${amount.toLocaleString("ru-RU")} UZS`;
 }
 
+/** Uzbek so'm with space thousands separators, e.g. "1 299 000 сум". */
+export function formatSum(amount: number): string {
+  return `${amount.toLocaleString("ru-RU")} сум`;
+}
+
 export function formatCompactCurrency(amount: number): string {
   if (amount >= 1_000_000_000) {
     return `${(amount / 1_000_000_000).toFixed(1)} млрд`;

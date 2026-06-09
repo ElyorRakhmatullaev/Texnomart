@@ -56,3 +56,18 @@ export interface AppShellConfig {
   searchPlaceholder?: string;
   collapseLabel?: string;
 }
+
+/**
+ * Optional role switcher for role-based apps (e.g. Texnomart Promo).
+ * When provided to <AppShell>, the active role drives nav/role gating and is
+ * shown as a pill next to the avatar plus a switcher inside the user menu.
+ * When omitted, the shell falls back to config.user.role (unchanged behavior).
+ */
+export interface RoleSwitcherConfig {
+  /** All roles the current user may act as. */
+  roles: string[];
+  /** The single role currently active. */
+  current: string;
+  /** Called when the user picks a different role. */
+  onChange: (role: string) => void;
+}
