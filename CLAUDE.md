@@ -9,6 +9,7 @@ Monorepo containing Texnomart web applications with a shared design system, comp
 | Project | Path | Description | Status |
 |---|---|---|---|
 | **Broker Dashboard** | `Dashboard/` | BNPL credit broker admin panel (23 routes, React Router) | Active |
+| **Texnomart Promo** | `Promo/` | Promo-calendar: planning & approval of promo campaigns (role-based, 10 routes) | Active — bootstrap + Master shell done; screens S1–S8 pending |
 | **Shared UI** | `packages/ui/` | shadcn/ui component library (46 components + 2 utilities) | Active |
 | **Shared Patterns** | `packages/shared/` | Reusable pattern components, auth, hooks, formatters | Active |
 
@@ -36,7 +37,8 @@ Texnomart/
 │   └── rules/                  # Layer-specific rules (design, etc.)
 ├── docs/                       # Global documentation
 │   ├── AI_CONTEXT.md           # Current project state snapshot
-│   └── dashboard_prompt_pack_part2.md  # Broker Dashboard page specs
+│   ├── dashboard_prompt_pack_part2.md  # Broker Dashboard page specs
+│   └── promo_prompt_pack.md    # Texnomart Promo prompt pack (Foundation + Master + S1–S8)
 ├── tasks/
 │   └── lessons.md              # Shared lessons & gotchas
 ├── packages/
@@ -56,6 +58,11 @@ Texnomart/
 │   ├── package.json
 │   ├── vite.config.ts
 │   └── src/
+├── Promo/                      # Texnomart Promo app (promo-calendar)
+│   ├── CLAUDE.md               # Promo-specific context (routes, roles, primitives)
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── src/                    # app/ (shell, routes, role-context), components/ (primitives), lib/ (mock data)
 ├── CLAUDE.md                   # This file — monorepo root
 ├── HISTORY.md                  # Change history (all projects)
 ├── styles-config.md            # Unified design token reference
@@ -81,9 +88,13 @@ Texnomart/
 pnpm install                    # Install all dependencies
 pnpm dev:dashboard              # Start Broker Dashboard dev server
 pnpm build:dashboard            # Build Broker Dashboard
+pnpm dev:promo                  # Start Texnomart Promo dev server
+pnpm build:promo                # Build Texnomart Promo
 pnpm build                      # Build all projects
 pnpm dev                        # Start all dev servers in parallel
 ```
+
+> **Note**: `pnpm` may not be on PATH; if so, prefix commands with `corepack` (e.g. `corepack pnpm install`). corepack ships with Node.
 
 > **Note**: pnpm v11 requires build script approvals. `pnpm-workspace.yaml` has `allowBuilds` set to `true` for `@tailwindcss/oxide` and `esbuild`. If `pnpm install` fails with `ERR_PNPM_IGNORED_BUILDS`, check that file.
 
@@ -249,8 +260,10 @@ Status colors are defined as CSS variables in each project's `src/styles/theme.c
 ## Project-Specific Docs
 
 - `Dashboard/CLAUDE.md` — Broker Dashboard routes, pages, mock data, conventions
+- `Promo/CLAUDE.md` — Texnomart Promo routes, 9-role switcher, primitives, mock data (bootstrap + Master shell done; S1–S8 pending)
 - `docs/AI_CONTEXT.md` — Current state snapshot, known issues, next steps
 - `docs/dashboard_prompt_pack_part2.md` — Broker Dashboard page specs (14 prompts)
+- `docs/promo_prompt_pack.md` — Texnomart Promo (promo-calendar) prompt pack: Foundation + Master + S1–S8 sections + Appendices, monorepo-adapted
 
 ## Custom Commands
 

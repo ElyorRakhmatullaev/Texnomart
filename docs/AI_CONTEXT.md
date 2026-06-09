@@ -9,6 +9,7 @@ All UI is mock data — no backend or API integration exists yet. Architecture, 
 | Project | Status |
 |---|---|
 | **Broker Dashboard** | All 14 prompt pack pages complete, 23 routes. Prototype stage (mock data). |
+| **Texnomart Promo** | Bootstrap + Master shell complete — runnable app (`pnpm dev:promo`): auth, 7-module nav, 9-role switcher, Promo primitives, seed mock data. Module screens (S1–S8) are placeholders. See `Promo/CLAUDE.md`. |
 
 ## Known Issues & TODOs
 
@@ -24,6 +25,8 @@ All UI is mock data — no backend or API integration exists yet. Architecture, 
 - [ ] No API layer
 - [ ] ApplicationsPage list needs mobile Pattern K
 - [ ] Detail pages other than Applications still use sticky action bars (can float mid-screen on short tabs); Applications uses the flex-column fixed-footer layout — consider converting the rest for consistency
+- [ ] **Promo**: module screens S1–S8 are placeholders (only the shell + short-calendar preview exist)
+- [ ] **Promo**: the «Скрыть отменённое» FilterBar switch is cosmetic in the bootstrap (real filtering lands with S1)
 
 ## Next Steps
 
@@ -32,3 +35,4 @@ All UI is mock data — no backend or API integration exists yet. Architecture, 
 3. Cleanup: legacy `ApplicationDetailDrawer.tsx`, unused MUI/Emotion deps
 4. Dark mode visual QA
 5. i18n for Uzbek language support
+6. Build out **Texnomart Promo** screens S1–S8 from `docs/promo_prompt_pack.md` (bootstrap + Master shell done) — start with S1 (Краткий промо-календарь) and S2 (Полный промо-календарь грид)
