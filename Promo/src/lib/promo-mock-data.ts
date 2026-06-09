@@ -242,6 +242,24 @@ export const CAMPAIGNS: PromoCampaign[] = [
     planStatus: "Утверждён",
   },
   {
+    // Near-term planned campaign: its «заполнение КМ» deadline (start − 21 кал. дн.)
+    // has already passed relative to today, so the short calendar shows an OverdueTag.
+    id: "PR-2026-007",
+    type: "Рассрочка 0-0-6",
+    name: "Летняя рассрочка на смартфоны",
+    planned: true,
+    cancelled: false,
+    startDate: new Date(2026, 5, 22),
+    endDate: new Date(2026, 6, 5),
+    status: "На согласовании у старшего КМ",
+    participatingKmIds: ["km-3", "km-5"],
+    kmStatuses: {
+      "km-3": "Не заполнено / Ожидание корректировки от КМ",
+      "km-5": "На согласовании у старшего КМ",
+    },
+    planStatus: "Утверждён",
+  },
+  {
     // Unplanned — no № промо in the short calendar; system-generated id.
     id: "UN-2026-014",
     type: "Товар в подарок",
@@ -280,6 +298,96 @@ export function getCampaignById(id: string): PromoCampaign | undefined {
 
 export function getCategoryManager(id: string): CategoryManager | undefined {
   return CATEGORY_MANAGERS.find((km) => km.id === id);
+}
+
+// ── Deadlines (spec §4.4 — all CALENDAR days, tied to a date) ──────────────────
+
+/** «Крайний срок заполнения КМ» = 21 calendar days before the campaign start. */
+export function getFillDeadline(campaign: PromoCampaign): Date {
+  const d = new Date(campaign.startDate);
+  d.setDate(d.getDate() - 21);
+  return d;
+}
+
+/**
+ * Whole calendar days a deadline is overdue relative to `ref` (default: now).
+ * 0 (or negative) means not overdue. Never blocks — purely a signal (spec).
+ */
+export function getOverdueDays(deadline: Date, ref: Date = new Date()): number {
+  const ms = ref.getTime() - deadline.getTime();
+  if (ms <= 0) return 0;
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
+}
+
+// ── Aggregated indicators (short-calendar row right side — spec §4.6) ──────────
+
+export interface KmAggregate {
+  /** «На согл. с КД» — submitted & in the КД pipeline (senior-KM step rolls in here). */
+  atKd: number;
+  /** «Принято КД». */
+  acceptedKd: number;
+  /** «Не заполнено / Ожидание корректировки от КМ». */
+  notFilled: number;
+  /** «Не участвует». */
+  notParticipating: number;
+}
+
+/**
+ * Roll a campaign's per-(Promo+КМ) statuses into the four aggregated indicators.
+ * The intermediate senior-КМ step is NOT a separate chip — it rolls into «На согл. с КД»
+ * (everything submitted and not yet accepted/declined and not «Не участвует»).
+ */
+export function aggregateKmStatuses(campaign: PromoCampaign): KmAggregate {
+  const agg: KmAggregate = {
+    atKd: 0,
+    acceptedKd: 0,
+    notFilled: 0,
+    notParticipating: 0,
+  };
+  for (const kmId of campaign.participatingKmIds) {
+    switch (campaign.kmStatuses[kmId]) {
+      case "Принято коммерческим директором":
+        agg.acceptedKd++;
+        break;
+      case "Не заполнено / Ожидание корректировки от КМ":
+        agg.notFilled++;
+        break;
+      case "Не участвует":
+        agg.notParticipating++;
+        break;
+      case "На согласовании у старшего КМ":
+      case "Согласовано старшим КМ (ожидает КД)":
+      case "На согласовании у коммерческого директора":
+        agg.atKd++;
+        break;
+    }
+  }
+  return agg;
+}
+
+// ── Plan workflow (spec §4.2.6, §4.3.2) ────────────────────────────────────────
+
+/** The multi-level plan approval chain, in order. */
+export const PLAN_APPROVAL_CHAIN: PromoRole[] = [
+  "Директор маркетинга",
+  "Коммерческий директор",
+  "Операционный директор",
+];
+
+/** Which role must act on a plan in the given plan-level status (undefined = terminal). */
+export function actorForPlanStatus(status: PlanStatus): PromoRole | undefined {
+  switch (status) {
+    case "На ознакомлении":
+    case "На обсуждении":
+      return "Директор маркетинга";
+    case "На согл. с КД":
+      return "Коммерческий директор";
+    case "На согл. с ОД":
+      return "Операционный директор";
+    case "Утверждён":
+    case "Отклонён":
+      return undefined;
+  }
 }
 
 /**

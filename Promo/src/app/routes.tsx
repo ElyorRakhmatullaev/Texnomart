@@ -2,7 +2,8 @@ import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router
 import { useAuth } from "./components/auth/AuthContext";
 import { AppShell } from "./components/AppShell";
 import { ModulePlaceholder } from "./components/ModulePlaceholder";
-import { ShortCalendarPreview } from "./components/ShortCalendarPreview";
+import { ShortCalendarPage } from "./components/short-calendar/ShortCalendarPage";
+import { ShortCalendarDetailPage } from "./components/short-calendar/ShortCalendarDetailPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { Login2FAPage } from "./components/auth/Login2FAPage";
 import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
@@ -30,17 +31,6 @@ function GuestLayout() {
 }
 
 // ── Module panels (placeholders for the bootstrap; real screens land in S1–S8) ──
-
-function ShortCalendarPage() {
-  return (
-    <ModulePlaceholder
-      title="Краткий промо-календарь"
-      description="Плановые акции, сроки, стадии согласования и готовность по КМ. Статусы авто-вычисляются и доступны только для чтения."
-    >
-      <ShortCalendarPreview />
-    </ModulePlaceholder>
-  );
-}
 
 function FullCalendarPage() {
   return (
@@ -122,7 +112,7 @@ export const router = createBrowserRouter([
       { path: "short-calendar", Component: ShortCalendarPage },
       {
         path: "short-calendar/:promoId",
-        element: <DetailPlaceholder title="Акция — детальная страница" />,
+        Component: ShortCalendarDetailPage,
       },
       { path: "full-calendar", Component: FullCalendarPage },
       { path: "approvals", Component: ApprovalsPage },
