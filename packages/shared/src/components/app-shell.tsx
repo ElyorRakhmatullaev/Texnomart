@@ -25,7 +25,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
   useSidebar,
 } from "@texnomart/ui/sidebar";
 import {
@@ -70,7 +69,7 @@ interface AppSidebarProps {
 }
 
 function AppSidebarNav({ config }: AppSidebarProps) {
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const location = useLocation();
 
@@ -128,16 +127,22 @@ function AppSidebarNav({ config }: AppSidebarProps) {
       <SidebarFooter className="border-t border-sidebar-border p-3">
         <Tooltip>
           <TooltipTrigger asChild>
-            <div>
-              <SidebarTrigger className="flex w-full items-center gap-2 h-8 rounded-md p-2 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
-                <PanelLeft className="size-4 shrink-0" />
-                {!isCollapsed && (
-                  <span className="flex-1 truncate">
-                    {config.collapseLabel ?? "Свернуть"}
-                  </span>
-                )}
-              </SidebarTrigger>
-            </div>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label={config.collapseLabel ?? "Свернуть"}
+              className={cn(
+                "flex w-full items-center gap-2 h-8 rounded-md p-2 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors",
+                isCollapsed && "justify-center"
+              )}
+            >
+              <PanelLeft className="size-4 shrink-0" />
+              {!isCollapsed && (
+                <span className="flex-1 truncate text-left">
+                  {config.collapseLabel ?? "Свернуть"}
+                </span>
+              )}
+            </button>
           </TooltipTrigger>
           <TooltipContent side="right" align="center" hidden={!isCollapsed}>
             {config.collapseLabel ?? "Свернуть"}
@@ -443,8 +448,8 @@ export function AppShell({
             headerActions={headerActions}
           />
           <AppBreadcrumbs items={breadcrumbs} />
-          <main className="flex-1 p-3 md:p-4 overflow-auto min-h-0">
-            <div className="mx-auto" style={{ maxWidth }}>
+          <main className="flex-1 p-3 md:p-4 overflow-auto min-h-0 bg-gray-50 dark:bg-background">
+            <div className="mx-auto h-full" style={{ maxWidth }}>
               <Outlet />
             </div>
           </main>
