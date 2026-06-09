@@ -471,13 +471,15 @@ function PartnersTab({ branch }: { branch: Branch }) {
       </div>
 
       {hasChanges && (
-        <div className="sticky bottom-0 bg-white border-t px-4 py-3 -mx-4 -mb-4 flex items-center justify-end gap-3">
-          <Button variant="ghost" onClick={() => { setPartners(branch.partners); setHasChanges(false); }}>
-            Отменить
-          </Button>
-          <Button className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90" onClick={() => setHasChanges(false)}>
-            Сохранить изменения
-          </Button>
+        <div className="sticky bottom-[-0.75rem] md:bottom-[-1rem] z-10 -mx-3 -mb-3 md:-mx-4 md:-mb-4 bg-white border-t border-gray-200 px-3 md:px-4 py-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
+            <Button variant="ghost" className="min-h-[44px] sm:min-h-0" onClick={() => { setPartners(branch.partners); setHasChanges(false); }}>
+              Отменить
+            </Button>
+            <Button className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90 min-h-[44px] sm:min-h-0" onClick={() => setHasChanges(false)}>
+              Сохранить изменения
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -777,17 +779,19 @@ function PrioritiesTab({ branch }: { branch: Branch }) {
 
       {/* Sticky save bar */}
       {hasChanges && (
-        <div className="sticky bottom-0 bg-white border-t px-4 py-3 -mx-4 -mb-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-          <Button variant="secondary" size="sm" onClick={handleApplyToAllDays}>
-            Применить ко всем дням
-          </Button>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={() => { setSchedule(branch.schedule); setHasChanges(false); }}>
-              Отменить
+        <div className="sticky bottom-[-0.75rem] md:bottom-[-1rem] z-10 -mx-3 -mb-3 md:-mx-4 md:-mb-4 bg-white border-t border-gray-200 px-3 md:px-4 py-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+            <Button variant="secondary" size="sm" className="min-h-[44px] sm:min-h-0" onClick={handleApplyToAllDays}>
+              Применить ко всем дням
             </Button>
-            <Button className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90" onClick={() => setHasChanges(false)}>
-              Сохранить расписание
-            </Button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <Button variant="ghost" className="min-h-[44px] sm:min-h-0" onClick={() => { setSchedule(branch.schedule); setHasChanges(false); }}>
+                Отменить
+              </Button>
+              <Button className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90 min-h-[44px] sm:min-h-0" onClick={() => setHasChanges(false)}>
+                Сохранить расписание
+              </Button>
+            </div>
           </div>
         </div>
       )}

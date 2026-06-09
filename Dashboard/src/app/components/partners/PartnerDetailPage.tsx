@@ -392,11 +392,13 @@ function TermsTab({ partner }: { partner: Partner }) {
       </Card>
 
       {/* Sticky save bar */}
-      <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 -mx-4 px-8 py-3 flex items-center justify-end gap-3">
-        <Button variant="ghost">Отменить</Button>
-        <Button className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90">
-          Сохранить изменения
-        </Button>
+      <div className="sticky bottom-[-0.75rem] md:bottom-[-1rem] z-10 -mx-3 -mb-3 md:-mx-4 md:-mb-4 bg-white border-t border-gray-200 px-3 md:px-6 py-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
+          <Button variant="ghost" className="min-h-[44px] sm:min-h-0">Отменить</Button>
+          <Button className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90 min-h-[44px] sm:min-h-0">
+            Сохранить изменения
+          </Button>
+        </div>
       </div>
     </div>
   );

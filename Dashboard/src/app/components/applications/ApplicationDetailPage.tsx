@@ -192,8 +192,8 @@ export function ApplicationDetailPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-auto min-h-0">
-      <div className="space-y-6 pb-8 px-4 md:px-6">
+      <div className="flex-1 min-h-0 overflow-auto [scrollbar-gutter:stable]">
+        <div className="space-y-6 pb-4">
         {/* Back Navigation */}
         <button
           onClick={() => navigate("/applications")}
@@ -262,7 +262,7 @@ export function ApplicationDetailPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="summary">
-          <TabsList className="bg-transparent border-b border-gray-200 rounded-none p-0 h-12 w-full justify-start gap-0">
+          <TabsList className="bg-transparent border-b border-gray-200 rounded-none p-0 h-12 w-full justify-start gap-1 overflow-x-auto overflow-y-hidden">
             {[
               { value: "summary", label: "Сводка" },
               { value: "client", label: "Клиент" },
@@ -275,7 +275,7 @@ export function ApplicationDetailPage() {
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#FFD60A] data-[state=active]:bg-transparent data-[state=active]:text-gray-900 data-[state=active]:shadow-none text-gray-500 hover:text-gray-700 px-4 h-12 text-sm font-medium min-w-fit"
+                className="relative -mb-px rounded-none rounded-t-md border-b-2 border-transparent flex-none px-4 h-12 text-sm font-medium whitespace-nowrap text-gray-500 transition-colors hover:text-gray-900 hover:bg-gray-50 data-[state=active]:border-[#FFD60A] data-[state=active]:text-gray-900 data-[state=active]:font-semibold data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
                 {tab.label}
               </TabsTrigger>
@@ -804,19 +804,21 @@ export function ApplicationDetailPage() {
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
+        </div>
       </div>
 
       {/* Fixed Action Bar */}
-      <div className="shrink-0 -mx-4 -mb-4 bg-gray-50 border-t border-gray-200 px-8 md:px-10 py-3 flex items-center justify-between">
-        <Button variant="ghost" size="sm" className="gap-2 text-gray-600">
-          <FileDown className="size-4" />
-          Скачать PDF договора
-        </Button>
-        <Button variant="ghost" size="sm" className="gap-2 text-gray-600">
-          <Copy className="size-4" />
-          Скопировать ID
-        </Button>
+      <div className="shrink-0 -mx-3 -mb-3 md:-mx-4 md:-mb-4 bg-white border-t border-gray-200 px-3 md:px-6 py-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <Button variant="ghost" size="sm" className="gap-2 text-gray-600 min-h-[44px] sm:min-h-0">
+            <FileDown className="size-4" />
+            Скачать PDF договора
+          </Button>
+          <Button variant="ghost" size="sm" className="gap-2 text-gray-600 min-h-[44px] sm:min-h-0">
+            <Copy className="size-4" />
+            Скопировать ID
+          </Button>
+        </div>
       </div>
     </div>
   );

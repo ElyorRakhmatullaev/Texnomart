@@ -282,10 +282,10 @@ export function AuditDetailPage() {
       )}
 
       {/* Sticky bottom: open object */}
-      <div className="sticky bottom-0 -mx-4 -mb-4 bg-white border-t p-4">
-        <div className="mx-auto max-w-[1400px] flex justify-end">
+      <div className="sticky bottom-[-0.75rem] md:bottom-[-1rem] z-10 -mx-3 -mb-3 md:-mx-4 md:-mb-4 bg-white border-t border-gray-200 px-3 md:px-6 py-3">
+        <div className="flex justify-end">
           <Button
-            className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90"
+            className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90 min-h-[44px] sm:min-h-0 w-full sm:w-auto"
             onClick={() => navigate(entry.objectHref)}
           >
             Открыть объект

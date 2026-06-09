@@ -462,14 +462,16 @@ export function UserDetailPage() {
       </Tabs>
 
       {/* Sticky Action Bar */}
-      <div className="sticky bottom-0 -mx-4 -mb-4 bg-white border-t px-6 py-3 flex items-center justify-between">
-        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50">
-          <Trash2 className="h-4 w-4 mr-2" />
-          Удалить пользователя
-        </Button>
-        <Button size="sm" className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90" disabled>
-          Сохранить изменения
-        </Button>
+      <div className="sticky bottom-[-0.75rem] md:bottom-[-1rem] z-10 -mx-3 -mb-3 md:-mx-4 md:-mb-4 bg-white border-t border-gray-200 px-3 md:px-6 py-3">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50 min-h-[44px] sm:min-h-0">
+            <Trash2 className="h-4 w-4 mr-2" />
+            Удалить пользователя
+          </Button>
+          <Button size="sm" className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90 min-h-[44px] sm:min-h-0" disabled>
+            Сохранить изменения
+          </Button>
+        </div>
       </div>
     </div>
   );
