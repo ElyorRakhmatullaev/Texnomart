@@ -1,6 +1,6 @@
 # Texnomart — Unified Design System
 
-Global design token reference for all Texnomart projects (Dashboard, Promo).
+Global design token reference for all Texnomart sub-projects.
 Source of truth for colors, typography, spacing, and component styling.
 
 ## Brand Colors
@@ -22,7 +22,7 @@ Source of truth for colors, typography, spacing, and component styling.
 
 ## Status Colors
 
-### Dashboard (Application Lifecycle)
+### Application Lifecycle
 | Status | CSS Variable | Hex |
 |---|---|---|
 | New | `--status-new` | `#3B82F6` |
@@ -36,15 +36,6 @@ Source of truth for colors, typography, spacing, and component styling.
 | Returned | `--status-returned` | `#EC4899` |
 | Expired | `--status-expired` | `#DC2626` |
 | Archived | `--status-archived` | `#9CA3AF` |
-
-### Promo (Semantic)
-| Status | CSS Variable | Hex |
-|---|---|---|
-| Success / Approved | `--status-success` | `#16A34A` |
-| Warning / In Review | `--status-warning` | `#F59E0B` |
-| Destructive / Rejected | `--status-destructive` | `#DC2626` |
-| Info / Handed Off | `--status-info` | `#2563EB` |
-| Neutral | `--status-neutral` | `#9CA3AF` |
 
 ## Typography
 
@@ -102,7 +93,7 @@ Source of truth for colors, typography, spacing, and component styling.
 
 - **Background**: `#ffffff`
 - **Border radius**: 10px (`--radius`)
-- **Shadow**: `0px 2px 4px rgba(204, 204, 204, 0.25)` (Dashboard) / flat (Promo)
+- **Shadow**: `0px 2px 4px rgba(204, 204, 204, 0.25)`
 - **Border**: `rgba(0, 0, 0, 0.1)`
 
 ## Chart Colors
@@ -180,7 +171,7 @@ Tailwind v4 reads these via `@theme inline` — no `tailwind.config.js` needed.
 
 ## Conventions
 
-- All UI text: **Russian** (Русский). Promo additionally uses bilingual labels (RU primary, EN secondary muted).
+- All UI text: **Russian** (Русский).
 - Colors in component code: exact hex via `style={{}}`, never Tailwind arbitrary classes like `bg-[#FFDD2D]`
 - Status badges: soft-tint (light bg + colored text + 1px colored border)
 - Loading: skeleton blocks, never spinners
