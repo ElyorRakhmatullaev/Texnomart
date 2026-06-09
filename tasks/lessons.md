@@ -149,3 +149,27 @@ Documented mistakes, gotchas, and learnings from project work. Never remove old 
 - When multiple pages share the same structural element (e.g., page H1 title), the class/style must be identical everywhere — each page being built by a separate prompt leads to drift (different `text-*` sizes, `font-semibold` vs `font-bold`, `sm:` vs `md:` breakpoints)
 - **Fix**: define a single canonical class for shared elements (e.g., `text-2xl md:text-[32px] font-bold leading-tight text-gray-900` for page titles) and document it in `.claude/rules/design.md` so new pages follow the same pattern
 - When adding a new page, grep existing pages for the same structural element to match their styling rather than choosing a size ad hoc
+
+---
+
+## 2026-06-08 — Shared Package Extraction
+
+### Re-export Pattern for Backwards-Compatible Extraction
+- When extracting a module (e.g., auth) from a project into a shared package, existing consumers don't need to change if the original file becomes a re-export: `export { AuthProvider, useAuth } from "@texnomart/shared/auth/auth-context"`
+- This avoids a large, risky diff across many files — the real import path change is confined to one file per module
+- Works well when the shared module's API is identical to the original; if the API changes, consumer updates are unavoidable anyway
+
+### Config-Driven AppShell over Hardcoded Routes
+- A layout shell with hardcoded nav items, breadcrumb routes, and logos can only serve one project — extracting it as a shared component requires making everything configurable via a data object (`AppShellConfig`)
+- Breadcrumb generation with 27+ if/else cases should be replaced with a route table + regex matching for parameterized routes (`:id` patterns) — this scales to any number of routes and sub-projects
+- Each sub-project defines a `shell-config.tsx` file with its own nav groups, breadcrumb routes, logos, and user info — the shared AppShell renders whatever config it receives
+
+### Three-Tier Component Architecture
+- `@texnomart/ui` (shadcn primitives, auto-generated, DO NOT edit) → `@texnomart/shared` (hand-written pattern components like AppShell, InfoRow, StatusBadge) → per-project feature components
+- The middle tier (`@texnomart/shared`) is where components that implement project-wide patterns (Patterns A–K) live — they are editable, unlike ui primitives
+- When deciding where a new component belongs: if it's a shadcn/ui primitive → `@texnomart/ui`; if it implements a shared pattern used across projects → `@texnomart/shared`; if it's specific to one project's business logic → that project's `src/app/components/`
+
+### pnpm Workspace Package Exports
+- The `"exports": {"./*": "./src/*"}` pattern in package.json enables deep imports like `@texnomart/shared/components/info-row` without an index barrel file
+- This avoids circular dependencies and keeps tree-shaking effective — consumers import exactly what they need
+- Vite path aliases must match: `'@texnomart/shared': path.resolve(__dirname, '../packages/shared/src')`
