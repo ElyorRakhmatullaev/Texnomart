@@ -26,12 +26,13 @@ Check `.claude/rules/` for rule files relevant to the task. Read any that match 
 
 Read `tasks/lessons.md` for documented mistakes, gotchas, and learnings from previous work. Pay attention to entries related to the current task type. If the file doesn't exist, note that and continue.
 
-## Step 4: Identify Affected Modules & Layers
+## Step 4: Identify Affected Modules & Load Sub-Project Context
 
 Based on the task description:
 - List which module(s) will be affected
 - List which layers will be touched (UI, logic, data, API, config, tests)
 - Flag any cross-module dependencies
+- Read the affected sub-project's `CLAUDE.md` (e.g., `Dashboard/CLAUDE.md`) for project-specific routes, structure, and conventions. If more than one sub-project is affected, read all of them.
 
 ## Step 5: Load Current Project State
 

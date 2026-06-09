@@ -22,10 +22,9 @@
 - Colors in code: exact hex via `style={{}}`, never Tailwind arbitrary classes like `bg-[#FFDD2D]`
 
 ## Language
-- **Dashboard**: All text in Russian (Русский)
-- **Promo**: Bilingual — Russian primary, English secondary (smaller/muted)
+- All text in **Russian** (Русский)
 
-## UI Patterns (Shared)
+## UI Patterns (Shared Across Projects)
 - **Page title (H1)**: `text-2xl md:text-[32px] font-bold leading-tight text-gray-900`
 - **Pattern A** — PageHeader: 64px, H1 + controls
 - **Pattern B** — FilterBar: chips with popover filters
@@ -39,9 +38,6 @@
 - **Pattern I** — Unified States: skeleton loading, empty, error
 - **Pattern J** — Detail Sub-components: InfoRow, Timeline, Tabs
 - **Pattern K** — Mobile Responsive: sm/md/lg/xl breakpoints, tables→card lists, 44px touch targets
-- **Pattern N** — Notification Overlay: right-side Sheet (Promo)
-- **Pattern R** — Split Review: side-by-side at lg+ (Promo)
-- **Pattern S** — Settings/Config Page: left-right master-detail (Promo)
 
 ## Mobile Responsiveness (Pattern K)
 - Breakpoints: sm(640)/md(768)/lg(1024)/xl(1280)
@@ -55,3 +51,9 @@
 - Loading: Skeleton blocks matching final shape, never spinners
 - Empty states: Lucide icon 48px + heading + description + CTA button
 - Error states: icon + message + "Повторить" button
+
+## New Sub-Project Styling
+- Copy `src/styles/` structure from an existing project (index.css, tailwind.css, theme.css, fonts.css)
+- Include `@source` for `packages/ui/` in tailwind.css
+- Reuse the same CSS variables and theme tokens
+- All design rules in this file apply to every sub-project

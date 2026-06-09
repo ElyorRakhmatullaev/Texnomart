@@ -21,10 +21,10 @@ If no focus area specified, sync everything.
 Read all existing doc/context files:
 - `CLAUDE.md` (root) — monorepo overview
 - `styles-config.md` (root) — unified design tokens
-- `Dashboard/CLAUDE.md` — Dashboard-specific context
-- `Dashboard/docs/AI_CONTEXT.md` — Dashboard project state
-- `Promo/CLAUDE.md` — Promo-specific context
-- `Promo/docs/AI_CONTEXT.md` — Promo project state
+- `docs/AI_CONTEXT.md` — project state snapshot
+- `HISTORY.md` — change history
+- `tasks/lessons.md` — shared lessons & gotchas
+- `Dashboard/CLAUDE.md` — Broker Dashboard-specific context
 - `.claude/rules/` — all rule files
 
 Then scan the actual project to find what has changed:
@@ -44,7 +44,8 @@ Update each file as needed. Key checks:
 - Are shared UI component counts accurate?
 - Are project dependencies current?
 - Are design tokens in styles-config.md matching theme.css files?
-- Are route/page lists up to date?
+- Are route/page lists up to date per sub-project?
+- Are monorepo structure diagrams current?
 
 ## Step 4: Report
 

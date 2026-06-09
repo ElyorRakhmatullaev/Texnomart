@@ -12,17 +12,15 @@ Classify each changed file into a topic group:
 1. **Shared UI** — `packages/ui/src/*` (shadcn components, utils)
 2. **Root Config** — `package.json`, `pnpm-workspace.yaml`, `.gitignore`, `CLAUDE.md`, `styles-config.md`
 3. **Rules & Commands** — `.claude/rules/*`, `.claude/commands/*`
-4. **Dashboard: Styles & Tokens** — `Dashboard/src/styles/*`
-5. **Dashboard: Mock Data** — `Dashboard/src/lib/*`
-6. **Dashboard: Auth** — `Dashboard/src/app/components/auth/*`
-7. **Dashboard: Layout & Shell** — `Dashboard/src/app/components/AppShell.tsx`, `Dashboard/src/app/routes.tsx`
-8. **Dashboard: Pages** — `Dashboard/src/app/components/<module>/*`
-9. **Dashboard: Config** — `Dashboard/package.json`, `Dashboard/vite.config.ts`, `Dashboard/CLAUDE.md`
-10. **Promo: Styles** — `Promo/src/styles/*`
-11. **Promo: App Shell** — `Promo/src/App.tsx`
-12. **Promo: Pages** — `Promo/src/pages/*`
-13. **Promo: Config** — `Promo/package.json`, `Promo/vite.config.ts`, `Promo/CLAUDE.md`
-14. **Docs** — `*/docs/*`, `*/HISTORY.md`, `*/tasks/*`
+4. **Docs** — `docs/*`, `HISTORY.md`, `tasks/*`
+5. **Dashboard: Styles & Tokens** — `Dashboard/src/styles/*`
+6. **Dashboard: Mock Data** — `Dashboard/src/lib/*`
+7. **Dashboard: Auth** — `Dashboard/src/app/components/auth/*`
+8. **Dashboard: Layout & Shell** — `Dashboard/src/app/components/AppShell.tsx`, `Dashboard/src/app/routes.tsx`
+9. **Dashboard: Pages** — `Dashboard/src/app/components/<module>/*`
+10. **Dashboard: Config** — `Dashboard/package.json`, `Dashboard/vite.config.ts`, `Dashboard/CLAUDE.md`
+
+> When a new sub-project is added, duplicate groups 5-10 for it (e.g., "Promo: Styles", "Promo: Pages", etc.)
 
 If files are tightly coupled for one logical change, group them together.
 
