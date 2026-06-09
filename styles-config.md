@@ -20,6 +20,16 @@ Source of truth for colors, typography, spacing, and component styling.
 
 > Yellow is **accent only** — never a large background fill. On-yellow text is always dark (`#000000`).
 
+### Layout Surfaces
+
+| Surface | Color | Notes |
+|---|---|---|
+| Sidebar | `#ffffff` (`--sidebar`) | White; divider via `--sidebar-border` (light gray) |
+| Header / Breadcrumb | `#ffffff` (`bg-background`) | White, sticky top |
+| Main content area | `bg-gray-50` (`#f9fafb`) | Subtly gray so white cards stand out (`dark:bg-background`) |
+
+> `--background` (`#ffffff`) remains the base token (body, header, cards). The `<main>` content area overrides it with `bg-gray-50` in the shared AppShell.
+
 ## Status Colors
 
 ### Application Lifecycle
@@ -168,6 +178,22 @@ Tailwind v4 reads these via `@theme inline` — no `tailwind.config.js` needed.
 | **I** | Unified States — skeleton, empty, error |
 | **J** | Detail Sub-components — InfoRow, Timeline, Tabs |
 | **K** | Mobile Responsive — sm/md/lg/xl breakpoints |
+
+### Underline Tabs (Pattern J)
+
+Detail-page tabs use an underline style, not pills:
+- **TabsList**: `bg-transparent border-b border-gray-200 rounded-none p-0 h-12 justify-start gap-1 overflow-x-auto overflow-y-hidden`
+- **TabsTrigger**: `flex-none` (content-width, NOT stretched), `px-4`, `-mb-px` so the active underline overlaps the list divider
+- **Active**: `text-gray-900 font-semibold` + `border-b-2 border-[#FFD60A]`; **inactive**: `text-gray-500` with `hover:text-gray-900 hover:bg-gray-50`
+- Scroll container holding tabbed content should use `[scrollbar-gutter:stable]` to avoid width shift between tabs.
+
+### Fixed Footer / Action Bar (Detail Pages)
+
+For an always-present bottom action bar that stays pinned (even on short content), use the flex-column pattern:
+- Root: `h-full flex flex-col` → scroll area `flex-1 min-h-0 overflow-auto` → bar `shrink-0`
+- Requires the AppShell content wrapper to pass `h-full` down (already configured)
+- Bar breaks out of `<main>` padding with `-mx-3 -mb-3 md:-mx-4 md:-mb-4` (margins match `<main>`'s `p-3 md:p-4`)
+- Buttons stack on mobile (`flex-col sm:flex-row`), 44px touch targets
 
 ## Conventions
 

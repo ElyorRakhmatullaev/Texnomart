@@ -23,6 +23,7 @@ All UI is mock data — no backend or API integration exists yet. Architecture, 
 - [ ] No tests
 - [ ] No API layer
 - [ ] ApplicationsPage list needs mobile Pattern K
+- [ ] Detail pages other than Applications still use sticky action bars (can float mid-screen on short tabs); Applications uses the flex-column fixed-footer layout — consider converting the rest for consistency
 
 ## Next Steps
 

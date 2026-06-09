@@ -178,6 +178,7 @@ Key values:
 - **Border radius**: 0.625rem (10px)
 - **Spacing**: 4/8/12/16/20/24/32/40/48px
 - **Card shadow**: `0px 2px 4px rgba(204, 204, 204, 0.25)`
+- **Surfaces**: sidebar + header + breadcrumb = white; main content area = `bg-gray-50` (white cards sit on a subtly gray surface)
 
 ### Status Colors (Application Lifecycle)
 
