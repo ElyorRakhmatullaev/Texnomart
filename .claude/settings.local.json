@@ -15,5 +15,9 @@
       "Bash(git commit *)",
       "Bash(git push *)"
     ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true
   }
 }
