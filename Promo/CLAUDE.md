@@ -9,7 +9,7 @@ Internal, role-based B2B workspace for planning and approving **planned & unplan
 
 ## Status
 
-**Bootstrap + Master shell complete.** The app runs (`pnpm dev:promo`): auth flow, 7-module nav, the 9-role switcher, Promo primitives, and seed mock data. Module screens are **placeholders** — the real screens (S1–S8) are the next tasks.
+**Bootstrap + Master shell + S1 complete.** The app runs (`pnpm dev:promo`): auth flow, 7-module nav, the 9-role switcher, Promo primitives, seed mock data, and the real **Краткий промо-календарь (S1)** screen. The remaining module screens (S2–S8) are **placeholders**.
 
 ## Commands
 
@@ -35,8 +35,13 @@ Promo/
       shell-config.tsx              # createPromoShellConfig(role): nav, breadcrumbs, logos, badges
       components/
         AppShell.tsx                # thin wrapper over @texnomart/shared AppShell + role switcher + command search
-        ModulePlaceholder.tsx       # titled placeholder + demo FilterBar + in-progress empty state
-        ShortCalendarPreview.tsx    # seeded-campaign preview (proves data + primitives)
+        ModulePlaceholder.tsx       # titled placeholder + demo FilterBar + in-progress empty state (S2–S8)
+        short-calendar/             # S1 — Краткий промо-календарь
+          ShortCalendarPage.tsx     #   PageHeader + mode Tabs + FilterBar + table / mobile list
+          ShortCalendarTable.tsx    #   Pattern F split-pane grid (frozen identity + scrolling per-КМ pane)
+          AggregatedIndicators.tsx  #   §4.6 four count-chips cluster
+          PlanMode.tsx              #   «План акций» stepper + role-aware approval + create-row dialog
+          ShortCalendarDetailPage.tsx #  Pattern D full page /short-calendar/:promoId
         auth/                       # Login, 2FA, ForgotPassword, ResetPassword, AuthLayout, AuthContext (re-export), RequireAuth (re-export)
     components/                     # Promo-specific shared primitives (reused by every screen)
       PromoStatusBadge.tsx          # wraps shared StatusBadge; full status map (Appendix A)
@@ -56,8 +61,8 @@ Promo/
 |---|---|---|
 | `/login` `/login/2fa` `/login/forgot-password` `/login/reset-password/:token` | auth pages | Done (shared mock auth) |
 | `/` | → redirects to `/short-calendar` | Done |
-| `/short-calendar` | ShortCalendarPage (preview) | Placeholder + seed preview |
-| `/short-calendar/:promoId` | detail placeholder | Placeholder (S1) |
+| `/short-calendar` | ShortCalendarPage | **Done (S1)** — table + «План акций» mode |
+| `/short-calendar/:promoId` | ShortCalendarDetailPage | **Done (S1)** — Pattern D full page |
 | `/full-calendar` | FullCalendarPage | Placeholder (S2) |
 | `/approvals` `/approvals/:id` | ApprovalsPage | Placeholder (S3) |
 | `/reports` | ReportsPage | Placeholder (S5) |
