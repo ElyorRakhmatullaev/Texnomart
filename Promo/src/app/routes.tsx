@@ -4,6 +4,7 @@ import { AppShell } from "./components/AppShell";
 import { ModulePlaceholder } from "./components/ModulePlaceholder";
 import { ShortCalendarPage } from "./components/short-calendar/ShortCalendarPage";
 import { ShortCalendarDetailPage } from "./components/short-calendar/ShortCalendarDetailPage";
+import { FullCalendarPage } from "./components/full-calendar/FullCalendarPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { Login2FAPage } from "./components/auth/Login2FAPage";
 import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
@@ -31,15 +32,6 @@ function GuestLayout() {
 }
 
 // ── Module panels (placeholders for the bootstrap; real screens land in S1–S8) ──
-
-function FullCalendarPage() {
-  return (
-    <ModulePlaceholder
-      title="Полный промо-календарь"
-      description="Детальный редактируемый грид: номенклатура, цены, рассрочки, компенсации и маркетинговые флаги."
-    />
-  );
-}
 
 function ApprovalsPage() {
   return (

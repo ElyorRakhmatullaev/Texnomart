@@ -365,6 +365,290 @@ export function aggregateKmStatuses(campaign: PromoCampaign): KmAggregate {
   return agg;
 }
 
+// ── Full promo calendar: lines (S2 — spec §6, §8) ──────────────────────────────
+// One PromoLine = one nomenclature line within a campaign, owned by one КМ.
+// All 38 Appendix-C fields are derived from these seeds (computed installment
+// columns via the helpers below; identity/calendar fields from the campaign).
+
+export interface WarehouseStock {
+  warehouse: string;
+  qty: number;
+}
+
+export interface PromoLine {
+  id: string;
+  campaignId: string;
+  /** Owner КМ — gates editing (КМ edits own lines only). */
+  kmId: string;
+  nomenclatureId: string;
+  /** Остаток — seeded from 1С, editable by КМ (field 9). */
+  stock: number;
+  /** ✏️ true when the остаток was overridden manually (autoupdate stopped). */
+  stockManual: boolean;
+  /** Новая цена (розничная), field 12. */
+  newPrice: number;
+  /** Скидка, % от полной оплаты, field 13. */
+  discountPct: number;
+  /** Регулярные продажи, field 14 (optional). */
+  regularSales?: number;
+  /** Прогноз продаж, field 15 — REQUIRED (blocks send for approval if empty). */
+  salesForecast?: number;
+  /** Скидка, % за Cash, field 31. */
+  cashDiscountPct?: number;
+  /** 12-мес «старый» ежемесячный платёж, field 19 (manual base; rest computed). */
+  oldMonthly12?: number;
+  /** Gift fields — only for типы «1+1» / «Товар в подарок» (fields 32–33). */
+  giftNomenclatureId?: string;
+  giftStock?: number;
+  /** Компенсация от поставщика / лимит (fields 34–35). */
+  supplierCompensation?: number;
+  compensationLimit?: number;
+  /** УТП, field 36 (optional). */
+  utp?: string;
+  /** «В рекламу (рекомендация КМ)» / «(выбрано маркетингом)» (fields 37–38). */
+  advRecommendedKm: boolean;
+  advSelectedMarketing: boolean;
+  /** Row-level review feedback (shared with S3): rejected line + reviewer comment. */
+  rejected?: boolean;
+  rejectComment?: string;
+  /** Duplicate marker — same nomenclature already in this/overlapping promo (§8.2.1). */
+  duplicate?: boolean;
+  /** 1С availability — saved as draft awaiting a 1С re-check (§8.3). */
+  pending1CCheck?: boolean;
+}
+
+// Compact seed — newPrice / discount derived from the nomenclature's old retail price.
+type LineSeed = {
+  id: string;
+  campaignId: string;
+  kmId: string;
+  nomenclatureId: string;
+  /** Discount fraction off the old retail price (drives newPrice + discountPct). */
+  off: number;
+  forecast?: number;
+  regular?: number;
+  cash?: number;
+  stockManual?: boolean;
+  rejected?: boolean;
+  rejectComment?: string;
+  duplicate?: boolean;
+  pending1CCheck?: boolean;
+  gift?: string;
+  utp?: string;
+  advKm?: boolean;
+  advMkt?: boolean;
+  supplierCompensation?: number;
+  compensationLimit?: number;
+};
+
+const LINE_SEED: LineSeed[] = [
+  // PR-2026-001 «Чёрная пятница 2026» (Скидка) — km-1, km-2, km-3, km-6
+  { id: "L-0001", campaignId: "PR-2026-001", kmId: "km-1", nomenclatureId: "1C-10001", off: 0.15, forecast: 120, regular: 35, cash: 5, advKm: true, advMkt: true },
+  { id: "L-0002", campaignId: "PR-2026-001", kmId: "km-1", nomenclatureId: "1C-10003", off: 0.18, forecast: 200, regular: 80, advKm: true, duplicate: true },
+  { id: "L-0003", campaignId: "PR-2026-001", kmId: "km-2", nomenclatureId: "1C-10006", off: 0.12, forecast: 60, regular: 18, cash: 3 },
+  // missing forecast → invalid until filled (red required marker)
+  { id: "L-0004", campaignId: "PR-2026-001", kmId: "km-3", nomenclatureId: "1C-10011", off: 0.1, regular: 90, advKm: true },
+  { id: "L-0005", campaignId: "PR-2026-001", kmId: "km-6", nomenclatureId: "1C-10026", off: 0.2, forecast: 150, rejected: true, rejectComment: "Скидка ниже минимальной маржи по категории — пересчитайте новую цену." },
+
+  // PR-2026-002 «Рассрочка на технику к Новому году» (Рассрочка 0-0-12) — km-2, km-4, km-5
+  { id: "L-0006", campaignId: "PR-2026-002", kmId: "km-5", nomenclatureId: "1C-10021", off: 0.08, forecast: 40, pending1CCheck: true },
+  { id: "L-0007", campaignId: "PR-2026-002", kmId: "km-4", nomenclatureId: "1C-10016", off: 0.14, forecast: 25, stockManual: true },
+
+  // PR-2026-005 «Cashback на смартфоны» (Переотправлено на корректировку) — km-3
+  { id: "L-0008", campaignId: "PR-2026-005", kmId: "km-3", nomenclatureId: "1C-10013", off: 0.16, forecast: 300, rejected: true, rejectComment: "Уточните остаток — расходится с данными 1С." },
+
+  // UN-2026-014 «Подарок к ноутбукам (внеплановая)» (Товар в подарок) — km-5
+  { id: "L-0009", campaignId: "UN-2026-014", kmId: "km-5", nomenclatureId: "1C-10022", off: 0.05, forecast: 15, gift: "1C-10018", utp: "Мультиварка в подарок к каждому MacBook" },
+];
+
+function roundTo(value: number, step: number): number {
+  return Math.round(value / step) * step;
+}
+
+export const PROMO_LINES: PromoLine[] = LINE_SEED.map((s) => {
+  const nom = NOMENCLATURE.find((n) => n.id === s.nomenclatureId);
+  const oldPrice = nom?.oldRetailPrice ?? 0;
+  const newPrice = roundTo(oldPrice * (1 - s.off), 10_000);
+  const discountPct = oldPrice ? Math.round((1 - newPrice / oldPrice) * 100) : 0;
+  const giftNom = s.gift ? NOMENCLATURE.find((n) => n.id === s.gift) : undefined;
+  return {
+    id: s.id,
+    campaignId: s.campaignId,
+    kmId: s.kmId,
+    nomenclatureId: s.nomenclatureId,
+    stock: nom?.stock ?? 0,
+    stockManual: s.stockManual ?? false,
+    newPrice,
+    discountPct,
+    regularSales: s.regular,
+    salesForecast: s.forecast,
+    cashDiscountPct: s.cash,
+    oldMonthly12: roundTo(oldPrice / 12, 1_000),
+    giftNomenclatureId: s.gift,
+    giftStock: giftNom ? giftNom.stock : undefined,
+    supplierCompensation: s.supplierCompensation,
+    compensationLimit: s.compensationLimit,
+    utp: s.utp,
+    advRecommendedKm: s.advKm ?? false,
+    advSelectedMarketing: s.advMkt ?? false,
+    rejected: s.rejected,
+    rejectComment: s.rejectComment,
+    duplicate: s.duplicate,
+    pending1CCheck: s.pending1CCheck,
+  };
+});
+
+export function getNomenclatureItem(id: string): NomenclatureItem | undefined {
+  return NOMENCLATURE.find((n) => n.id === id);
+}
+
+/** Lines for a campaign, in seed order. */
+export function getPromoLines(campaignId: string): PromoLine[] {
+  return PROMO_LINES.filter((l) => l.campaignId === campaignId);
+}
+
+/** Campaigns that have at least one full-calendar line, in CAMPAIGNS order. */
+export function getCampaignsWithLines(): PromoCampaign[] {
+  const ids = new Set(PROMO_LINES.map((l) => l.campaignId));
+  return CAMPAIGNS.filter((c) => ids.has(c.id));
+}
+
+// ── Installment programs (spec §8.5) — monthly payments auto-calculated ─────────
+// Simplified illustrative model: equal monthly split with a small per-term markup.
+// Exact bank formulas are out of scope for the mock.
+
+/** Program monthly payment for a flat N-month split (0-0-6 / 0-0-12 / 50-0-2). */
+export function programMonthly(fullPrice: number, months: number, prepayFraction = 0): number {
+  const financed = fullPrice * (1 - prepayFraction);
+  return Math.round(financed / months);
+}
+
+/** Per-term markup factor applied to the full installment price (12 / 24 / 36 мес). */
+const TERM_FACTOR: Record<number, number> = { 12: 1.0, 24: 1.08, 36: 1.16 };
+
+export interface InstallmentTerm {
+  months: number;
+  /** Ежемесячный платёж по старой цене (field 19/23/27). */
+  oldMonthly: number;
+  /** Ежемесячный платёж по новой цене (field 20/24/28). */
+  newMonthly: number;
+  /** Размер скидки за период (field 21/25/29). */
+  discount: number;
+  /** Полная цена (новая) за период (field 22/26/30). */
+  newFullPrice: number;
+}
+
+/** Compute the four 12/24/36-month installment fields for a line. */
+export function installmentTerm(
+  line: PromoLine,
+  oldRetailPrice: number,
+  months: 12 | 24 | 36
+): InstallmentTerm {
+  const factor = TERM_FACTOR[months];
+  const newFullPrice = roundTo(line.newPrice * factor, 1_000);
+  const oldFullPrice = roundTo(oldRetailPrice * factor, 1_000);
+  return {
+    months,
+    oldMonthly: Math.round(oldFullPrice / months),
+    newMonthly: Math.round(newFullPrice / months),
+    discount: oldFullPrice - newFullPrice,
+    newFullPrice,
+  };
+}
+
+// ── 1С stock breakdown (per-warehouse, read-only — spec §8.2.2) ─────────────────
+
+const WAREHOUSES = [
+  "Ташкент — Центральный",
+  "Ташкент — Юнусабад",
+  "Самарканд",
+  "Бухара",
+  "Андижан",
+];
+const WAREHOUSE_WEIGHTS = [0.38, 0.27, 0.16, 0.11, 0.08];
+
+/**
+ * Deterministic per-warehouse split of a nomenclature's остаток (sums to total).
+ * Source = 1С, read-only; the остаток cell's Popover renders this in S2.
+ */
+export function getWarehouseBreakdown(nomenclatureId: string): WarehouseStock[] {
+  const item = NOMENCLATURE.find((n) => n.id === nomenclatureId);
+  if (!item) return [];
+  const total = item.stock;
+  const seed = parseInt(nomenclatureId.replace(/\D/g, ""), 10) || 0;
+  const rows = WAREHOUSES.map((warehouse, i) => {
+    // Rotate the weights by the seed so different SKUs split differently.
+    const weight = WAREHOUSE_WEIGHTS[(i + seed) % WAREHOUSE_WEIGHTS.length];
+    return { warehouse, qty: Math.floor(total * weight) };
+  });
+  // Assign the rounding remainder to the largest bucket so the split is exact.
+  const assigned = rows.reduce((s, r) => s + r.qty, 0);
+  if (rows.length) rows[0].qty += total - assigned;
+  return rows;
+}
+
+// ── Full-calendar access (Appendix D) ──────────────────────────────────────────
+
+export interface FullCalendarAccess {
+  /** Whether the role may open the full calendar at all. */
+  canView: boolean;
+  /** Roles that fill/edit their own lines (КМ, Старший КМ, Администратор). */
+  canEditOwnLines: boolean;
+  /** Сотрудник маркетинга — may only toggle «В рекламу (выбрано маркетингом)». */
+  marketingFlagOnly: boolean;
+  /** Short RU description of what this role can do here (for the access banner). */
+  note: string;
+}
+
+export function getFullCalendarAccess(role: PromoRole): FullCalendarAccess {
+  switch (role) {
+    case "Категорийный менеджер (КМ)":
+    case "Старший КМ":
+      return {
+        canView: true,
+        canEditOwnLines: true,
+        marketingFlagOnly: false,
+        note: "Заполнение и редактирование только своих строк; направление старшему КМ.",
+      };
+    case "Администратор":
+      return {
+        canView: true,
+        canEditOwnLines: true,
+        marketingFlagOnly: false,
+        note: "Технический доступ (полный).",
+      };
+    case "Коммерческий директор":
+      return {
+        canView: true,
+        canEditOwnLines: false,
+        marketingFlagOnly: false,
+        note: "Просмотр всех строк, согласование и отклонение версий КМ.",
+      };
+    case "Операционный директор":
+      return {
+        canView: true,
+        canEditOwnLines: false,
+        marketingFlagOnly: false,
+        note: "Просмотр после утверждения коммерческим директором.",
+      };
+    case "Сотрудник маркетинга":
+      return {
+        canView: true,
+        canEditOwnLines: false,
+        marketingFlagOnly: true,
+        note: "Доступно изменение только поля «В рекламу (выбрано маркетингом)».",
+      };
+    default:
+      // Директор маркетинга, Сотрудник закупа, Сотрудник аналитики — нет доступа.
+      return {
+        canView: false,
+        canEditOwnLines: false,
+        marketingFlagOnly: false,
+        note: "Нет доступа к полному промо-календарю.",
+      };
+  }
+}
+
 // ── Plan workflow (spec §4.2.6, §4.3.2) ────────────────────────────────────────
 
 /** The multi-level plan approval chain, in order. */
