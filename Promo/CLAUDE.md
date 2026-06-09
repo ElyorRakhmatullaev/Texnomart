@@ -9,7 +9,7 @@ Internal, role-based B2B workspace for planning and approving **planned & unplan
 
 ## Status
 
-**Bootstrap + Master shell + S1 complete.** The app runs (`pnpm dev:promo`): auth flow, 7-module nav, the 9-role switcher, Promo primitives, seed mock data, and the real **Краткий промо-календарь (S1)** screen. The remaining module screens (S2–S8) are **placeholders**.
+**Bootstrap + Master shell + S1 complete; S2 grid skeleton (Phase 1) complete.** The app runs (`pnpm dev:promo`): auth flow, 7-module nav, the 9-role switcher, Promo primitives, seed mock data, the real **Краткий промо-календарь (S1)** screen, and the **Полный промо-календарь (S2)** read-only grid skeleton (Pattern F split-pane, 38-field dictionary, role gating, column-group chooser, inert action bar). S2 Phases 2–5 (inline editing, nomenclature entry, Excel import, 1С states, unplanned creation, mobile) and screens S3–S8 are **pending** (S3–S8 still placeholders).
 
 ## Commands
 
@@ -42,6 +42,11 @@ Promo/
           AggregatedIndicators.tsx  #   §4.6 four count-chips cluster
           PlanMode.tsx              #   «План акций» stepper + role-aware approval + create-row dialog
           ShortCalendarDetailPage.tsx #  Pattern D full page /short-calendar/:promoId
+        full-calendar/              # S2 — Полный промо-календарь (Phase 1: read-only grid skeleton)
+          FullCalendarPage.tsx      #   shell: role gate + PageHeader + column chooser + FilterBar + inert fixed-footer action bar
+          FullCalendarGrid.tsx      #   Pattern F split-pane grid (frozen № промо/ФИО КМ/Номенклатура + scrolling 38-field block), campaign group bands, lock/required/rejected/duplicate/1С markers
+          gridFields.ts             #   38-field column dictionary (Appendix C): groups, widths, source→lock, required
+          ColumnGroupToggle.tsx     #   «Колонки N из 5» popover with group checkboxes
         auth/                       # Login, 2FA, ForgotPassword, ResetPassword, AuthLayout, AuthContext (re-export), RequireAuth (re-export)
     components/                     # Promo-specific shared primitives (reused by every screen)
       PromoStatusBadge.tsx          # wraps shared StatusBadge; full status map (Appendix A)
@@ -51,7 +56,7 @@ Promo/
       VersionHistoryDrawer.tsx      # right Sheet, version list + «только изменения» toggle (stub → S4)
       DeadlineChips.tsx             # calendar-deadline chips (46/21/17 дн., «календарные»)
     lib/
-      promo-mock-data.ts            # seed: 8 campaigns, 6 КМ, 30 SKUs, 7 promo types, helpers
+      promo-mock-data.ts            # seed: 8 campaigns, 6 КМ, 30 SKUs, 7 promo types; S2 PromoLine model + 9 lines, warehouse breakdown, installment + full-calendar-access helpers
     styles/                         # index/tailwind/theme/fonts/globals (copied from Dashboard)
 ```
 
@@ -63,7 +68,7 @@ Promo/
 | `/` | → redirects to `/short-calendar` | Done |
 | `/short-calendar` | ShortCalendarPage | **Done (S1)** — table + «План акций» mode |
 | `/short-calendar/:promoId` | ShortCalendarDetailPage | **Done (S1)** — Pattern D full page |
-| `/full-calendar` | FullCalendarPage | Placeholder (S2) |
+| `/full-calendar` | FullCalendarPage | **Done (S2 — Phase 1)** — read-only Pattern F grid skeleton (Phases 2–5 pending) |
 | `/approvals` `/approvals/:id` | ApprovalsPage | Placeholder (S3) |
 | `/reports` | ReportsPage | Placeholder (S5) |
 | `/notifications` | NotificationsPage | Placeholder (S6) |
