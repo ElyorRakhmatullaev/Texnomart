@@ -9,7 +9,7 @@ Internal, role-based B2B workspace for planning and approving **planned & unplan
 
 ## Status
 
-**Bootstrap + Master shell + S1 complete; S2 Phases 1–3 complete.** The app runs (`pnpm dev:promo`): auth flow, 7-module nav, the 9-role switcher, Promo primitives, seed mock data, the real **Краткий промо-календарь (S1)** screen, and the **Полный промо-календарь (S2)** editable grid (Pattern F split-pane, 38-field dictionary, role gating, column-group chooser; **Phase 2**: inline editing of КМ fields with live validation, остаток ✏️ + warehouse-breakdown popover, installment auto-recalc, gift conditional fields, «В рекламу» checkboxes + bulk-select, and a functional draft/submit action bar — mock toasts; **Phase 3**: nomenclature entry via a searchable 1С Command picker (no free-text), duplicate-check confirm dialog with a persistent «дубль» marker + line history, and a gift-nomenclature picker). S2 Phases 4–5 (Excel import + full 1С states, unplanned creation, mobile per-line Sheet) and screens S3–S8 are **pending** (S3–S8 still placeholders).
+**Bootstrap + Master shell + S1 complete; S2 Phases 1–4 complete.** The app runs (`pnpm dev:promo`): auth flow, 7-module nav, the 9-role switcher, Promo primitives, seed mock data, the real **Краткий промо-календарь (S1)** screen, and the **Полный промо-календарь (S2)** editable grid (Pattern F split-pane, 38-field dictionary, role gating, column-group chooser; **Phase 2**: inline editing of КМ fields with live validation, остаток ✏️ + warehouse-breakdown popover, installment auto-recalc, gift conditional fields, «В рекламу» checkboxes + bulk-select, and a functional draft/submit action bar — mock toasts; **Phase 3**: nomenclature entry via a searchable 1С Command picker (no free-text), duplicate-check confirm dialog with a persistent «дубль» marker + line history, and a gift-nomenclature picker; **Phase 4**: Excel/CSV bulk import with a per-row validation preview, and the 1С-availability flow — «Ожидает проверки 1С» banner + re-check + submit gate). S2 Phase 5 (unplanned creation, mobile per-line Sheet) and screens S3–S8 are **pending** (S3–S8 still placeholders).
 
 ## Commands
 
@@ -42,11 +42,12 @@ Promo/
           AggregatedIndicators.tsx  #   §4.6 four count-chips cluster
           PlanMode.tsx              #   «План акций» stepper + role-aware approval + create-row dialog
           ShortCalendarDetailPage.tsx #  Pattern D full page /short-calendar/:promoId
-        full-calendar/              # S2 — Полный промо-календарь (Phases 1–3: editable grid + nomenclature entry)
-          FullCalendarPage.tsx      #   shell: role gate + PageHeader + column chooser + FilterBar + editable line store (useReducer Map: edit/add/bulkAdv) + bulk-select strip + live-validation fixed-footer action bar (functional draft/submit, mock toasts); hosts the add/gift nomenclature pickers + duplicate-confirm dialog
-          FullCalendarGrid.tsx      #   Pattern F split-pane grid (frozen select/№ промо/ФИО КМ/Номенклатура + scrolling 38-field block); editable КМ cells, editable «В рекламу» checkboxes, row/group select for bulk; per-band «+ Добавить номенклатуру», clickable gift-nomenclature cell; campaign group bands, lock/required/rejected/duplicate(+info tooltip)/1С markers
+        full-calendar/              # S2 — Полный промо-календарь (Phases 1–4: editable grid + nomenclature entry + Excel import & 1С states)
+          FullCalendarPage.tsx      #   shell: role gate + PageHeader + column chooser + FilterBar + editable line store (useReducer Map: edit/add/addMany/recheck1C/bulkAdv) + bulk-select strip + non-blocking 1С «Ожидает проверки» banner (re-check) + live-validation fixed-footer action bar (draft/submit gated on validity AND no pending 1С); hosts the add/gift pickers, duplicate-confirm dialog, and the Excel-import dialog
+          FullCalendarGrid.tsx      #   Pattern F split-pane grid (frozen select/№ промо/ФИО КМ/Номенклатура + scrolling 38-field block); editable КМ cells, editable «В рекламу» checkboxes, row/group select for bulk; per-band «+ Добавить номенклатуру», clickable gift-nomenclature cell; campaign group bands, amber tint + lock/required/rejected/duplicate(+info tooltip)/1С markers
           EditableCell.tsx          #   inline number/money/percent/text input — commit on blur/Enter, Esc cancels, required «не заполнено» marker + ✏️ manual pencil; fixed height keeps panes aligned
           AddNomenclatureDialog.tsx #   searchable 1С-reference Command picker in a Dialog (§8.2.1, no free-text); reused for adding a line AND picking gift nomenclature
+          ExcelImportDialog.tsx     #   Excel/CSV bulk import (§8.2.1): campaign select + «Скачать шаблон» + drag-drop/«Вставить пример» + per-row validation preview (Готово/Дубль/Ошибка + reason); imports non-error rows as drafts (pending 1С)
           WarehousePopover.tsx      #   per-warehouse остаток breakdown + total (§8.2.2, read-only from 1С); native-button trigger beside the editable остаток
           gridFields.ts             #   38-field column dictionary (Appendix C): groups, widths, source→lock (km editable incl. giftNomenclature; auto/1С/calc locked), required
           ColumnGroupToggle.tsx     #   «Колонки N из 5» popover with group checkboxes
@@ -59,7 +60,7 @@ Promo/
       VersionHistoryDrawer.tsx      # right Sheet, version list + «только изменения» toggle (stub → S4)
       DeadlineChips.tsx             # calendar-deadline chips (46/21/17 дн., «календарные»)
     lib/
-      promo-mock-data.ts            # seed: 8 campaigns, 6 КМ, 30 SKUs, 7 promo types; S2 PromoLine model + 9 lines, warehouse breakdown, installment + full-calendar-access helpers, isGiftType / missingRequiredFields / isLineValid validators; Phase 3: createPromoLine factory, detectDuplicate (+DuplicateHit), LineHistoryEntry
+      promo-mock-data.ts            # seed: 8 campaigns, 6 КМ, 30 SKUs, 7 promo types; S2 PromoLine model + 9 lines, warehouse breakdown, installment + full-calendar-access helpers, isGiftType / missingRequiredFields / isLineValid validators; Phase 3: createPromoLine factory, detectDuplicate (+DuplicateHit), LineHistoryEntry; Phase 4: IMPORT_COLUMNS, buildImportTemplateCsv/buildImportSampleCsv, parseImportCsv (+ParsedImportRow/ImportParseResult), createImportedLine
     styles/                         # index/tailwind/theme/fonts/globals (copied from Dashboard)
 ```
 
@@ -71,7 +72,7 @@ Promo/
 | `/` | → redirects to `/short-calendar` | Done |
 | `/short-calendar` | ShortCalendarPage | **Done (S1)** — table + «План акций» mode |
 | `/short-calendar/:promoId` | ShortCalendarDetailPage | **Done (S1)** — Pattern D full page |
-| `/full-calendar` | FullCalendarPage | **Done (S2 — Phases 1–3)** — editable Pattern F grid: inline editing, live validation, warehouse popover, bulk-select, functional action bar, nomenclature entry (1С Command picker) + duplicate check + gift picker (Phases 4–5 pending) |
+| `/full-calendar` | FullCalendarPage | **Done (S2 — Phases 1–4)** — editable Pattern F grid: inline editing, live validation, warehouse popover, bulk-select, functional action bar, nomenclature entry (1С Command picker) + duplicate check + gift picker, Excel/CSV import + 1С availability banner/re-check/submit gate (Phase 5 pending) |
 | `/approvals` `/approvals/:id` | ApprovalsPage | Placeholder (S3) |
 | `/reports` | ReportsPage | Placeholder (S5) |
 | `/notifications` | NotificationsPage | Placeholder (S6) |
