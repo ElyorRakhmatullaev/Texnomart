@@ -568,6 +568,17 @@ const LINE_SEED: LineSeed[] = [
 
   // UN-2026-014 «Подарок к ноутбукам (внеплановая)» (Товар в подарок) — km-5
   { id: "L-0009", campaignId: "UN-2026-014", kmId: "km-5", nomenclatureId: "1C-10022", off: 0.05, forecast: 15, gift: "1C-10018", utp: "Мультиварка в подарок к каждому MacBook" },
+
+  // Review-queue coverage (S3): a line set for every (Promo + КМ) pair that is
+  // pending a reviewer, so the согласование snapshot is never empty.
+  // PR-2026-002 km-2 (at Старший КМ) — Холодильники.
+  { id: "L-0010", campaignId: "PR-2026-002", kmId: "km-2", nomenclatureId: "1C-10007", off: 0.1, forecast: 30, regular: 12 },
+  { id: "L-0011", campaignId: "PR-2026-002", kmId: "km-2", nomenclatureId: "1C-10010", off: 0.13, forecast: 18 },
+  // PR-2026-006 km-6 (at Старший КМ) — Климатическая; L-0013 missing forecast → red required marker.
+  { id: "L-0012", campaignId: "PR-2026-006", kmId: "km-6", nomenclatureId: "1C-10027", off: 0.15, forecast: 55, advKm: true },
+  { id: "L-0013", campaignId: "PR-2026-006", kmId: "km-6", nomenclatureId: "1C-10029", off: 0.2 },
+  // PR-2026-007 km-5 (at Старший КМ) — Ноутбуки.
+  { id: "L-0014", campaignId: "PR-2026-007", kmId: "km-5", nomenclatureId: "1C-10023", off: 0.07, forecast: 40 },
 ];
 
 function roundTo(value: number, step: number): number {
@@ -1091,17 +1102,204 @@ export function actorForPlanStatus(status: PlanStatus): PromoRole | undefined {
  * «Согласование» nav badge. Simplified for the bootstrap.
  */
 export function countApprovalsAwaiting(role: PromoRole): number {
-  const active = CAMPAIGNS.filter((c) => !c.cancelled);
-  switch (role) {
-    case "Старший КМ":
-      return active.filter((c) => c.status === "На согласовании у старшего КМ").length;
-    case "Коммерческий директор":
-      return active.filter(
-        (c) => c.status === "На согласовании у коммерческого директора"
-      ).length;
-    case "Операционный директор":
-      return active.filter((c) => c.planStatus === "На согл. с ОД").length;
-    default:
-      return 0;
+  // Per-(Promo + КМ) review items awaiting this role's action (S3 queue).
+  return reviewQueueFor(role, buildReviewItems()).length;
+}
+
+// ── S3 — Согласование и проверка (review workspace) ─────────────────────────────
+
+/** SLA window for a reviewer to act (spec §4.5.2) — РАБОЧИЕ дни (Пн–Пт). */
+export const REVIEW_SLA_WORKING_DAYS = 2;
+
+export function isWeekend(d: Date): boolean {
+  const day = d.getDay();
+  return day === 0 || day === 6;
+}
+
+/** Add (or subtract, if negative) N working days, skipping Sat/Sun. */
+export function addWorkingDays(start: Date, days: number): Date {
+  const d = new Date(start);
+  const step = days >= 0 ? 1 : -1;
+  let remaining = Math.abs(days);
+  while (remaining > 0) {
+    d.setDate(d.getDate() + step);
+    if (!isWeekend(d)) remaining -= 1;
   }
+  return d;
+}
+
+/** Count of working days in the half-open interval (from, to]. 0 if to ≤ from. */
+export function workingDaysBetween(from: Date, to: Date): number {
+  if (to <= from) return 0;
+  let count = 0;
+  const d = new Date(from);
+  while (d < to) {
+    d.setDate(d.getDate() + 1);
+    if (!isWeekend(d)) count += 1;
+  }
+  return count;
+}
+
+export interface ReviewSla {
+  /** Deadline = submittedAt + REVIEW_SLA_WORKING_DAYS working days. */
+  deadline: Date;
+  /** Working days still left (negative once past the deadline). */
+  remaining: number;
+  /** Working days the item is past its deadline (0 while in-time). */
+  overdue: number;
+}
+
+export function reviewSla(submittedAt: Date, ref: Date = new Date()): ReviewSla {
+  const deadline = addWorkingDays(submittedAt, REVIEW_SLA_WORKING_DAYS);
+  if (ref <= deadline) {
+    return { deadline, remaining: workingDaysBetween(ref, deadline), overdue: 0 };
+  }
+  return { deadline, remaining: -workingDaysBetween(deadline, ref), overdue: workingDaysBetween(deadline, ref) };
+}
+
+/** A review item is either the КМ's filled data set, or a «Не участвует» request. */
+export type ReviewKind = "data" | "non-participation";
+
+/**
+ * A review comment — author + role + timestamp, scoped either to specific lines
+ * (lineIds) or to the whole set (general). Persisted on the item; surfaced in the
+ * line tooltip and the version history (spec §4.5.2, §4.7).
+ */
+export interface ReviewComment {
+  /** Acting role label (no per-person identity in the mock). */
+  author: PromoRole;
+  /** ISO timestamp. */
+  at: string;
+  text: string;
+  /** Lines the comment is attached to; empty/undefined = general comment. */
+  lineIds?: string[];
+}
+
+/**
+ * One review item = a (Promo + КМ) pair. Statuses are computed per (Promo + КМ)
+ * (spec §4.5). The current KM-level status drives which reviewer it's queued for.
+ */
+export interface ReviewItem {
+  /** `${campaignId}~${kmId}`. */
+  id: string;
+  campaignId: string;
+  kmId: string;
+  kind: ReviewKind;
+  /** Current KM-level status — the single source of truth for routing. */
+  kmStatus: KmStatus;
+  /** When the КМ sent the set / non-participation request for review (ISO). */
+  submittedAt: string;
+  /** Auto-forwarded to КД after the Старший КМ SLA lapsed (spec §4.5.2). */
+  escalatedToKD: boolean;
+  /** Required reason when kind === "non-participation". */
+  nonParticipationReason?: string;
+  /** Whether «Не участвует» was set directly by КД (КМ cannot override). */
+  nonParticipationByKd?: boolean;
+  /** Reviewer comments (rejections etc.), newest last. */
+  comments: ReviewComment[];
+  /** Per-line reviewer feedback (rejection + comment), keyed by line id. */
+  lineFeedback: Record<string, LineFeedback>;
+}
+
+/** A reviewer's decision on a single submitted line. */
+export interface LineFeedback {
+  rejected: boolean;
+  comment?: string;
+  /** ISO timestamp of the decision. */
+  at: string;
+  /** Acting reviewer role. */
+  by: PromoRole;
+}
+
+/** KM-level status a set lands in once the given reviewer approves it (spec §4.5.2). */
+export function approvedKmStatusFor(actor: PromoRole): KmStatus {
+  return actor === "Старший КМ"
+    ? "Согласовано старшим КМ (ожидает КД)"
+    : "Принято коммерческим директором";
+}
+
+/** Rejecting ANY line returns the WHOLE КМ set here (spec §4.5.2). */
+export const REJECTED_KM_STATUS: KmStatus =
+  "Не заполнено / Ожидание корректировки от КМ";
+
+export function reviewItemId(campaignId: string, kmId: string): string {
+  return `${campaignId}~${kmId}`;
+}
+
+/** Which reviewer must act on a KM-level status (undefined = not in any queue). */
+export function reviewerForKmStatus(status: KmStatus): PromoRole | undefined {
+  switch (status) {
+    case "На согласовании у старшего КМ":
+      return "Старший КМ";
+    case "Согласовано старшим КМ (ожидает КД)":
+    case "На согласовании у коммерческого директора":
+      return "Коммерческий директор";
+    default:
+      // «Принято КД», «Не заполнено / на корректировке», «Не участвует» — terminal here.
+      return undefined;
+  }
+}
+
+/**
+ * Seed offsets (in working days, relative to "now") for submittedAt, so that at
+ * today's date the queue shows in-time, breached-Старший-КМ (auto-escalation),
+ * and overdue-КД (просрочка) items without time travel. Default = 1 working day.
+ */
+const REVIEW_SUBMIT_OFFSET: Record<string, { days: number; escalatedToKD?: boolean; kind?: ReviewKind; reason?: string }> = {
+  // PR-2026-002 km-5: at Старший КМ, breached 2-day SLA → eligible for auto-escalation.
+  "PR-2026-002~km-5": { days: 3 },
+  // PR-2026-002 km-2: at Старший КМ, still in time.
+  "PR-2026-002~km-2": { days: 1 },
+  // PR-2026-001 km-2: at КД, overdue (просрочка — non-blocking).
+  "PR-2026-001~km-2": { days: 4 },
+  // PR-2026-001 km-3: forwarded by Старший КМ, awaiting КД, in time.
+  "PR-2026-001~km-3": { days: 1, escalatedToKD: false },
+  // UN-2026-014 km-5: unplanned, straight to КД, in time.
+  "UN-2026-014~km-5": { days: 1 },
+  // PR-2026-006 km-6: at Старший КМ, in time.
+  "PR-2026-006~km-6": { days: 1 },
+  // PR-2026-007 km-5: at Старший КМ, breached (campaign also fill-overdue).
+  "PR-2026-007~km-5": { days: 3 },
+};
+
+/**
+ * Builds the initial review items from the seed campaigns: one item per
+ * participating КМ whose KM-level status is a pending-review state (data sets).
+ * «Не участвует» lifecycle items are layered in by the provider in a later phase.
+ */
+export function buildReviewItems(ref: Date = new Date()): ReviewItem[] {
+  const items: ReviewItem[] = [];
+  for (const c of CAMPAIGNS) {
+    if (c.cancelled) continue;
+    for (const kmId of c.participatingKmIds) {
+      const kmStatus = c.kmStatuses[kmId];
+      if (!kmStatus) continue;
+      const reviewer = reviewerForKmStatus(kmStatus);
+      if (!reviewer) continue; // terminal / not awaiting a reviewer
+      const key = reviewItemId(c.id, kmId);
+      const seed = REVIEW_SUBMIT_OFFSET[key] ?? { days: 1 };
+      items.push({
+        id: key,
+        campaignId: c.id,
+        kmId,
+        kind: seed.kind ?? "data",
+        kmStatus,
+        submittedAt: addWorkingDays(ref, -seed.days).toISOString(),
+        escalatedToKD: seed.escalatedToKD ?? false,
+        nonParticipationReason: seed.reason,
+        comments: [],
+        lineFeedback: {},
+      });
+    }
+  }
+  return items;
+}
+
+/** Items awaiting the given reviewer role. КД also sees items auto-escalated to it. */
+export function reviewQueueFor(role: PromoRole, items: ReviewItem[]): ReviewItem[] {
+  return items.filter((it) => {
+    const reviewer = reviewerForKmStatus(it.kmStatus);
+    if (it.escalatedToKD && role === "Коммерческий директор") return true;
+    return reviewer === role;
+  });
 }
