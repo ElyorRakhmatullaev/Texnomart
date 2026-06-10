@@ -1,6 +1,6 @@
 # AI Context — Texnomart Monorepo
 
-> Last updated: 2026-06-10
+> Last updated: 2026-06-10 (Promo S3 Phases 1–2 in progress)
 
 All UI is mock data — no backend or API integration exists yet. Architecture, structure, and conventions are in `CLAUDE.md` (root + per-project).
 
@@ -9,7 +9,7 @@ All UI is mock data — no backend or API integration exists yet. Architecture, 
 | Project | Status |
 |---|---|
 | **Broker Dashboard** | All 14 prompt pack pages complete, 23 routes. Prototype stage (mock data). |
-| **Texnomart Promo** | Bootstrap + Master shell + **S1 (Краткий промо-календарь)** complete; **S2 (Полный промо-календарь) complete (Phases 1–5)** — runnable app (`pnpm dev:promo`): auth, 7-module nav, 9-role switcher, Promo primitives, seed mock data, S1 short calendar, S2 editable Pattern F grid (inline editing, live validation, остаток ✏️ + warehouse popover, installment auto-recalc, gift conditional fields, «В рекламу» bulk-select, functional draft/submit action bar; **Phase 3**: nomenclature entry via a searchable 1С Command picker + duplicate-check confirm dialog with persistent «дубль» marker/history, gift nomenclature picker; **Phase 4**: Excel/CSV bulk import with per-row validation preview + 1С availability banner/re-check + submit gate; **Phase 5**: unplanned-campaign creation («Создать акцию» — new внеплановая with system № промо + ≥3-cal-day deadline guard, OR встроить в плановую), edit-until-first-send, campaigns lifted into page state, mobile full-screen per-line edit Sheet). Screens S3–S8 are placeholders. See `Promo/CLAUDE.md`. |
+| **Texnomart Promo** | Bootstrap + Master shell + **S1 (Краткий промо-календарь)** complete; **S2 (Полный промо-календарь) complete (Phases 1–5)**; **S3 (Согласование и проверка) in progress (Phases 1–2 done, Phase 3 pending)** — runnable app (`pnpm dev:promo`): auth, 7-module nav, 9-role switcher, Promo primitives, seed mock data, S1 short calendar, S2 editable Pattern F grid (inline editing, live validation, остаток ✏️ + warehouse popover, installment auto-recalc, gift conditional fields, «В рекламу» bulk-select, functional draft/submit action bar; nomenclature entry via 1С Command picker + duplicate check; Excel/CSV import + 1С availability banner/re-check/submit gate; unplanned-campaign creation/integrate + edit-until-first-send + mobile per-line Sheet), and the **S3 approval workspace** at `/approvals` (+ `/approvals/:id`): role-aware review queue with a working-days SLA timer (Pattern C table → Mode-B cards), and a split-view detail with per-line/bulk Принять·Отклонить (`ReasonDialog` comment), status transitions (Старший КМ → КД auto-forward → «Принято КД»; any line rejected → whole КМ set returns to «Не заполнено»), persisted line rejection feedback + a review-comment log. Screens S4–S8 are placeholders. See `Promo/CLAUDE.md`. |
 
 ## Known Issues & TODOs
 
@@ -25,7 +25,8 @@ All UI is mock data — no backend or API integration exists yet. Architecture, 
 - [ ] No API layer
 - [ ] ApplicationsPage list needs mobile Pattern K
 - [ ] Detail pages other than Applications still use sticky action bars (can float mid-screen on short tabs); Applications uses the flex-column fixed-footer layout — consider converting the rest for consistency
-- [ ] **Promo**: module screens S3–S8 are placeholders (S1 short calendar + S2 full-calendar are built — S2 complete, Phases 1–5)
+- [ ] **Promo**: module screens S4–S8 are placeholders (S1 short calendar + S2 full-calendar built; S3 approvals in progress — Phases 1–2 done)
+- [ ] **Promo S3**: Phases 1–2 done (review queue + SLA timer + split-view per-line/bulk approve·reject + status transitions + comment log). **Phase 3 pending**: full «Не участвует» lifecycle, auto-escalation «авто-передано» after the 2-working-day breach, non-blocking просрочка note in history, the "every КМ needs a final decision before the campaign advances" gate, comment surfacing in `VersionHistoryDrawer`, mobile sticky action bar. Mock limits: in-memory only (reload reseeds the provider); no per-person КМ identity; the sidebar «Согласование» badge reads the seed baseline (AppShell is above the provider), not in-session decisions — the queue itself updates
 - [ ] **Promo S2**: complete (read-only skeleton + inline editing/validation + nomenclature entry & duplicate check + Excel import & 1С states + unplanned creation/integrate/edit + mobile per-line Sheet); installment values are an illustrative model (not exact bank formulas)
 - [ ] **Promo S2**: edits/added/imported/created lines & campaigns live only in in-memory React state (no persistence — «Сохранить черновик»/«Отправить» are mock toasts; reload reseeds). No per-person КМ identity, so any КМ-role user edits all КМ lines and new/imported lines + created campaigns attach to a default/the campaign's existing КМ (mock simplification, same as S1). Прогноз продаж↔цена and цена↔скидка% are not auto-linked
 - [ ] **Promo S2 Phase 5**: unplanned creation generates a № промо (UN-2026-1xx) and enforces ≥3 календарных дней before start; `firstSendDone` (тип/период lock after first send) is in-memory only and the deadline rule isn't re-enforced when editing an existing campaign; the mobile per-line Sheet is reachable at any width via the row chevron (shown below md)
@@ -41,4 +42,4 @@ All UI is mock data — no backend or API integration exists yet. Architecture, 
 3. Cleanup: legacy `ApplicationDetailDrawer.tsx`, unused MUI/Emotion deps
 4. Dark mode visual QA
 5. i18n for Uzbek language support
-6. Build out **Texnomart Promo** screens from `docs/promo_prompt_pack.md` — S2 is complete; next is **S3** (Согласование и проверка: КМ → Старший КМ → КД review queue, per-line Принять/Отклонить with required comment via `ReasonDialog`, «Не участвует» lifecycle, 2-working-day SLA + auto-escalation), then S4–S8
+6. Build out **Texnomart Promo** screens from `docs/promo_prompt_pack.md` — S2 complete; **S3** in progress (Phases 1–2 done: queue + SLA + per-line/bulk approve·reject + transitions). Finish **S3 Phase 3** (full «Не участвует» lifecycle, auto-escalation, просрочка note, advance gate, history surfacing, mobile sticky bar), then S4–S8

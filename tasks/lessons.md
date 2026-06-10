@@ -345,3 +345,24 @@ Documented mistakes, gotchas, and learnings from project work. Never remove old 
 
 ### Extend a Shared Layout Component With an Optional `className`, Not a Fork
 - Needed the FilterBar's gray box + `px-3` gone on one screen (so filters align flush with the header/grid). Rather than fork it, added an optional `className?: string` to `@texnomart/shared` FilterBar merged via `cn(base, className)` — the screen passes `bg-transparent px-0`. Default (no className) is byte-identical, so Dashboard's usages are unchanged. Same additive pattern as the AppShell `roleSwitcher`/`maxWidth` props: extend shared components with optional overrides, never breaking existing consumers.
+
+---
+
+## 2026-06-10 — Texnomart Promo S3 (Согласование и проверка, Phases 1–2)
+
+### State Shared Across Sibling Routes = a Provider on a Layout Route, Not Page-Level `useState`
+- S1/S2 each lived on ONE route, so their reducer store sat in the page component. S3 spans `/approvals` (queue) AND `/approvals/:id` (detail), and an action on the detail must reflect back in the queue — so the store has to live ABOVE both. Mount an `ApprovalsProvider` on a **layout route** (`{ path: "approvals", Component: ApprovalsLayout, children: [index, ":id"] }` where `ApprovalsLayout` renders `<ApprovalsProvider><Outlet/></ApprovalsProvider>`). Navigating *between* the two routes keeps the layout (and its `useReducer` state) mounted; navigating away and back remounts → reseeds (acceptable mock behavior). Verified: rejecting an item on the detail dropped the queue 4→3 after in-app back-navigation.
+- Caveat (left as a known mock limit): the sidebar nav **badge** is built in the AppShell, which sits ABOVE the provider — so a badge fed by the same data must use a fresh seed (`buildReviewItems()`), and it therefore shows the *baseline* count, not in-session mutations. Fixing it would mean hoisting the provider above the whole shell; not worth it for a mock. Rule: a count rendered above the store can't reflect the store — decide whether baseline-vs-live matters before wiring it.
+
+### A Working-Days (Пн–Пт) SLA Model, Seeded Relative to "now" So Timers Are Live
+- The spec's review SLA is **рабочие дни** (vs the calendar-day fill deadlines). Model it with `isWeekend` + `addWorkingDays(d, ±n)` (step day-by-day, skip Sat/Sun; handle negative for "n working days ago") + `workingDaysBetween(from,to)` over the half-open interval; `reviewSla(submittedAt) → {deadline, remaining, overdue}`. Always label «раб. дн.» / «рабочие дни (Пн–Пт)» so it's not confused with the календарные deadlines.
+- Seed `submittedAt` as `addWorkingDays(now, -offset)` (NOT a fixed past date) so that at today's date the queue always shows an in-time item, a breached-Старший-КМ item, and an overdue-КД item — the SLA/overdue paths stay visible without time travel. Same live-`new Date()` approach as the seeded overdue short-calendar campaign. (`new Date()` is fine in app code — the no-`Date.now()` rule is only for Workflow scripts.)
+
+### A Review Item Is per (Promo + КМ); Reject Returns the WHOLE Set; Feedback Overrides the Seed Flag
+- Statuses are per (Promo + КМ) (§4.5), so the review "item" key is `${campaignId}~${kmId}` and the queue is built by walking each campaign's `participatingKmIds`, keeping only KM-statuses that map to a reviewer (`reviewerForKmStatus`). КД also picks up items auto-escalated to it.
+- Rejecting ANY line returns the WHOLE КМ set to «Не заполнено / Ожидание корректировки от КМ» (§4.5.2) — one reducer action marks the targeted lines, appends a timestamped `ReviewComment` (scoped to lineIds, or general when empty), AND flips the item status. The item then leaves every reviewer queue (its status no longer maps to a reviewer).
+- Store reviewer decisions as `ReviewItem.lineFeedback[lineId]` rather than mutating `PROMO_LINES`; the lines panel displays "rejected" as `feedback[id]?.rejected ?? line.rejected` (reviewer decision wins over the seed flag) and prefers the feedback comment. Keeps S3 self-contained and reload-resettable.
+- Make sure every pending review item actually HAS lines — the S1/S2 seed had КМ marked «На согласовании» with no lines in `LINE_SEED`, so the snapshot was empty. Added line seeds so each pending (campaign, КМ) pair has nomenclature (one deliberately missing a forecast to exercise the red required marker in the reviewer's snapshot).
+
+### The Page-Hosted-Dialog Defer Applies to `ReasonDialog` Too
+- The reject `ReasonDialog` is a controlled `<Dialog open>` opened by a button click (per-line «Отклонить» X / bulk / whole-set) — same self-dismiss race as the S2 Phase 3/4/5 dialogs. Open it via `setTimeout(() => setRejectTarget(target), 0)`. Confirmed the dialog stays open. (The benign shared-`DialogOverlay` "Function components cannot be given refs" warning still fires on any shared Dialog open — not the cause, ignore it.)
