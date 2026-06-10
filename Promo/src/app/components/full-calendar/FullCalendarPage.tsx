@@ -2,7 +2,18 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Ban, Check, Copy, Info, Plus, Send, Upload, X } from "lucide-react";
+import {
+  Ban,
+  Check,
+  Clock,
+  Copy,
+  Info,
+  Plus,
+  RefreshCw,
+  Send,
+  Upload,
+  X,
+} from "lucide-react";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { FilterBar } from "@texnomart/shared/components/filter-bar";
 import type { FilterConfig } from "@texnomart/shared/types";
@@ -16,6 +27,7 @@ import { useRole } from "../../role-context";
 import { FullCalendarGrid } from "./FullCalendarGrid";
 import { ColumnGroupToggle } from "./ColumnGroupToggle";
 import { AddNomenclatureDialog } from "./AddNomenclatureDialog";
+import { ExcelImportDialog } from "./ExcelImportDialog";
 import { DEFAULT_VISIBLE_GROUPS, type ColumnGroupKey } from "./gridFields";
 import {
   Dialog,
@@ -25,18 +37,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@texnomart/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@texnomart/ui/alert";
 import {
   CAMPAIGNS,
   CATEGORY_MANAGERS,
   PROMO_LINES,
   PROMO_TYPES,
+  createImportedLine,
   createPromoLine,
   detectDuplicate,
   getCampaignsWithLines,
   getFullCalendarAccess,
   getNomenclatureItem,
   isLineValid,
+  parseImportCsv,
   type DuplicateHit,
+  type ImportParseResult,
+  type ParsedImportRow,
   type PromoLine,
 } from "../../../lib/promo-mock-data";
 
@@ -90,6 +107,8 @@ function seedLineMap(): LineMap {
 type LineAction =
   | { type: "edit"; id: string; patch: Partial<PromoLine> }
   | { type: "add"; line: PromoLine }
+  | { type: "addMany"; lines: PromoLine[] }
+  | { type: "recheck1C" }
   | { type: "bulkAdv"; ids: string[]; field: keyof PromoLine; value: boolean };
 
 function lineReducer(state: LineMap, action: LineAction): LineMap {
@@ -104,6 +123,19 @@ function lineReducer(state: LineMap, action: LineAction): LineMap {
     case "add": {
       const next = new Map(state);
       next.set(action.line.id, action.line);
+      return next;
+    }
+    case "addMany": {
+      const next = new Map(state);
+      for (const line of action.lines) next.set(line.id, line);
+      return next;
+    }
+    case "recheck1C": {
+      // Mock 1С re-check: every pending row passes and clears its badge (§8.3).
+      const next = new Map(state);
+      for (const [id, l] of next) {
+        if (l.pending1CCheck) next.set(id, { ...l, pending1CCheck: false });
+      }
       return next;
     }
     case "bulkAdv": {
@@ -140,6 +172,7 @@ export function FullCalendarPage() {
   // line's gift-picker is open, and a pending duplicate awaiting confirmation.
   const [addCampaignId, setAddCampaignId] = React.useState<string | null>(null);
   const [giftLineId, setGiftLineId] = React.useState<string | null>(null);
+  const [importOpen, setImportOpen] = React.useState(false);
   const [pendingDup, setPendingDup] = React.useState<{
     campaignId: string;
     kmId: string;
@@ -196,6 +229,21 @@ export function FullCalendarPage() {
     }
     return n;
   }, [filtered, linesFor]);
+
+  // Lines saved as draft awaiting a 1С re-check (§8.3) — block send until cleared.
+  const pending1CCount = React.useMemo(() => {
+    let n = 0;
+    for (const c of filtered) {
+      for (const l of linesFor(c.id)) if (l.pending1CCheck) n++;
+    }
+    return n;
+  }, [filtered, linesFor]);
+
+  // Campaigns the КМ can import into (visible + non-cancelled).
+  const importTargets = React.useMemo(
+    () => filtered.filter((c) => !c.cancelled),
+    [filtered]
+  );
 
   const onEdit = React.useCallback(
     (id: string, patch: Partial<PromoLine>) =>
@@ -320,6 +368,41 @@ export function FullCalendarPage() {
     [giftLineId]
   );
 
+  // ── Excel import + 1С availability (§8.2.1 / §8.3) ───────────────────────────
+  const onImportRequest = React.useCallback(() => {
+    setTimeout(() => setImportOpen(true), 0);
+  }, []);
+
+  // Validate a pasted/dropped CSV against the live store (pure preview).
+  const validateImport = React.useCallback(
+    (cid: string, text: string): ImportParseResult => {
+      const campaign = campaignsById.get(cid);
+      if (!campaign) return { rows: [], structureError: "Акция не найдена." };
+      return parseImportCsv(text, campaign, [...lines.values()], campaignsById);
+    },
+    [campaignsById, lines]
+  );
+
+  const onImport = React.useCallback(
+    (cid: string, rows: ParsedImportRow[]) => {
+      const kmId = kmForCampaign(cid);
+      const created = rows.map((r) => createImportedLine(cid, kmId, r));
+      dispatch({ type: "addMany", lines: created });
+      const dupCount = created.filter((l) => l.duplicate).length;
+      toast.success(
+        `Импортировано строк: ${created.length}` +
+          (dupCount ? ` (из них дублей: ${dupCount})` : "") +
+          ". Ожидают проверки 1С."
+      );
+    },
+    [kmForCampaign]
+  );
+
+  const recheck1C = () => {
+    dispatch({ type: "recheck1C" });
+    toast.success("Проверка 1С пройдена — данные подтверждены.");
+  };
+
   if (!access.canView) {
     return <AccessDenied note={access.note} />;
   }
@@ -350,7 +433,8 @@ export function FullCalendarPage() {
       "Действие появится на следующем шаге сборки полного календаря (S2)."
     );
 
-  const canSubmit = access.canEditOwnLines && invalidLines === 0;
+  const canSubmit =
+    access.canEditOwnLines && invalidLines === 0 && pending1CCount === 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -377,7 +461,7 @@ export function FullCalendarPage() {
             actions={
               access.canEditOwnLines ? (
                 <div className="flex items-center gap-2">
-                  <Button variant="secondary" onClick={phaseToast}>
+                  <Button variant="secondary" onClick={onImportRequest}>
                     <Upload className="size-4" />
                     Загрузить из Excel
                   </Button>
@@ -434,6 +518,31 @@ export function FullCalendarPage() {
             </div>
           )}
 
+          {/* 1С availability (§8.3) — non-blocking; send is gated until re-check passes. */}
+          {pending1CCount > 0 && (
+            <Alert variant="warning">
+              <Clock className="size-4" />
+              <AlertTitle>Ожидают проверки 1С: {pending1CCount}</AlertTitle>
+              <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  Данные сохранены как черновик. Отправка на согласование недоступна,
+                  пока не пройдена повторная проверка в 1С.
+                </span>
+                {access.canEditOwnLines && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={recheck1C}
+                  >
+                    <RefreshCw className="size-4" />
+                    Повторить проверку 1С
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
           <FullCalendarGrid
             campaigns={filtered}
             visibleGroups={visibleGroups}
@@ -465,6 +574,15 @@ export function FullCalendarPage() {
         title="Выбор подарочной номенклатуры"
         description="Выберите подарочный товар из справочника 1С."
         onPick={onPickForGift}
+      />
+
+      {/* Excel/CSV bulk import (§8.2.1). */}
+      <ExcelImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        campaigns={importTargets}
+        validate={validateImport}
+        onImport={onImport}
       />
 
       {/* Duplicate-confirmation dialog (§8.2.1) — adding is NOT blocked. */}
@@ -526,6 +644,10 @@ export function FullCalendarPage() {
                 {invalidLines} {pluralLines(invalidLines)}: не заполнены
                 обязательные поля
               </span>
+            ) : pending1CCount > 0 ? (
+              <span className="text-amber-700">
+                {pending1CCount} {pluralLines(pending1CCount)} ожидают проверки 1С
+              </span>
             ) : (
               "Все обязательные поля заполнены"
             )}
@@ -541,8 +663,15 @@ export function FullCalendarPage() {
             </Button>
             <SubmitButton
               canSubmit={canSubmit}
-              canEdit={access.canEditOwnLines}
-              invalidLines={invalidLines}
+              reason={
+                !access.canEditOwnLines
+                  ? "Доступно только для категорийного менеджера, заполняющего свои строки"
+                  : invalidLines > 0
+                    ? `Заполните обязательные поля (${invalidLines} ${pluralLines(invalidLines)})`
+                    : pending1CCount > 0
+                      ? `Дождитесь проверки 1С (${pending1CCount} ${pluralLines(pending1CCount)})`
+                      : ""
+              }
               onClick={submitForApproval}
             />
           </div>
@@ -554,13 +683,11 @@ export function FullCalendarPage() {
 
 function SubmitButton({
   canSubmit,
-  canEdit,
-  invalidLines,
+  reason,
   onClick,
 }: {
   canSubmit: boolean;
-  canEdit: boolean;
-  invalidLines: number;
+  reason: string;
   onClick: () => void;
 }) {
   const btn = (
@@ -575,9 +702,6 @@ function SubmitButton({
   );
   if (canSubmit) return btn;
 
-  const reason = !canEdit
-    ? "Доступно только для категорийного менеджера, заполняющего свои строки"
-    : `Заполните обязательные поля (${invalidLines} ${pluralLines(invalidLines)})`;
   return (
     <Tooltip>
       <TooltipTrigger asChild>

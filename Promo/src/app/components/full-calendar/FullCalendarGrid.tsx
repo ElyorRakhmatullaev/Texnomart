@@ -468,6 +468,7 @@ export function FullCalendarGrid({
                         "group/row flex items-center border-b transition-colors hover:bg-gray-50",
                         ROW_H,
                         selectedIds.has(line.id) && "bg-[#FFD60A]/5",
+                        line.pending1CCheck && "bg-amber-50/50",
                         line.rejected && "bg-red-50/70 hover:bg-red-50"
                       )}
                     >
@@ -600,6 +601,7 @@ export function FullCalendarGrid({
                           "flex items-center border-b text-sm transition-colors hover:bg-gray-50",
                           ROW_H,
                           selectedIds.has(line.id) && "bg-[#FFD60A]/5",
+                          line.pending1CCheck && "bg-amber-50/50",
                           line.rejected && "bg-red-50/70 hover:bg-red-50"
                         )}
                       >

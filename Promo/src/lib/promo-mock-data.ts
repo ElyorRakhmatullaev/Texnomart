@@ -633,6 +633,183 @@ export function detectDuplicate(
   return null;
 }
 
+// ── Excel/CSV bulk import (§8.2.1) — template + per-row validation ────────────────
+// Pragmatic mock: semicolon-delimited CSV (Excel-RU friendly), parsed client-side
+// with no extra dependency. The per-row validation UX matches the spec; a true .xlsx
+// parser is out of scope for the prototype.
+
+/** Import template columns, in order. */
+export const IMPORT_COLUMNS = [
+  "Код 1С",
+  "Прогноз продаж",
+  "Новая цена",
+  "Скидка %",
+] as const;
+
+const IMPORT_DELIM = ";";
+
+/** Downloadable CSV template (header + one example row). */
+export function buildImportTemplateCsv(): string {
+  const header = IMPORT_COLUMNS.join(IMPORT_DELIM);
+  const example = ["1C-10001", "120", "7640000", "15"].join(IMPORT_DELIM);
+  return `${header}\n${example}\n`;
+}
+
+/** Sample CSV with a mix of valid / invalid rows for quick testing. */
+export function buildImportSampleCsv(): string {
+  return (
+    [
+      IMPORT_COLUMNS.join(IMPORT_DELIM),
+      ["1C-10002", "60", "9900000", "12"].join(IMPORT_DELIM), // ok
+      ["1C-99999", "40", "5000000", "10"].join(IMPORT_DELIM), // нет в 1С
+      ["1C-10005", "", "3800000", "8"].join(IMPORT_DELIM), // нет прогноза
+      ["1C-10009", "90", "6200000", "9"].join(IMPORT_DELIM), // ok
+    ].join("\n") + "\n"
+  );
+}
+
+export type ImportRowStatus = "ok" | "duplicate" | "error";
+
+export interface ParsedImportRow {
+  /** 1-based source row number (excluding the header). */
+  row: number;
+  nomenclatureId: string;
+  salesForecast?: number;
+  newPrice?: number;
+  discountPct?: number;
+  status: ImportRowStatus;
+  /** RU reason shown in the preview for error / duplicate rows. */
+  reason?: string;
+  /** Resolved name when the code exists in 1С. */
+  name?: string;
+  /** Carried to the created line when the row is a duplicate. */
+  duplicateInfo?: DuplicateHit;
+}
+
+export interface ImportParseResult {
+  rows: ParsedImportRow[];
+  /** Whole-file structure error (bad header) — blocks the entire import. */
+  structureError?: string;
+}
+
+function parseImportNum(s: string | undefined): number | undefined {
+  if (s == null) return undefined;
+  const digits = s.replace(/[^\d]/g, "");
+  return digits ? Number(digits) : undefined;
+}
+
+/**
+ * Parse + validate a semicolon-CSV against the 1С reference and a target campaign
+ * (§8.2.1). Pure — drives the import preview. «нет в 1С» / missing required field /
+ * bad structure are errors; a duplicate is a non-blocking warning (imported with the
+ * «дубль» marker).
+ */
+export function parseImportCsv(
+  text: string,
+  targetCampaign: PromoCampaign,
+  liveLines: PromoLine[],
+  campaignsById: Map<string, PromoCampaign>
+): ImportParseResult {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length === 0) return { rows: [], structureError: "Файл пуст." };
+
+  const header = lines[0].split(IMPORT_DELIM).map((h) => h.trim());
+  const headerOk =
+    header.length === IMPORT_COLUMNS.length &&
+    IMPORT_COLUMNS.every((c, i) => header[i]?.toLowerCase() === c.toLowerCase());
+  if (!headerOk) {
+    return {
+      rows: [],
+      structureError: `Нарушена структура шаблона. Ожидаются столбцы: ${IMPORT_COLUMNS.join(", ")}.`,
+    };
+  }
+
+  const rows: ParsedImportRow[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(IMPORT_DELIM).map((c) => c.trim());
+    const row = i;
+    if (cells.length !== IMPORT_COLUMNS.length) {
+      rows.push({
+        row,
+        nomenclatureId: cells[0] ?? "",
+        status: "error",
+        reason: "Нарушена структура строки (неверное число столбцов).",
+      });
+      continue;
+    }
+    const [code, forecastS, priceS, discS] = cells;
+    const salesForecast = parseImportNum(forecastS);
+    const newPrice = parseImportNum(priceS);
+    const discountPct = parseImportNum(discS);
+    const nom = NOMENCLATURE.find((n) => n.id === code);
+
+    if (!nom) {
+      rows.push({
+        row,
+        nomenclatureId: code,
+        salesForecast,
+        newPrice,
+        discountPct,
+        status: "error",
+        reason: "Нет в 1С / неверная номенклатура.",
+      });
+      continue;
+    }
+    if (salesForecast == null) {
+      rows.push({
+        row,
+        nomenclatureId: code,
+        name: nom.name,
+        salesForecast,
+        newPrice,
+        discountPct,
+        status: "error",
+        reason: "Не заполнены обязательные поля (Прогноз продаж).",
+      });
+      continue;
+    }
+    const dup = detectDuplicate(code, targetCampaign, liveLines, campaignsById);
+    rows.push({
+      row,
+      nomenclatureId: code,
+      name: nom.name,
+      salesForecast,
+      newPrice,
+      discountPct,
+      status: dup ? "duplicate" : "ok",
+      duplicateInfo: dup ?? undefined,
+      reason: dup
+        ? dup.samePromo
+          ? "Дубль: уже в этой акции (импортируется с отметкой «дубль»)."
+          : `Дубль: уже в акции ${dup.promoId} (импортируется с отметкой «дубль»).`
+        : undefined,
+    });
+  }
+  return { rows };
+}
+
+/** Build a draft line from a validated import row — awaits a 1С re-check (§8.3). */
+export function createImportedLine(
+  campaignId: string,
+  kmId: string,
+  row: ParsedImportRow
+): PromoLine {
+  const line = createPromoLine(campaignId, kmId, row.nomenclatureId);
+  if (row.salesForecast != null) line.salesForecast = row.salesForecast;
+  if (row.newPrice != null) line.newPrice = row.newPrice;
+  if (row.discountPct != null) line.discountPct = row.discountPct;
+  // Imported data is saved as a draft awaiting 1С availability re-check (§8.3).
+  line.pending1CCheck = true;
+  if (row.duplicateInfo) {
+    line.duplicate = true;
+    line.duplicateInfo = row.duplicateInfo;
+  }
+  return line;
+}
+
 /** Whether a campaign's тип bears a gift (requires gift nomenclature fields, §8.8). */
 export function isGiftType(typeName: string): boolean {
   return Boolean(PROMO_TYPES.find((t) => t.name === typeName)?.giftType);
