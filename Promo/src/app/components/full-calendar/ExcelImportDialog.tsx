@@ -98,7 +98,8 @@ export function ExcelImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] gap-0 overflow-hidden p-0 sm:max-w-[680px]">
+      <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px] max-sm:h-full max-sm:max-h-full max-sm:max-w-full max-sm:rounded-none">
+        {/* Full-screen Sheet-style layout below sm (Phase 5 RESPONSIVE §). */}
         <DialogHeader className="border-b px-5 py-4">
           <DialogTitle>Загрузить из Excel</DialogTitle>
           <DialogDescription>
@@ -107,7 +108,7 @@ export function ExcelImportDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
           {/* Target campaign + template */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <label className="flex-1 space-y-1.5 text-sm">

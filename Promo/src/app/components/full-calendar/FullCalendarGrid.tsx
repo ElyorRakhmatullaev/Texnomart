@@ -5,7 +5,16 @@ import { cn } from "@texnomart/ui/utils";
 import { Card } from "@texnomart/ui/card";
 import { Checkbox } from "@texnomart/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
-import { AlertCircle, Clock, Copy, Gift, Lock, Plus } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronRight,
+  Clock,
+  Copy,
+  Gift,
+  Lock,
+  Pencil,
+  Plus,
+} from "lucide-react";
 import { Money } from "../../../components/Money";
 import { RuDate } from "../../../components/RuDate";
 import {
@@ -354,6 +363,10 @@ interface FullCalendarGridProps {
   onAddRequest: (campaignId: string) => void;
   /** Open the 1С picker to (re)select a line's gift nomenclature. */
   onGiftPick: (lineId: string) => void;
+  /** Mobile: open the full-screen per-line edit Sheet (Phase 5). */
+  onLineTap?: (lineId: string) => void;
+  /** Edit an unplanned, not-yet-sent campaign's тип/период (§10; editor roles only). */
+  onEditCampaign?: (campaignId: string) => void;
   /** Bulk-select state (shown only for editor roles). */
   selectedIds: Set<string>;
   onToggleSelect: (lineId: string) => void;
@@ -368,6 +381,8 @@ export function FullCalendarGrid({
   onEdit,
   onAddRequest,
   onGiftPick,
+  onLineTap,
+  onEditCampaign,
   selectedIds,
   onToggleSelect,
   onToggleGroup,
@@ -379,11 +394,10 @@ export function FullCalendarGrid({
     [visibleGroups]
   );
 
+  // Keep empty campaigns (a freshly created/integrated one has no lines yet) so the
+  // band + «+ Добавить номенклатуру» affordance is visible (Phase 5).
   const groups = React.useMemo(
-    () =>
-      campaigns
-        .map((campaign) => ({ campaign, lines: linesFor(campaign.id) }))
-        .filter((g) => g.lines.length > 0),
+    () => campaigns.map((campaign) => ({ campaign, lines: linesFor(campaign.id) })),
     [campaigns, linesFor]
   );
 
@@ -391,7 +405,7 @@ export function FullCalendarGrid({
     return (
       <Card className="p-0">
         <p className="py-16 text-center text-sm text-muted-foreground">
-          Строки не найдены
+          Акции не найдены
         </p>
       </Card>
     );
@@ -492,12 +506,12 @@ export function FullCalendarGrid({
                       </span>
                       <KmCell kmId={line.kmId} width={FROZEN.km} />
                       <div
-                        className="flex items-center gap-1.5 px-3"
+                        className="flex min-w-0 items-center gap-1.5 px-3"
                         style={colStyle(FROZEN.nomenclature)}
                       >
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="truncate text-sm font-medium text-gray-900">
+                            <span className="min-w-0 truncate text-sm font-medium text-gray-900">
                               {nom?.name ?? line.nomenclatureId}
                             </span>
                           </TooltipTrigger>
@@ -508,10 +522,30 @@ export function FullCalendarGrid({
                           </TooltipContent>
                         </Tooltip>
                         <LineMarkers line={line} />
+                        {onLineTap && (
+                          <button
+                            type="button"
+                            onClick={() => onLineTap(line.id)}
+                            aria-label="Редактировать строку"
+                            className="ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 hover:text-gray-900 md:hidden"
+                          >
+                            <ChevronRight className="size-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
                 })}
+                {lines.length === 0 && (
+                  <div
+                    className={cn(
+                      "flex items-center border-b px-3 text-xs text-muted-foreground",
+                      ROW_H
+                    )}
+                  >
+                    Нет строк
+                  </div>
+                )}
               </div>
             );
           })}
@@ -589,6 +623,20 @@ export function FullCalendarGrid({
                       <RuDate value={campaign.startDate} /> —{" "}
                       <RuDate value={campaign.endDate} />
                     </span>
+                    {onEditCampaign &&
+                      !campaign.planned &&
+                      !campaign.firstSendDone &&
+                      !campaign.cancelled &&
+                      access.canEditOwnLines && (
+                        <button
+                          type="button"
+                          onClick={() => onEditCampaign(campaign.id)}
+                          className="ml-auto inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
+                        >
+                          <Pencil className="size-3" />
+                          Изменить
+                        </button>
+                      )}
                   </div>
 
                   {/* lines */}
@@ -629,6 +677,18 @@ export function FullCalendarGrid({
                       </div>
                     );
                   })}
+                  {lines.length === 0 && (
+                    <div
+                      className={cn(
+                        "flex items-center border-b px-3 text-xs text-muted-foreground",
+                        ROW_H
+                      )}
+                    >
+                      {access.canEditOwnLines
+                        ? "Пока нет строк — добавьте номенклатуру кнопкой «+ Добавить номенклатуру»."
+                        : "Нет строк"}
+                    </div>
+                  )}
                 </div>
               );
             })}

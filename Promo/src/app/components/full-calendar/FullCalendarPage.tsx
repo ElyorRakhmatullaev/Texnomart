@@ -28,6 +28,8 @@ import { FullCalendarGrid } from "./FullCalendarGrid";
 import { ColumnGroupToggle } from "./ColumnGroupToggle";
 import { AddNomenclatureDialog } from "./AddNomenclatureDialog";
 import { ExcelImportDialog } from "./ExcelImportDialog";
+import { CreateCampaignDialog } from "./CreateCampaignDialog";
+import { LineEditSheet } from "./LineEditSheet";
 import { DEFAULT_VISIBLE_GROUPS, type ColumnGroupKey } from "./gridFields";
 import {
   Dialog,
@@ -45,6 +47,7 @@ import {
   PROMO_TYPES,
   createImportedLine,
   createPromoLine,
+  createUnplannedCampaign,
   detectDuplicate,
   getCampaignsWithLines,
   getFullCalendarAccess,
@@ -54,12 +57,15 @@ import {
   type DuplicateHit,
   type ImportParseResult,
   type ParsedImportRow,
+  type PromoCampaign,
   type PromoLine,
+  type UnplannedCampaignInput,
 } from "../../../lib/promo-mock-data";
 
 const ALL = "all";
 
 const CAMPAIGN_STATUSES = [
+  "Черновик",
   "На согласовании у старшего КМ",
   "На согласовании у коммерческого директора",
   "Переотправлено на корректировку КМ",
@@ -92,8 +98,6 @@ const FILTERS: FilterConfig[] = [
     ],
   },
 ];
-
-const CAMPAIGNS_WITH_LINES = getCampaignsWithLines();
 
 // ── Editable line store (Phase 2) ──────────────────────────────────────────────
 // Lines are lifted into state so edits propagate to validation, the installment
@@ -157,6 +161,12 @@ export function FullCalendarPage() {
   const editorMode = access.canEditOwnLines || access.marketingFlagOnly;
 
   const [lines, dispatch] = React.useReducer(lineReducer, undefined, seedLineMap);
+  // Campaigns are lifted into state too (Phase 5): a created/integrated campaign must
+  // appear in the grid. Seeded with the campaigns that have lines; session-added ones
+  // are prepended. The full reference (CAMPAIGNS ∪ visible) backs duplicate detection.
+  const [visibleCampaigns, setVisibleCampaigns] = React.useState<PromoCampaign[]>(
+    () => getCampaignsWithLines()
+  );
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [visibleGroups, setVisibleGroups] = React.useState<ColumnGroupKey[]>(
     DEFAULT_VISIBLE_GROUPS
@@ -173,6 +183,10 @@ export function FullCalendarPage() {
   const [addCampaignId, setAddCampaignId] = React.useState<string | null>(null);
   const [giftLineId, setGiftLineId] = React.useState<string | null>(null);
   const [importOpen, setImportOpen] = React.useState(false);
+  // Unplanned creation / per-line mobile editing (Phase 5).
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [editCampaignId, setEditCampaignId] = React.useState<string | null>(null);
+  const [editLineId, setEditLineId] = React.useState<string | null>(null);
   const [pendingDup, setPendingDup] = React.useState<{
     campaignId: string;
     kmId: string;
@@ -185,8 +199,18 @@ export function FullCalendarPage() {
     setSelectedIds(new Set());
   }, [currentRole]);
 
-  const campaignsById = React.useMemo(
-    () => new Map(CAMPAIGNS.map((c) => [c.id, c])),
+  // Full reference for duplicate detection + лookups — all seed campaigns plus any
+  // session-created/integrated ones (the latter win, carrying status/firstSendDone edits).
+  const campaignsById = React.useMemo(() => {
+    const m = new Map<string, PromoCampaign>();
+    for (const c of CAMPAIGNS) m.set(c.id, c);
+    for (const c of visibleCampaigns) m.set(c.id, c);
+    return m;
+  }, [visibleCampaigns]);
+
+  // Planned, non-cancelled campaigns available to integrate nomenclature into (§10).
+  const plannedCampaigns = React.useMemo(
+    () => CAMPAIGNS.filter((c) => c.planned && !c.cancelled),
     []
   );
 
@@ -202,7 +226,7 @@ export function FullCalendarPage() {
   );
 
   const filtered = React.useMemo(() => {
-    return CAMPAIGNS_WITH_LINES.filter((c) => {
+    return visibleCampaigns.filter((c) => {
       if (values.type !== ALL && c.type !== values.type) return false;
       if (values.status !== ALL && c.status !== values.status) return false;
       if (values.priznak !== ALL) {
@@ -214,7 +238,7 @@ export function FullCalendarPage() {
       }
       return true;
     });
-  }, [values, linesFor]);
+  }, [values, linesFor, visibleCampaigns]);
 
   const totalLines = React.useMemo(
     () => filtered.reduce((s, c) => s + linesFor(c.id).length, 0),
@@ -403,6 +427,74 @@ export function FullCalendarPage() {
     toast.success("Проверка 1С пройдена — данные подтверждены.");
   };
 
+  // ── Unplanned creation + integrate + per-line edit (Phase 5, §10) ────────────
+  // Page-hosted dialogs/sheets opened from a toolbar/grid button: defer the open a
+  // tick so the opening pointer click doesn't dismiss the controlled Radix layer
+  // (see tasks/lessons.md S2 Phases 3–4).
+  const onCreateRequest = React.useCallback(() => {
+    setTimeout(() => setCreateOpen(true), 0);
+  }, []);
+
+  const onEditCampaignRequest = React.useCallback((campaignId: string) => {
+    setTimeout(() => setEditCampaignId(campaignId), 0);
+  }, []);
+
+  const onLineTap = React.useCallback((lineId: string) => {
+    setTimeout(() => setEditLineId(lineId), 0);
+  }, []);
+
+  const onCreateUnplanned = React.useCallback(
+    (input: Omit<UnplannedCampaignInput, "kmId">) => {
+      // No per-person КМ identity in the mock — attach the new campaign to a default КМ.
+      const created = createUnplannedCampaign({
+        ...input,
+        kmId: CATEGORY_MANAGERS[0].id,
+      });
+      setVisibleCampaigns((prev) => [created, ...prev]);
+      toast.success(
+        `Внеплановая акция создана: ${created.id} «${created.name}». № промо присвоен системой.`
+      );
+      // Open the add-nomenclature picker for the new (empty) campaign right away.
+      setTimeout(() => setAddCampaignId(created.id), 0);
+    },
+    []
+  );
+
+  const onEditCampaignSave = React.useCallback(
+    (
+      campaignId: string,
+      patch: { type: string; name: string; startDate: Date; endDate: Date }
+    ) => {
+      setVisibleCampaigns((prev) =>
+        prev.map((c) => (c.id === campaignId ? { ...c, ...patch } : c))
+      );
+      toast.success("Изменения внеплановой акции сохранены.");
+    },
+    []
+  );
+
+  const onIntegrate = React.useCallback(
+    (campaignId: string) => {
+      const c = campaignsById.get(campaignId);
+      if (!c) return;
+      // Make sure the planned campaign is in the grid, then open its add-picker.
+      setVisibleCampaigns((prev) =>
+        prev.some((x) => x.id === c.id) ? prev : [c, ...prev]
+      );
+      toast.success(`Встраивание в плановую акцию ${c.id} «${c.name}».`);
+      setTimeout(() => setAddCampaignId(campaignId), 0);
+    },
+    [campaignsById]
+  );
+
+  const editCampaign = editCampaignId
+    ? campaignsById.get(editCampaignId) ?? null
+    : null;
+  const editLine = editLineId ? lines.get(editLineId) : undefined;
+  const editLineCampaign = editLine
+    ? campaignsById.get(editLine.campaignId)
+    : undefined;
+
   if (!access.canView) {
     return <AccessDenied note={access.note} />;
   }
@@ -425,13 +517,15 @@ export function FullCalendarPage() {
   };
 
   const saveDraft = () => toast.success("Черновик сохранён");
-  const submitForApproval = () =>
-    toast.success("Отправлено на согласование старшему КМ");
-
-  const phaseToast = () =>
-    toast.info(
-      "Действие появится на следующем шаге сборки полного календаря (S2)."
+  const submitForApproval = () => {
+    // First send locks the тип/период of unplanned campaigns (§10).
+    setVisibleCampaigns((prev) =>
+      prev.map((c) =>
+        !c.planned && !c.firstSendDone ? { ...c, firstSendDone: true } : c
+      )
     );
+    toast.success("Отправлено на согласование старшему КМ");
+  };
 
   const canSubmit =
     access.canEditOwnLines && invalidLines === 0 && pending1CCount === 0;
@@ -465,18 +559,13 @@ export function FullCalendarPage() {
                     <Upload className="size-4" />
                     Загрузить из Excel
                   </Button>
-                  <Button onClick={phaseToast}>
+                  <Button onClick={onCreateRequest}>
                     <Plus className="size-4" />
-                    Создать внеплановую акцию
+                    Создать акцию
                   </Button>
                 </div>
               ) : undefined
             }
-          />
-
-          <ColumnGroupToggle
-            visible={visibleGroups}
-            onChange={setVisibleGroups}
           />
 
           <FilterBar
@@ -489,7 +578,13 @@ export function FullCalendarPage() {
               setValues({ type: ALL, status: ALL, km: ALL, priznak: ALL })
             }
             resultCount={filtered.length}
-          />
+            className="bg-transparent px-0"
+          >
+            <ColumnGroupToggle
+              visible={visibleGroups}
+              onChange={setVisibleGroups}
+            />
+          </FilterBar>
 
           {/* Bulk-select strip — appears once rows are selected (editor roles only). */}
           {editorMode && selectedIds.size > 0 && (
@@ -551,6 +646,8 @@ export function FullCalendarPage() {
             onEdit={onEdit}
             onAddRequest={onAddRequest}
             onGiftPick={onGiftPick}
+            onLineTap={onLineTap}
+            onEditCampaign={onEditCampaignRequest}
             selectedIds={selectedIds}
             onToggleSelect={onToggleSelect}
             onToggleGroup={onToggleGroup}
@@ -583,6 +680,33 @@ export function FullCalendarPage() {
         campaigns={importTargets}
         validate={validateImport}
         onImport={onImport}
+      />
+
+      {/* Create unplanned / integrate into planned / edit unplanned (§10). */}
+      <CreateCampaignDialog
+        open={createOpen || editCampaignId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCreateOpen(false);
+            setEditCampaignId(null);
+          }
+        }}
+        plannedCampaigns={plannedCampaigns}
+        editCampaign={editCampaign}
+        onCreate={onCreateUnplanned}
+        onEdit={onEditCampaignSave}
+        onIntegrate={onIntegrate}
+      />
+
+      {/* Mobile per-line edit Sheet (Phase 5 RESPONSIVE §). */}
+      <LineEditSheet
+        open={editLineId !== null}
+        onOpenChange={(open) => !open && setEditLineId(null)}
+        line={editLine}
+        campaign={editLineCampaign}
+        access={access}
+        onEdit={onEdit}
+        onGiftPick={onGiftPick}
       />
 
       {/* Duplicate-confirmation dialog (§8.2.1) — adding is NOT blocked. */}
@@ -635,9 +759,10 @@ export function FullCalendarPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Sticky bottom action bar (fixed footer) — flush to the main edges. */}
-      <div className="-mx-3 -mb-3 shrink-0 border-t bg-white px-3 py-3 md:-mx-4 md:-mb-4 md:px-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Sticky bottom action bar (fixed footer) — full-bleed past the main padding;
+          on sm+ its height (h-14 + border) matches the sidebar collapse-button block. */}
+      <div className="-mx-3 -mb-3 shrink-0 border-t bg-white px-3 py-3 sm:h-14 sm:py-0 md:-mx-4 md:-mb-4 md:px-4">
+        <div className="flex h-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             {invalidLines > 0 ? (
               <span className="text-red-600">

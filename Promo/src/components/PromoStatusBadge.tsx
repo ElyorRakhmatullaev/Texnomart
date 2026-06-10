@@ -10,6 +10,7 @@ import type { StatusConfig } from "@texnomart/shared/types";
  */
 export const PROMO_STATUS_CONFIG: Record<string, StatusConfig> = {
   // Campaign-level
+  "Черновик": { label: "Черновик", bg: "bg-gray-100", text: "text-gray-600" },
   "На согласовании у старшего КМ": { label: "На согл. у старшего КМ", bg: "bg-amber-50", text: "text-amber-700" },
   "На согласовании у коммерческого директора": { label: "На согл. у КД", bg: "bg-amber-50", text: "text-amber-700" },
   "Переотправлено на корректировку КМ": { label: "Переотправлено КМ", bg: "bg-red-50", text: "text-red-700" },

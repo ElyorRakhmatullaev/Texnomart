@@ -7,6 +7,7 @@ import type { PromoRole } from "../app/role-context";
 
 /** Campaign-level status — auto-computed, read-only (short calendar). */
 export type CampaignStatus =
+  | "Черновик"
   | "На согласовании у старшего КМ"
   | "На согласовании у коммерческого директора"
   | "Переотправлено на корректировку КМ"
@@ -143,6 +144,11 @@ export interface PromoCampaign {
   participatingKmIds: string[];
   kmStatuses: Record<string, KmStatus>;
   planStatus?: PlanStatus;
+  /**
+   * Unplanned campaigns (§10): тип is editable only until the FIRST send for
+   * approval. Flips true on submit and locks the тип/период editing affordance.
+   */
+  firstSendDone?: boolean;
 }
 
 export const CAMPAIGNS: PromoCampaign[] = [
@@ -298,6 +304,89 @@ export function getCampaignById(id: string): PromoCampaign | undefined {
 
 export function getCategoryManager(id: string): CategoryManager | undefined {
   return CATEGORY_MANAGERS.find((km) => km.id === id);
+}
+
+// ── Unplanned campaign creation (spec §10) ─────────────────────────────────────
+// «Создать внеплановую акцию»: created directly in the full calendar with NO № промо
+// chosen by the user — the system generates an id; признак auto = «Внеплановая»;
+// тип editable only until the first send for approval; срок подачи ≥ 3 кал. дн. до
+// старта. Also «встроить в существующую плановую акцию» (keeps признак «Плановая»).
+
+/** Срок подачи внеплановой акции — не менее 3 КАЛЕНДАРНЫХ дней до старта (§10). */
+export const MIN_UNPLANNED_LEAD_DAYS = 3;
+
+/** Add N calendar days to a date (pure — returns a new Date). */
+export function addCalendarDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+/** Earliest start an unplanned campaign created on `ref` may have (today + 3 кал. дн.). */
+export function minUnplannedStartDate(ref: Date = new Date()): Date {
+  const d = addCalendarDays(ref, MIN_UNPLANNED_LEAD_DAYS);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export interface UnplannedCampaignInput {
+  type: string;
+  name: string;
+  startDate: Date;
+  endDate: Date;
+  /** Owner КМ — the mock attaches the campaign to a single creating КМ. */
+  kmId: string;
+}
+
+/** Per-field validation for the create-unplanned form (§10). */
+export interface UnplannedValidation {
+  ok: boolean;
+  errors: { name?: string; startDate?: string; endDate?: string };
+}
+
+export function validateUnplannedInput(
+  input: { name: string; startDate: Date | null; endDate: Date | null },
+  ref: Date = new Date()
+): UnplannedValidation {
+  const errors: UnplannedValidation["errors"] = {};
+  if (!input.name.trim()) errors.name = "Укажите название акции.";
+  const minStart = minUnplannedStartDate(ref);
+  if (!input.startDate || Number.isNaN(input.startDate.getTime())) {
+    errors.startDate = "Укажите дату начала.";
+  } else if (input.startDate < minStart) {
+    errors.startDate = `Срок подачи — не менее ${MIN_UNPLANNED_LEAD_DAYS} календарных дней до старта (не ранее ${minStart.toLocaleDateString("ru-RU")}).`;
+  }
+  if (!input.endDate || Number.isNaN(input.endDate.getTime())) {
+    errors.endDate = "Укажите дату окончания.";
+  } else if (input.startDate && input.endDate < input.startDate) {
+    errors.endDate = "Дата окончания не может быть раньше даты начала.";
+  }
+  return { ok: Object.keys(errors).length === 0, errors };
+}
+
+let unplannedCounter = 0;
+
+/**
+ * Build an unplanned campaign (§10). The user does NOT pick a № промо — the system
+ * generates an id (UN-2026-1xx). признак = «Внеплановая» (planned:false), status
+ * starts «Черновик», and `firstSendDone` is false so the тип stays editable until
+ * the first send. The creating КМ is the sole participant (mock single-creator).
+ */
+export function createUnplannedCampaign(input: UnplannedCampaignInput): PromoCampaign {
+  unplannedCounter += 1;
+  return {
+    id: `UN-2026-${100 + unplannedCounter}`,
+    type: input.type,
+    name: input.name.trim(),
+    planned: false,
+    cancelled: false,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    status: "Черновик",
+    participatingKmIds: [input.kmId],
+    kmStatuses: { [input.kmId]: "Не заполнено / Ожидание корректировки от КМ" },
+    firstSendDone: false,
+  };
 }
 
 // ── Deadlines (spec §4.4 — all CALENDAR days, tied to a date) ──────────────────
