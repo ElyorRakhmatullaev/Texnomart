@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Ban, Info, Plus, Send, Upload } from "lucide-react";
+import { Ban, Check, Info, Plus, Send, Upload, X } from "lucide-react";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { FilterBar } from "@texnomart/shared/components/filter-bar";
 import type { FilterConfig } from "@texnomart/shared/types";
@@ -18,10 +18,12 @@ import { ColumnGroupToggle } from "./ColumnGroupToggle";
 import { DEFAULT_VISIBLE_GROUPS, type ColumnGroupKey } from "./gridFields";
 import {
   CATEGORY_MANAGERS,
+  PROMO_LINES,
   PROMO_TYPES,
   getCampaignsWithLines,
   getFullCalendarAccess,
-  getPromoLines,
+  isLineValid,
+  type PromoLine,
 } from "../../../lib/promo-mock-data";
 
 const ALL = "all";
@@ -62,10 +64,48 @@ const FILTERS: FilterConfig[] = [
 
 const CAMPAIGNS_WITH_LINES = getCampaignsWithLines();
 
+// ── Editable line store (Phase 2) ──────────────────────────────────────────────
+// Lines are lifted into state so edits propagate to validation, the installment
+// columns, and the action bar. Seeded from PROMO_LINES; insertion order preserved.
+type LineMap = Map<string, PromoLine>;
+
+function seedLineMap(): LineMap {
+  return new Map(PROMO_LINES.map((l) => [l.id, { ...l }]));
+}
+
+type LineAction =
+  | { type: "edit"; id: string; patch: Partial<PromoLine> }
+  | { type: "bulkAdv"; ids: string[]; field: keyof PromoLine; value: boolean };
+
+function lineReducer(state: LineMap, action: LineAction): LineMap {
+  switch (action.type) {
+    case "edit": {
+      const cur = state.get(action.id);
+      if (!cur) return state;
+      const next = new Map(state);
+      next.set(action.id, { ...cur, ...action.patch });
+      return next;
+    }
+    case "bulkAdv": {
+      const next = new Map(state);
+      for (const id of action.ids) {
+        const cur = next.get(id);
+        if (cur) next.set(id, { ...cur, [action.field]: action.value });
+      }
+      return next;
+    }
+    default:
+      return state;
+  }
+}
+
 export function FullCalendarPage() {
   const { currentRole } = useRole();
   const access = getFullCalendarAccess(currentRole);
+  const editorMode = access.canEditOwnLines || access.marketingFlagOnly;
 
+  const [lines, dispatch] = React.useReducer(lineReducer, undefined, seedLineMap);
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [visibleGroups, setVisibleGroups] = React.useState<ColumnGroupKey[]>(
     DEFAULT_VISIBLE_GROUPS
   );
@@ -76,6 +116,22 @@ export function FullCalendarPage() {
     priznak: ALL,
   });
 
+  // Clear any selection when the role changes (gating differs per role).
+  React.useEffect(() => {
+    setSelectedIds(new Set());
+  }, [currentRole]);
+
+  const linesFor = React.useCallback(
+    (campaignId: string) => {
+      const out: PromoLine[] = [];
+      for (const l of lines.values()) {
+        if (l.campaignId === campaignId) out.push(l);
+      }
+      return out;
+    },
+    [lines]
+  );
+
   const filtered = React.useMemo(() => {
     return CAMPAIGNS_WITH_LINES.filter((c) => {
       if (values.type !== ALL && c.type !== values.type) return false;
@@ -85,33 +141,83 @@ export function FullCalendarPage() {
         if (values.priznak === "unplanned" && c.planned) return false;
       }
       if (values.km !== ALL) {
-        const hasKm = getPromoLines(c.id).some((l) => l.kmId === values.km);
-        if (!hasKm) return false;
+        if (!linesFor(c.id).some((l) => l.kmId === values.km)) return false;
       }
       return true;
     });
-  }, [values]);
+  }, [values, linesFor]);
 
-  // Validation summary for the action bar — lines missing the required forecast.
-  const missingRequired = React.useMemo(
-    () =>
-      filtered.reduce(
-        (sum, c) =>
-          sum +
-          getPromoLines(c.id).filter((l) => l.salesForecast == null).length,
-        0
-      ),
-    [filtered]
+  const totalLines = React.useMemo(
+    () => filtered.reduce((s, c) => s + linesFor(c.id).length, 0),
+    [filtered, linesFor]
   );
+
+  // Live validation — lines missing any required field (forecast / gift fields).
+  const invalidLines = React.useMemo(() => {
+    let n = 0;
+    for (const c of filtered) {
+      for (const l of linesFor(c.id)) if (!isLineValid(l, c)) n++;
+    }
+    return n;
+  }, [filtered, linesFor]);
+
+  const onEdit = React.useCallback(
+    (id: string, patch: Partial<PromoLine>) =>
+      dispatch({ type: "edit", id, patch }),
+    []
+  );
+
+  const onToggleSelect = React.useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const onToggleGroup = React.useCallback((ids: string[], select: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (select) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }, []);
 
   if (!access.canView) {
     return <AccessDenied note={access.note} />;
   }
 
-  const phaseToast = () =>
-    toast.info("Действие появится на следующем шаге сборки полного календаря (S2).");
+  // Bulk «В рекламу»: КМ toggles the recommendation, Маркетинг toggles its selection.
+  const bulkField: keyof PromoLine = access.marketingFlagOnly
+    ? "advSelectedMarketing"
+    : "advRecommendedKm";
+  const bulkLabel = access.marketingFlagOnly
+    ? "В рекламу (маркетинг)"
+    : "В рекламу (КМ)";
 
-  const canSubmit = access.canEditOwnLines && missingRequired === 0;
+  const applyBulk = (value: boolean) => {
+    const ids = [...selectedIds];
+    dispatch({ type: "bulkAdv", ids, field: bulkField, value });
+    toast.success(
+      `${value ? "Отмечено" : "Снято"}: «${bulkLabel}» для ${ids.length} ${pluralLines(ids.length)}`
+    );
+    setSelectedIds(new Set());
+  };
+
+  const saveDraft = () => toast.success("Черновик сохранён");
+  const submitForApproval = () =>
+    toast.success("Отправлено на согласование старшему КМ");
+
+  const phaseToast = () =>
+    toast.info(
+      "Действие появится на следующем шаге сборки полного календаря (S2)."
+    );
+
+  const canSubmit = access.canEditOwnLines && invalidLines === 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -124,10 +230,7 @@ export function FullCalendarPage() {
             subtitle={
               <span className="flex items-center gap-2">
                 {filtered.length.toLocaleString("ru-RU")} акций ·{" "}
-                {filtered
-                  .reduce((s, c) => s + getPromoLines(c.id).length, 0)
-                  .toLocaleString("ru-RU")}{" "}
-                строк
+                {totalLines.toLocaleString("ru-RU")} строк
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Info className="size-3.5 text-muted-foreground" />
@@ -171,9 +274,42 @@ export function FullCalendarPage() {
             resultCount={filtered.length}
           />
 
+          {/* Bulk-select strip — appears once rows are selected (editor roles only). */}
+          {editorMode && selectedIds.size > 0 && (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-[#FFD60A]/10 px-3 py-2 text-sm">
+              <span className="font-medium text-gray-900">
+                Выбрано {selectedIds.size} {pluralLines(selectedIds.size)}
+              </span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-muted-foreground">{bulkLabel}:</span>
+              <Button size="sm" variant="secondary" onClick={() => applyBulk(true)}>
+                <Check className="size-4" />
+                Отметить
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => applyBulk(false)}>
+                Снять
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto text-muted-foreground"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                <X className="size-4" />
+                Сбросить выбор
+              </Button>
+            </div>
+          )}
+
           <FullCalendarGrid
             campaigns={filtered}
             visibleGroups={visibleGroups}
+            access={access}
+            linesFor={linesFor}
+            onEdit={onEdit}
+            selectedIds={selectedIds}
+            onToggleSelect={onToggleSelect}
+            onToggleGroup={onToggleGroup}
           />
         </div>
       </div>
@@ -182,11 +318,10 @@ export function FullCalendarPage() {
       <div className="-mx-3 -mb-3 shrink-0 border-t bg-white px-3 py-3 md:-mx-4 md:-mb-4 md:px-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
-            {missingRequired > 0 ? (
+            {invalidLines > 0 ? (
               <span className="text-red-600">
-                {missingRequired}{" "}
-                {pluralLines(missingRequired)}: не заполнены обязательные поля
-                («Прогноз продаж»)
+                {invalidLines} {pluralLines(invalidLines)}: не заполнены
+                обязательные поля
               </span>
             ) : (
               "Все обязательные поля заполнены"
@@ -195,7 +330,7 @@ export function FullCalendarPage() {
           <div className="flex items-center gap-2">
             <Button
               variant="secondary"
-              onClick={phaseToast}
+              onClick={saveDraft}
               disabled={!access.canEditOwnLines}
               className="min-h-11 sm:min-h-9"
             >
@@ -204,8 +339,8 @@ export function FullCalendarPage() {
             <SubmitButton
               canSubmit={canSubmit}
               canEdit={access.canEditOwnLines}
-              missingRequired={missingRequired}
-              onClick={phaseToast}
+              invalidLines={invalidLines}
+              onClick={submitForApproval}
             />
           </div>
         </div>
@@ -217,12 +352,12 @@ export function FullCalendarPage() {
 function SubmitButton({
   canSubmit,
   canEdit,
-  missingRequired,
+  invalidLines,
   onClick,
 }: {
   canSubmit: boolean;
   canEdit: boolean;
-  missingRequired: number;
+  invalidLines: number;
   onClick: () => void;
 }) {
   const btn = (
@@ -239,7 +374,7 @@ function SubmitButton({
 
   const reason = !canEdit
     ? "Доступно только для категорийного менеджера, заполняющего свои строки"
-    : `Заполните обязательные поля (${missingRequired})`;
+    : `Заполните обязательные поля (${invalidLines} ${pluralLines(invalidLines)})`;
   return (
     <Tooltip>
       <TooltipTrigger asChild>

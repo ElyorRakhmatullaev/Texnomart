@@ -103,24 +103,24 @@ export const COLUMNS: ColumnDef[] = [
   { id: "inst0012", label: "0-0-12 (платёж/мес)", width: 150, group: "installments", source: "calc", kind: "money" },
   { id: "inst5002", label: "50-0-2 (платёж/мес)", width: 150, group: "installments", source: "calc", kind: "money" },
 
-  { id: "t12old", label: "12 мес: платёж (старая)", width: 170, group: "installments", source: "km", kind: "money" },
+  { id: "t12old", label: "12 мес: платёж (старая)", width: 170, group: "installments", source: "calc", kind: "money" },
   { id: "t12new", label: "12 мес: платёж (новая)", width: 170, group: "installments", source: "calc", kind: "money" },
   { id: "t12disc", label: "12 мес: размер скидки", width: 160, group: "installments", source: "km", kind: "money" },
   { id: "t12full", label: "12 мес: полная цена (новая)", width: 190, group: "installments", source: "calc", kind: "money" },
 
-  { id: "t24old", label: "24 мес: платёж (старая)", width: 170, group: "installments", source: "km", kind: "money" },
+  { id: "t24old", label: "24 мес: платёж (старая)", width: 170, group: "installments", source: "calc", kind: "money" },
   { id: "t24new", label: "24 мес: платёж (новая)", width: 170, group: "installments", source: "calc", kind: "money" },
   { id: "t24disc", label: "24 мес: размер скидки", width: 160, group: "installments", source: "km", kind: "money" },
   { id: "t24full", label: "24 мес: полная цена (новая)", width: 190, group: "installments", source: "calc", kind: "money" },
 
-  { id: "t36old", label: "36 мес: платёж (старая)", width: 170, group: "installments", source: "km", kind: "money" },
+  { id: "t36old", label: "36 мес: платёж (старая)", width: 170, group: "installments", source: "calc", kind: "money" },
   { id: "t36new", label: "36 мес: платёж (новая)", width: 170, group: "installments", source: "calc", kind: "money" },
   { id: "t36disc", label: "36 мес: размер скидки", width: 160, group: "installments", source: "km", kind: "money" },
   { id: "t36full", label: "36 мес: полная цена (новая)", width: 190, group: "installments", source: "calc", kind: "money" },
 
   // ── Маркетинг ──
   { id: "giftNomenclature", label: "Номенклатура по подаркам", width: 220, group: "marketing", source: "1c", kind: "text", giftOnly: true },
-  { id: "giftStock", label: "Остаток подарка", width: 140, group: "marketing", source: "auto", kind: "number", giftOnly: true },
+  { id: "giftStock", label: "Остаток подарка", width: 140, group: "marketing", source: "km", kind: "number", giftOnly: true },
   { id: "supplierCompensation", label: "Компенсация поставщика", width: 180, group: "marketing", source: "km", kind: "money" },
   { id: "compensationLimit", label: "Лимит компенс. кол-ва", width: 170, group: "marketing", source: "km", kind: "number" },
   { id: "utp", label: "УТП", width: 200, group: "marketing", source: "km", kind: "text" },

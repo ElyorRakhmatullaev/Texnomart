@@ -5,16 +5,16 @@ import { cn } from "@texnomart/ui/utils";
 import { Card } from "@texnomart/ui/card";
 import { Checkbox } from "@texnomart/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
-import { AlertCircle, Clock, Copy, Lock, Pencil } from "lucide-react";
+import { AlertCircle, Clock, Copy, Lock } from "lucide-react";
 import { Money } from "../../../components/Money";
 import { RuDate } from "../../../components/RuDate";
 import {
-  PROMO_TYPES,
   getCategoryManager,
   getNomenclatureItem,
-  getPromoLines,
   installmentTerm,
+  isGiftType,
   programMonthly,
+  type FullCalendarAccess,
   type NomenclatureItem,
   type PromoCampaign,
   type PromoLine,
@@ -26,6 +26,8 @@ import {
   type ColumnDef,
   type ColumnGroupKey,
 } from "./gridFields";
+import { EditableCell } from "./EditableCell";
+import { WarehousePopover } from "./WarehousePopover";
 
 // Fixed heights keep the frozen pane and the scrolling pane aligned row-for-row
 // (Pattern F: two synced divs, never position:sticky on a cell — see tasks/lessons.md).
@@ -35,6 +37,7 @@ const ROW_H = "h-14";
 
 // The 3 spec-frozen columns (§6, §8) — always visible in the frozen pane.
 const FROZEN = {
+  select: 40,
   promo: 96,
   km: 150,
   nomenclature: 230,
@@ -48,10 +51,6 @@ function lastName(name: string): string {
   return name.split(" ")[0];
 }
 
-function isGiftCampaign(campaign: PromoCampaign): boolean {
-  return Boolean(PROMO_TYPES.find((t) => t.name === campaign.type)?.giftType);
-}
-
 const Dash = () => <span className="text-muted-foreground">—</span>;
 
 function alignClass(col: ColumnDef): string {
@@ -62,22 +61,50 @@ function alignClass(col: ColumnDef): string {
     : "text-left";
 }
 
-/** Heterogeneous per-field value renderer (read-only in Phase 1). */
+/** Whether the current role may edit this column on a line (Phase 2 gating). */
+function cellEditable(col: ColumnDef, access: FullCalendarAccess): boolean {
+  // «В рекламу (выбрано маркетингом)» — Сотрудник маркетинга only.
+  if (col.id === "advSelectedMarketing") return access.marketingFlagOnly;
+  if (!access.canEditOwnLines) return false;
+  // Only genuine КМ-entry fields are editable; auto / 1С / calc stay locked.
+  return col.source === "km";
+}
+
+/** Is this column required for the given campaign (drives the red marker)? */
+function isRequiredFor(colId: string, gift: boolean): boolean {
+  if (colId === "salesForecast") return true;
+  if (gift && (colId === "giftNomenclature" || colId === "giftStock")) return true;
+  return false;
+}
+
+interface CellCtx {
+  access: FullCalendarAccess;
+  onEdit: (lineId: string, patch: Partial<PromoLine>) => void;
+  gift: boolean;
+}
+
+/** Heterogeneous per-field renderer — editable inputs for КМ fields, read-only for the rest. */
 function CellValue({
   col,
   line,
   nom,
   campaign,
+  ctx,
 }: {
   col: ColumnDef;
   line: PromoLine;
   nom: NomenclatureItem | undefined;
   campaign: PromoCampaign;
+  ctx: CellCtx;
 }) {
-  if (col.giftOnly && !isGiftCampaign(campaign)) return <Dash />;
+  if (col.giftOnly && !ctx.gift) return <Dash />;
   const old = nom?.oldRetailPrice ?? 0;
+  const editable = cellEditable(col, ctx.access);
+  const required = isRequiredFor(col.id, ctx.gift);
+  const edit = (patch: Partial<PromoLine>) => ctx.onEdit(line.id, patch);
 
   switch (col.id) {
+    // ── Идентификация / calendar (auto, read-only) ──
     case "priznak":
       return <span>{campaign.planned ? "Плановая" : "Внеплановая"}</span>;
     case "type":
@@ -89,20 +116,22 @@ function CellValue({
     case "end":
       return <RuDate value={campaign.endDate} />;
 
+    // ── Товар ──
     case "stock":
       return (
-        <span className="inline-flex items-center justify-end gap-1">
-          <span className="tabular-nums">{line.stock.toLocaleString("ru-RU")}</span>
-          {line.stockManual && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Pencil className="size-3 shrink-0 text-amber-500" />
-              </TooltipTrigger>
-              <TooltipContent>
-                Значение изменено вручную, автообновление остановлено
-              </TooltipContent>
-            </Tooltip>
-          )}
+        <span className="inline-flex w-full items-center justify-end gap-1">
+          <EditableCell
+            value={line.stock}
+            kind="number"
+            align="right"
+            editable={editable}
+            manualEdited={line.stockManual}
+            manualHint="Значение изменено вручную, автообновление остановлено"
+            onCommit={(v) =>
+              edit({ stock: typeof v === "number" ? v : 0, stockManual: true })
+            }
+          />
+          <WarehousePopover nomenclatureId={line.nomenclatureId} />
         </span>
       );
     case "cost":
@@ -110,48 +139,72 @@ function CellValue({
     case "oldPrice":
       return nom ? <Money value={old} /> : <Dash />;
 
+    // ── Цены (КМ-editable) ──
     case "newPrice":
-      return <Money value={line.newPrice} />;
+      return (
+        <EditableCell
+          value={line.newPrice}
+          kind="money"
+          align="right"
+          editable={editable}
+          onCommit={(v) => edit({ newPrice: typeof v === "number" ? v : 0 })}
+        />
+      );
     case "discountPct":
-      return <span>{line.discountPct}%</span>;
+      return (
+        <EditableCell
+          value={line.discountPct}
+          kind="percent"
+          align="right"
+          editable={editable}
+          onCommit={(v) => edit({ discountPct: typeof v === "number" ? v : 0 })}
+        />
+      );
     case "regularSales":
-      return line.regularSales != null ? (
-        <span>{line.regularSales.toLocaleString("ru-RU")}</span>
-      ) : (
-        <Dash />
+      return (
+        <EditableCell
+          value={line.regularSales}
+          kind="number"
+          align="right"
+          editable={editable}
+          onCommit={(v) =>
+            edit({ regularSales: typeof v === "number" ? v : undefined })
+          }
+        />
       );
     case "salesForecast":
-      return line.salesForecast != null ? (
-        <span>{line.salesForecast.toLocaleString("ru-RU")}</span>
-      ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-[11px] font-medium text-red-700">
-              <AlertCircle className="size-3" />
-              не заполнено
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            Обязательное поле — без него нельзя отправить на согласование
-          </TooltipContent>
-        </Tooltip>
+      return (
+        <EditableCell
+          value={line.salesForecast}
+          kind="number"
+          align="right"
+          editable={editable}
+          required={required}
+          onCommit={(v) =>
+            edit({ salesForecast: typeof v === "number" ? v : undefined })
+          }
+        />
       );
     case "cashDiscountPct":
-      return line.cashDiscountPct != null ? (
-        <span>{line.cashDiscountPct}%</span>
-      ) : (
-        <Dash />
+      return (
+        <EditableCell
+          value={line.cashDiscountPct}
+          kind="percent"
+          align="right"
+          editable={editable}
+          onCommit={(v) =>
+            edit({ cashDiscountPct: typeof v === "number" ? v : undefined })
+          }
+        />
       );
 
-    // Installment programs (auto-calculated, §8.5)
+    // ── Рассрочка (auto-calculated from the live new price, §8.5) ──
     case "inst006":
       return <Money value={programMonthly(line.newPrice, 6)} />;
     case "inst0012":
       return <Money value={programMonthly(line.newPrice, 12)} />;
     case "inst5002":
       return <Money value={programMonthly(line.newPrice, 2, 0.5)} />;
-
-    // 12/24/36-мес sets
     case "t12old":
       return <Money value={installmentTerm(line, old, 12).oldMonthly} />;
     case "t12new":
@@ -177,40 +230,87 @@ function CellValue({
     case "t36full":
       return <Money value={installmentTerm(line, old, 36).newFullPrice} />;
 
-    // Маркетинг
+    // ── Маркетинг ──
     case "giftNomenclature": {
+      // Selection of gift nomenclature is nomenclature-entry (Phase 3) — read-only here.
       const gift = line.giftNomenclatureId
         ? getNomenclatureItem(line.giftNomenclatureId)
         : undefined;
-      return gift ? <span className="truncate">{gift.name}</span> : <Dash />;
+      return (
+        <EditableCell
+          value={gift?.name}
+          kind="text"
+          editable={false}
+          required={required}
+          onCommit={() => undefined}
+        />
+      );
     }
     case "giftStock":
-      return line.giftStock != null ? (
-        <span>{line.giftStock.toLocaleString("ru-RU")}</span>
-      ) : (
-        <Dash />
+      return (
+        <EditableCell
+          value={line.giftStock}
+          kind="number"
+          align="right"
+          editable={editable}
+          required={required}
+          onCommit={(v) =>
+            edit({ giftStock: typeof v === "number" ? v : undefined })
+          }
+        />
       );
     case "supplierCompensation":
-      return line.supplierCompensation != null ? (
-        <Money value={line.supplierCompensation} />
-      ) : (
-        <Dash />
+      return (
+        <EditableCell
+          value={line.supplierCompensation}
+          kind="money"
+          align="right"
+          editable={editable}
+          onCommit={(v) =>
+            edit({ supplierCompensation: typeof v === "number" ? v : undefined })
+          }
+        />
       );
     case "compensationLimit":
-      return line.compensationLimit != null ? (
-        <span>{line.compensationLimit.toLocaleString("ru-RU")}</span>
-      ) : (
-        <Dash />
+      return (
+        <EditableCell
+          value={line.compensationLimit}
+          kind="number"
+          align="right"
+          editable={editable}
+          onCommit={(v) =>
+            edit({ compensationLimit: typeof v === "number" ? v : undefined })
+          }
+        />
       );
     case "utp":
-      return line.utp ? <span className="truncate">{line.utp}</span> : <Dash />;
+      return (
+        <EditableCell
+          value={line.utp}
+          kind="text"
+          editable={editable}
+          onCommit={(v) =>
+            edit({ utp: typeof v === "string" ? v : undefined })
+          }
+        />
+      );
     case "advRecommendedKm":
       return (
-        <Checkbox checked={line.advRecommendedKm} disabled aria-readonly />
+        <Checkbox
+          checked={line.advRecommendedKm}
+          disabled={!editable}
+          aria-readonly={!editable}
+          onCheckedChange={(c) => edit({ advRecommendedKm: c === true })}
+        />
       );
     case "advSelectedMarketing":
       return (
-        <Checkbox checked={line.advSelectedMarketing} disabled aria-readonly />
+        <Checkbox
+          checked={line.advSelectedMarketing}
+          disabled={!editable}
+          aria-readonly={!editable}
+          onCheckedChange={(c) => edit({ advSelectedMarketing: c === true })}
+        />
       );
     default:
       return <Dash />;
@@ -220,12 +320,28 @@ function CellValue({
 interface FullCalendarGridProps {
   campaigns: PromoCampaign[];
   visibleGroups: ColumnGroupKey[];
+  access: FullCalendarAccess;
+  /** Edited lines for a campaign (from the page-level store). */
+  linesFor: (campaignId: string) => PromoLine[];
+  onEdit: (lineId: string, patch: Partial<PromoLine>) => void;
+  /** Bulk-select state (shown only for editor roles). */
+  selectedIds: Set<string>;
+  onToggleSelect: (lineId: string) => void;
+  onToggleGroup: (lineIds: string[], select: boolean) => void;
 }
 
 export function FullCalendarGrid({
   campaigns,
   visibleGroups,
+  access,
+  linesFor,
+  onEdit,
+  selectedIds,
+  onToggleSelect,
+  onToggleGroup,
 }: FullCalendarGridProps) {
+  const editorMode = access.canEditOwnLines || access.marketingFlagOnly;
+
   const cols = React.useMemo(
     () => COLUMNS.filter((c) => visibleGroups.includes(c.group)),
     [visibleGroups]
@@ -234,9 +350,9 @@ export function FullCalendarGrid({
   const groups = React.useMemo(
     () =>
       campaigns
-        .map((campaign) => ({ campaign, lines: getPromoLines(campaign.id) }))
+        .map((campaign) => ({ campaign, lines: linesFor(campaign.id) }))
         .filter((g) => g.lines.length > 0),
-    [campaigns]
+    [campaigns, linesFor]
   );
 
   if (groups.length === 0) {
@@ -252,7 +368,7 @@ export function FullCalendarGrid({
   return (
     <Card className="overflow-hidden p-0">
       <div className="flex">
-        {/* ── Frozen identity pane (№ промо · ФИО КМ · Номенклатура) ──────── */}
+        {/* ── Frozen identity pane (select · № промо · ФИО КМ · Номенклатура) ── */}
         <div className="shrink-0 border-r bg-white">
           <div
             className={cn(
@@ -260,6 +376,7 @@ export function FullCalendarGrid({
               HEADER_H
             )}
           >
+            {editorMode && <span style={colStyle(FROZEN.select)} />}
             <span className="px-3" style={colStyle(FROZEN.promo)}>
               № промо
             </span>
@@ -271,63 +388,90 @@ export function FullCalendarGrid({
             </span>
           </div>
 
-          {groups.map(({ campaign, lines }) => (
-            <div key={campaign.id}>
-              {/* group band (frozen side) */}
-              <div
-                className={cn(
-                  "flex items-center gap-2 border-b bg-gray-100/70 px-3 text-xs font-semibold text-gray-700",
-                  BAND_H,
-                  campaign.cancelled && "bg-red-50"
-                )}
-              >
-                <span className="tabular-nums">{campaign.id}</span>
-                <span className="font-normal text-muted-foreground">
-                  · {lines.length} стр.
-                </span>
-              </div>
+          {groups.map(({ campaign, lines }) => {
+            const ids = lines.map((l) => l.id);
+            const selCount = ids.filter((id) => selectedIds.has(id)).length;
+            const groupChecked: boolean | "indeterminate" =
+              selCount === 0 ? false : selCount === ids.length ? true : "indeterminate";
+            return (
+              <div key={campaign.id}>
+                {/* group band (frozen side) */}
+                <div
+                  className={cn(
+                    "flex items-center gap-2 border-b bg-gray-100/70 px-3 text-xs font-semibold text-gray-700",
+                    BAND_H,
+                    campaign.cancelled && "bg-red-50"
+                  )}
+                >
+                  {editorMode && (
+                    <Checkbox
+                      checked={groupChecked}
+                      onCheckedChange={(c) => onToggleGroup(ids, c === true)}
+                      aria-label="Выбрать все строки акции"
+                    />
+                  )}
+                  <span className="tabular-nums">{campaign.id}</span>
+                  <span className="font-normal text-muted-foreground">
+                    · {lines.length} стр.
+                  </span>
+                </div>
 
-              {/* lines */}
-              {lines.map((line) => {
-                const km = line.kmId;
-                const nom = getNomenclatureItem(line.nomenclatureId);
-                return (
-                  <div
-                    key={line.id}
-                    className={cn(
-                      "group/row flex items-center border-b transition-colors hover:bg-gray-50",
-                      ROW_H,
-                      line.rejected && "bg-red-50/70 hover:bg-red-50"
-                    )}
-                  >
-                    <span
-                      className="px-3 text-xs tabular-nums text-muted-foreground"
-                      style={colStyle(FROZEN.promo)}
-                    >
-                      {campaign.id}
-                    </span>
-                    <KmCell kmId={km} width={FROZEN.km} />
+                {/* lines */}
+                {lines.map((line) => {
+                  const nom = getNomenclatureItem(line.nomenclatureId);
+                  return (
                     <div
-                      className="flex items-center gap-1.5 px-3"
-                      style={colStyle(FROZEN.nomenclature)}
+                      key={line.id}
+                      className={cn(
+                        "group/row flex items-center border-b transition-colors hover:bg-gray-50",
+                        ROW_H,
+                        selectedIds.has(line.id) && "bg-[#FFD60A]/5",
+                        line.rejected && "bg-red-50/70 hover:bg-red-50"
+                      )}
                     >
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="truncate text-sm font-medium text-gray-900">
-                            {nom?.name ?? line.nomenclatureId}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {nom ? `${nom.name} · ${line.nomenclatureId}` : line.nomenclatureId}
-                        </TooltipContent>
-                      </Tooltip>
-                      <LineMarkers line={line} />
+                      {editorMode && (
+                        <span
+                          className="flex items-center justify-center"
+                          style={colStyle(FROZEN.select)}
+                        >
+                          <Checkbox
+                            checked={selectedIds.has(line.id)}
+                            onCheckedChange={() => onToggleSelect(line.id)}
+                            aria-label="Выбрать строку"
+                          />
+                        </span>
+                      )}
+                      <span
+                        className="px-3 text-xs tabular-nums text-muted-foreground"
+                        style={colStyle(FROZEN.promo)}
+                      >
+                        {campaign.id}
+                      </span>
+                      <KmCell kmId={line.kmId} width={FROZEN.km} />
+                      <div
+                        className="flex items-center gap-1.5 px-3"
+                        style={colStyle(FROZEN.nomenclature)}
+                      >
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="truncate text-sm font-medium text-gray-900">
+                              {nom?.name ?? line.nomenclatureId}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {nom
+                              ? `${nom.name} · ${line.nomenclatureId}`
+                              : line.nomenclatureId}
+                          </TooltipContent>
+                        </Tooltip>
+                        <LineMarkers line={line} />
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
 
         {/* ── Scrolling pane ─────────────────────────────────────────────── */}
@@ -366,78 +510,84 @@ export function FullCalendarGrid({
             </div>
 
             {/* groups */}
-            {groups.map(({ campaign, lines }) => (
-              <div key={campaign.id}>
-                {/* group band (scroll side) — campaign context */}
-                <div
-                  className={cn(
-                    "flex w-full items-center gap-3 border-b bg-gray-100/70 px-3 text-xs",
-                    BAND_H,
-                    campaign.cancelled && "bg-red-50"
-                  )}
-                >
-                  <span
+            {groups.map(({ campaign, lines }) => {
+              const gift = isGiftType(campaign.type);
+              const ctx: CellCtx = { access, onEdit, gift };
+              return (
+                <div key={campaign.id}>
+                  {/* group band (scroll side) — campaign context */}
+                  <div
                     className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] font-medium",
-                      campaign.planned
-                        ? "bg-blue-50 text-blue-700"
-                        : "bg-purple-50 text-purple-700"
+                      "flex w-full items-center gap-3 border-b bg-gray-100/70 px-3 text-xs",
+                      BAND_H,
+                      campaign.cancelled && "bg-red-50"
                     )}
                   >
-                    {campaign.planned ? "Плановая" : "Внеплановая"}
-                  </span>
-                  <span className="text-muted-foreground">{campaign.type}</span>
-                  <span
-                    className={cn(
-                      "font-semibold text-gray-900",
-                      campaign.cancelled && "text-red-700 line-through"
-                    )}
-                  >
-                    {campaign.name}
-                  </span>
-                  <span className="tabular-nums text-muted-foreground">
-                    <RuDate value={campaign.startDate} /> —{" "}
-                    <RuDate value={campaign.endDate} />
-                  </span>
-                </div>
-
-                {/* lines */}
-                {lines.map((line) => {
-                  const nom = getNomenclatureItem(line.nomenclatureId);
-                  return (
-                    <div
-                      key={line.id}
+                    <span
                       className={cn(
-                        "flex items-center border-b text-sm transition-colors hover:bg-gray-50",
-                        ROW_H,
-                        line.rejected && "bg-red-50/70 hover:bg-red-50"
+                        "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                        campaign.planned
+                          ? "bg-blue-50 text-blue-700"
+                          : "bg-purple-50 text-purple-700"
                       )}
                     >
-                      {cols.map((col) => (
-                        <div
-                          key={col.id}
-                          className={cn(
-                            "flex items-center px-3 text-gray-800",
-                            alignClass(col) === "text-right"
-                              ? "justify-end tabular-nums"
-                              : "justify-start",
-                            isLocked(col.source) && "text-gray-500"
-                          )}
-                          style={colStyle(col.width)}
-                        >
-                          <CellValue
-                            col={col}
-                            line={line}
-                            nom={nom}
-                            campaign={campaign}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+                      {campaign.planned ? "Плановая" : "Внеплановая"}
+                    </span>
+                    <span className="text-muted-foreground">{campaign.type}</span>
+                    <span
+                      className={cn(
+                        "font-semibold text-gray-900",
+                        campaign.cancelled && "text-red-700 line-through"
+                      )}
+                    >
+                      {campaign.name}
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">
+                      <RuDate value={campaign.startDate} /> —{" "}
+                      <RuDate value={campaign.endDate} />
+                    </span>
+                  </div>
+
+                  {/* lines */}
+                  {lines.map((line) => {
+                    const nom = getNomenclatureItem(line.nomenclatureId);
+                    return (
+                      <div
+                        key={line.id}
+                        className={cn(
+                          "flex items-center border-b text-sm transition-colors hover:bg-gray-50",
+                          ROW_H,
+                          selectedIds.has(line.id) && "bg-[#FFD60A]/5",
+                          line.rejected && "bg-red-50/70 hover:bg-red-50"
+                        )}
+                      >
+                        {cols.map((col) => (
+                          <div
+                            key={col.id}
+                            className={cn(
+                              "flex items-center px-3 text-gray-800",
+                              alignClass(col) === "text-right"
+                                ? "justify-end tabular-nums"
+                                : "justify-start",
+                              isLocked(col.source) && "text-gray-500"
+                            )}
+                            style={colStyle(col.width)}
+                          >
+                            <CellValue
+                              col={col}
+                              line={line}
+                              nom={nom}
+                              campaign={campaign}
+                              ctx={ctx}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

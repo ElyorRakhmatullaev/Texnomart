@@ -513,6 +513,32 @@ export function getCampaignsWithLines(): PromoCampaign[] {
   return CAMPAIGNS.filter((c) => ids.has(c.id));
 }
 
+/** Whether a campaign's тип bears a gift (requires gift nomenclature fields, §8.8). */
+export function isGiftType(typeName: string): boolean {
+  return Boolean(PROMO_TYPES.find((t) => t.name === typeName)?.giftType);
+}
+
+/** Required-field IDs missing on a line (drives the red marker + send gating, §8.6/§8.8). */
+export function missingRequiredFields(
+  line: PromoLine,
+  campaign: PromoCampaign
+): string[] {
+  const missing: string[] = [];
+  // Прогноз продаж — always required (spec §8.6).
+  if (line.salesForecast == null) missing.push("salesForecast");
+  // Gift fields — required only for gift типы (spec §8.8).
+  if (isGiftType(campaign.type)) {
+    if (!line.giftNomenclatureId) missing.push("giftNomenclature");
+    if (line.giftStock == null) missing.push("giftStock");
+  }
+  return missing;
+}
+
+/** A line is valid (sendable) when it has no missing required fields. */
+export function isLineValid(line: PromoLine, campaign: PromoCampaign): boolean {
+  return missingRequiredFields(line, campaign).length === 0;
+}
+
 // ── Installment programs (spec §8.5) — monthly payments auto-calculated ─────────
 // Simplified illustrative model: equal monthly split with a small per-term markup.
 // Exact bank formulas are out of scope for the mock.
