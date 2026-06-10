@@ -5,6 +5,9 @@ import { ModulePlaceholder } from "./components/ModulePlaceholder";
 import { ShortCalendarPage } from "./components/short-calendar/ShortCalendarPage";
 import { ShortCalendarDetailPage } from "./components/short-calendar/ShortCalendarDetailPage";
 import { FullCalendarPage } from "./components/full-calendar/FullCalendarPage";
+import { ApprovalsProvider } from "./components/approvals/ApprovalsProvider";
+import { ApprovalsPage } from "./components/approvals/ApprovalsPage";
+import { ApprovalDetailPage } from "./components/approvals/ApprovalDetailPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { Login2FAPage } from "./components/auth/Login2FAPage";
 import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
@@ -33,12 +36,12 @@ function GuestLayout() {
 
 // ── Module panels (placeholders for the bootstrap; real screens land in S1–S8) ──
 
-function ApprovalsPage() {
+/** Mounts the shared S3 review store above the queue + detail routes. */
+function ApprovalsLayout() {
   return (
-    <ModulePlaceholder
-      title="Согласование"
-      description="Очередь проверки для старшего КМ и коммерческого директора, отправка КМ и поток «Не участвует»."
-    />
+    <ApprovalsProvider>
+      <Outlet />
+    </ApprovalsProvider>
   );
 }
 
@@ -107,10 +110,13 @@ export const router = createBrowserRouter([
         Component: ShortCalendarDetailPage,
       },
       { path: "full-calendar", Component: FullCalendarPage },
-      { path: "approvals", Component: ApprovalsPage },
       {
-        path: "approvals/:id",
-        element: <DetailPlaceholder title="Заявка на согласование" />,
+        path: "approvals",
+        Component: ApprovalsLayout,
+        children: [
+          { index: true, Component: ApprovalsPage },
+          { path: ":id", Component: ApprovalDetailPage },
+        ],
       },
       { path: "reports", Component: ReportsPage },
       { path: "notifications", Component: NotificationsPage },
