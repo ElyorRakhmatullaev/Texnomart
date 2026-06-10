@@ -306,3 +306,42 @@ Documented mistakes, gotchas, and learnings from project work. Never remove old 
 
 ### The Phase-3 Radix Deferral Applies to Every Page-Hosted Dialog
 - The «Загрузить из Excel» dialog is opened by a PageHeader button (not a `DialogTrigger`), so it hits the same "controlled dialog opened by an outside pointer click self-dismisses" race — `setTimeout(() => setImportOpen(true), 0)` again. Any new page-level dialog opened from a toolbar/grid button needs this defer; the only exception is a dialog opened from inside another dialog's `onSelect` (the dup-confirm in Phase 3), where no fresh outside-pointer interaction is in flight.
+
+---
+
+## 2026-06-10 — Texnomart Promo S2 (Полный промо-календарь, Phase 5 — unplanned creation + mobile per-line Sheet)
+
+### To Render a Newly-Created Row Group, the GROUP Collection Must Be State Too — Not Just the Rows
+- Phases 1–4 lifted only the *lines* into state; the *campaigns* were still read from the `getCampaignsWithLines()` module constant. A created/integrated campaign therefore never appeared no matter how many lines you added to it. Fix: add a `visibleCampaigns` state slice (seeded from the same constant) and derive `filtered`/`campaignsById`/duplicate-detection from `CAMPAIGNS ∪ visibleCampaigns`. The rule generalizes: when "add a new top-level entity" is in scope, the entity COLLECTION has to be stateful, not only its children — otherwise the child store has nowhere to hang the new parent.
+- Keep the seed path byte-identical (same initializer) so the prior phases' behavior is provably unchanged; only the *new* prepend path is new code. The grid's group memo also had to stop filtering out zero-line groups (`.filter(g => g.lines.length > 0)`) — a freshly created campaign is legitimately empty until the КМ adds nomenclature, so render the band + an empty-hint row in BOTH Pattern-F panes (same ROW_H) to keep them aligned.
+
+### A Sheet Is a Radix Dialog — the Page-Hosted-Dialog Defer Applies to Sheets Too
+- `@texnomart/ui/sheet` wraps `@radix-ui/react-dialog`, so a controlled `<Sheet open>` opened from a grid/toolbar button self-dismisses on the opening pointer click exactly like the Phase-3/4 dialogs. Every new opener in Phase 5 (create-campaign, edit-campaign, mobile line-tap) uses the same `setTimeout(() => setX(...), 0)` defer. Treat "opened by an outside pointer click" — not "is a Dialog" — as the trigger for the deferral.
+
+### Reuse the Cell Editor in a Stacked Mobile Form Instead of Re-implementing Inputs
+- The mobile «редактировать строку» Sheet renders the line's editable fields stacked by group, but it reuses the SAME `EditableCell` (click-to-edit, commit on blur/Enter) the grid uses — so a forecast typed in the Sheet flows through the identical `onEdit(id, patch)` → page store → validation path, and the action-bar invalid-count updates with zero extra wiring. Verified by editing the forecast in the Sheet and watching the footer count drop. Don't fork a second input implementation for mobile; wrap the shared one in a full-width container.
+
+### "Editable Until First Send" = a Per-Entity Flag Flipped on Submit, Surfaced as a Conditional Affordance
+- Spec §10 «тип editable only until first send» is modeled as `firstSendDone` on the campaign, flipped true inside the submit handler for every unplanned campaign. The concrete UI manifestation is a band-level «Изменить» button gated on `!planned && !firstSendDone && canEditOwnLines` that reopens the create dialog in edit mode (prefilled, no mode tabs). Because submit is a mock (no persistence) the flag is in-memory only — but the rule is still visible/testable. The deadline guard (≥3 кал. дн. before start) is enforced only for NEW campaigns (`validateUnplannedInput(..., ref)` with `ref = epoch` in edit mode) since an existing campaign may already start sooner.
+
+### `<input type="date">` Is the Pragmatic Date Picker for a Mock — Convert via Local-TZ Helpers
+- No date-picker component is in the kit and date-fns alone doesn't give a calendar UI; a native `<input type="date">` (value `yyyy-mm-dd`, with a `min` attribute mirroring the validator) is zero-dep, accessible, and locale-aware. Convert with explicit local-tz helpers (`new Date(\`${s}T00:00:00\`)` and a `getFullYear/Month/Date` formatter) — NOT `toISOString().slice(0,10)`, which shifts the day across the UTC boundary for non-UTC users.
+
+---
+
+## 2026-06-10 — Texnomart Promo: Layout polish (full-bleed, header height, padding, Pattern F)
+
+### Per-Route Full-Bleed Without Touching the Shared AppShell — Drive `maxWidth` From the Thin Wrapper
+- The shared `AppShell` centers content in a `mx-auto h-full` wrapper with a `maxWidth` prop (default `1400px`). To make ONE route full-width (the dense full-calendar grid) without affecting other pages or other apps, compute `maxWidth` in the project's thin `AppShell` wrapper via `useLocation()`: `pathname.startsWith("/full-calendar") ? "100%" : "1400px"`. `maxWidth:100%` + `mx-auto` → zero auto-margins → true full-bleed, and a page's existing `-mx-3 md:-mx-4` action-bar negative margins then break out of `<main>`'s padding to the full width. No shared-component change needed.
+
+### A Fixed-Height Header (`h-14`) Clips a Tall Title — Use `min-h-14`
+- `@texnomart/shared` `PageHeader` had `sm:h-14` (56px) with `items-center`. A 32px title + subtitle + `pt-3 pb-6` needs ~64–100px, so the content overflowed the fixed 56px box and, being centered, spilled ABOVE the container where the scroll-area top edge clipped it (h1 top measured 10px above the header's own top). Fix: `sm:h-14` → **`sm:min-h-14`** (grows to fit; pages with shorter content still render at 56px, so it's backward-compatible). Rule: never put a fixed `h-*` on a container whose text content can exceed it — use `min-h-*`.
+
+### A Scroll Container's `padding-bottom` Is Swallowed When an `h-full` Child Overflows It
+- `<main overflow-auto p-4>` → `<div mx-auto h-full>` → page. For a tall block-flow page, the `h-full` wrapper is fixed at main's height and the page content overflows IT (not main), so main's `padding-bottom` sits at the wrapper's edge mid-scroll, not after the content — the last card ends flush against the viewport (measured gap 0). The `h-full` wrapper can't be dropped (app-like pages with internal fixed footers need a definite-height ancestor). Fix: add bottom padding to the *page content* itself (`pb-6`), which flows past the wrapper and IS respected (gap → 24px). Apply the same value to every block-flow page for consistency; app-like pages (own fixed footer) don't need it.
+
+### Pattern F: `min-h` Does NOT Keep the Two Panes Aligned — the Row Height Must Be FIXED
+- Reiterating the S1 Pattern-F lesson with a concrete regression: `ShortCalendarTable` used `min-h-[72px]` on rows. The frozen pane (single-line truncated columns) stayed at 72px, but the scrolling pane's rows GREW past 72px when content wrapped (3–4 category chips, long КМ-name lists) — the two independent panes then desynced row-for-row. `min-h` lets each pane size independently; only a FIXED `h-[72px]` on both panes guarantees alignment. Pair it with clamping so nothing overflows the fixed height: cap wrapping chip lists at N + «+N» (full list on `title`), `line-clamp-2` long text, and `overflow-hidden` as a safety net. Verified: all rows exactly 72px in both panes, 0px top-delta.
+
+### Extend a Shared Layout Component With an Optional `className`, Not a Fork
+- Needed the FilterBar's gray box + `px-3` gone on one screen (so filters align flush with the header/grid). Rather than fork it, added an optional `className?: string` to `@texnomart/shared` FilterBar merged via `cn(base, className)` — the screen passes `bg-transparent px-0`. Default (no className) is byte-identical, so Dashboard's usages are unchanged. Same additive pattern as the AppShell `roleSwitcher`/`maxWidth` props: extend shared components with optional overrides, never breaking existing consumers.
