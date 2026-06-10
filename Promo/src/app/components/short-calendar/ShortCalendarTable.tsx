@@ -18,9 +18,11 @@ import {
 } from "../../../lib/promo-mock-data";
 
 // Fixed heights keep the frozen pane and the scrolling pane aligned row-for-row
-// (Pattern F: two synced divs, never position:sticky on a cell).
+// (Pattern F: two synced divs, never position:sticky on a cell). The row height is
+// FIXED (not min-h) — the two panes are independent, so a taller scrolling row would
+// otherwise desync from its frozen counterpart; variable cells clamp to fit instead.
 const HEADER_H = "h-12";
-const ROW_H = "min-h-[72px]";
+const ROW_H = "h-[72px]";
 
 /** Capitalised short weekday, e.g. "Пн". */
 function weekdayShort(date: Date): string {
@@ -141,7 +143,7 @@ export function ShortCalendarTable({
                   type="button"
                   onClick={() => onRowClick(c.id)}
                   className={cn(
-                    "flex w-full items-center border-b text-left transition-colors hover:bg-gray-50",
+                    "flex w-full items-center overflow-hidden border-b text-left transition-colors hover:bg-gray-50",
                     ROW_H,
                     c.cancelled && "bg-red-50/60 hover:bg-red-50"
                   )}
@@ -157,21 +159,29 @@ export function ShortCalendarTable({
                     </div>
                   </div>
 
-                  {/* Распределение по категориям */}
-                  <div className="flex w-[200px] flex-wrap gap-1 px-3">
-                    {categories.map((cat) => (
+                  {/* Распределение по категориям — cap at 2 chips + «+N» so the cell
+                      never grows past the fixed row height (keeps panes aligned). */}
+                  <div
+                    className="flex w-[200px] flex-wrap content-center gap-1 px-3"
+                    title={categories.join(", ")}
+                  >
+                    {categories.slice(0, 2).map((cat) => (
                       <span
                         key={cat}
-                        className="truncate rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
-                        title={cat}
+                        className="max-w-full truncate rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
                       >
                         {cat}
                       </span>
                     ))}
+                    {categories.length > 2 && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        +{categories.length - 2}
+                      </span>
+                    )}
                   </div>
 
-                  {/* ФИО КМ */}
-                  <div className="w-[200px] px-3 text-xs text-gray-700">
+                  {/* ФИО КМ — clamp to 2 lines so long participant lists fit the row. */}
+                  <div className="line-clamp-2 w-[200px] px-3 text-xs text-gray-700">
                     {kmNames.join(", ")}
                   </div>
 

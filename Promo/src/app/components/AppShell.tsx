@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useLocation } from "react-router";
 import { CalendarRange, Table2, FileBarChart, Search } from "lucide-react";
 import { Badge } from "@texnomart/ui/badge";
 import {
@@ -95,17 +96,23 @@ function PromoCommandSearch() {
 
 export function AppShell() {
   const { roles, currentRole, setCurrentRole } = useRole();
+  const { pathname } = useLocation();
 
   const config = React.useMemo(
     () => createPromoShellConfig(currentRole),
     [currentRole]
   );
 
+  // The full promo-calendar is a dense, wide data grid — let it use the full main
+  // width (no 1400px cap); other Promo screens keep the centered default.
+  const maxWidth = pathname.startsWith("/full-calendar") ? "100%" : "1400px";
+
   return (
     <SharedAppShell
       config={config}
       notifications={promoNotifications}
       headerActions={<PromoCommandSearch />}
+      maxWidth={maxWidth}
       roleSwitcher={{
         roles,
         current: currentRole,

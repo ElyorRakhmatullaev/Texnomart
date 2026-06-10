@@ -127,7 +127,7 @@ export function ShortCalendarPage() {
   }, [values, hideCancelled]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-6">
       <PageHeader
         title="Краткий промо-календарь"
         showCompare={false}

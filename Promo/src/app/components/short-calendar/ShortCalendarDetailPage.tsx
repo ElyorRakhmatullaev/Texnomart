@@ -52,7 +52,7 @@ export function ShortCalendarDetailPage() {
   const agg = aggregateKmStatuses(campaign);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-6">
       <DetailPageHero
         backHref="/short-calendar"
         backLabel="Краткий промо-календарь"

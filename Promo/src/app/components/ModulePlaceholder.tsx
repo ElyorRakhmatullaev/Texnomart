@@ -53,7 +53,7 @@ export function ModulePlaceholder({
   const [hideCancelled, setHideCancelled] = React.useState(true);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-6">
       <div className="space-y-1">
         <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-gray-900">
           {title}
