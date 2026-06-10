@@ -119,7 +119,7 @@ export const COLUMNS: ColumnDef[] = [
   { id: "t36full", label: "36 мес: полная цена (новая)", width: 190, group: "installments", source: "calc", kind: "money" },
 
   // ── Маркетинг ──
-  { id: "giftNomenclature", label: "Номенклатура по подаркам", width: 220, group: "marketing", source: "1c", kind: "text", giftOnly: true },
+  { id: "giftNomenclature", label: "Номенклатура по подаркам", width: 220, group: "marketing", source: "km", kind: "text", giftOnly: true },
   { id: "giftStock", label: "Остаток подарка", width: 140, group: "marketing", source: "km", kind: "number", giftOnly: true },
   { id: "supplierCompensation", label: "Компенсация поставщика", width: 180, group: "marketing", source: "km", kind: "money" },
   { id: "compensationLimit", label: "Лимит компенс. кол-ва", width: 170, group: "marketing", source: "km", kind: "number" },

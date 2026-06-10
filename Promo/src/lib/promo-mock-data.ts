@@ -413,8 +413,28 @@ export interface PromoLine {
   rejectComment?: string;
   /** Duplicate marker — same nomenclature already in this/overlapping promo (§8.2.1). */
   duplicate?: boolean;
+  /** Detail behind the «дубль» marker — which promo / overlap period (§8.2.1). */
+  duplicateInfo?: DuplicateHit;
+  /** Line history (§8.2.1: dup additions etc.). Light in-memory model; the full
+   *  VersionHistoryDrawer integration is S4. */
+  history?: LineHistoryEntry[];
   /** 1С availability — saved as draft awaiting a 1С re-check (§8.3). */
   pending1CCheck?: boolean;
+}
+
+/** A single line-history record (§8.2.1 stores {what, which promo, overlap, user, date/time}). */
+export interface LineHistoryEntry {
+  /** RU label of what happened (e.g. «Добавлен дубль номенклатуры»). */
+  what: string;
+  /** Conflicting promo, when the entry relates to a duplicate. */
+  promoId?: string;
+  promoName?: string;
+  /** Overlapping-period text, when the conflict came from a period overlap. */
+  overlap?: string;
+  /** Actor — role label in the mock (no per-person identity yet). */
+  user: string;
+  /** ISO timestamp. */
+  at: string;
 }
 
 // Compact seed — newPrice / discount derived from the nomenclature's old retail price.
@@ -511,6 +531,106 @@ export function getPromoLines(campaignId: string): PromoLine[] {
 export function getCampaignsWithLines(): PromoCampaign[] {
   const ids = new Set(PROMO_LINES.map((l) => l.campaignId));
   return CAMPAIGNS.filter((c) => ids.has(c.id));
+}
+
+// ── Nomenclature entry (§8.2.1) — new lines + duplicate detection ────────────────
+
+let newLineCounter = 0;
+
+/**
+ * Build a fresh line from a 1С nomenclature pick (§8.2.1 — no free-text entry).
+ * Остаток/цена are seeded from the 1С item; Прогноз продаж is left empty so the
+ * required marker shows and the action-bar invalid count ticks up immediately.
+ */
+export function createPromoLine(
+  campaignId: string,
+  kmId: string,
+  nomenclatureId: string
+): PromoLine {
+  const nom = NOMENCLATURE.find((n) => n.id === nomenclatureId);
+  const oldPrice = nom?.oldRetailPrice ?? 0;
+  newLineCounter += 1;
+  return {
+    id: `L-new-${newLineCounter}`,
+    campaignId,
+    kmId,
+    nomenclatureId,
+    stock: nom?.stock ?? 0,
+    stockManual: false,
+    newPrice: oldPrice,
+    discountPct: 0,
+    salesForecast: undefined,
+    oldMonthly12: roundTo(oldPrice / 12, 1_000),
+    advRecommendedKm: false,
+    advSelectedMarketing: false,
+  };
+}
+
+/** Where a duplicate nomenclature was found (§8.2.1). */
+export interface DuplicateHit {
+  promoId: string;
+  promoName: string;
+  /** Overlap period text when the conflict is a different promo with overlapping dates. */
+  overlap?: string;
+  /** True when the same nomenclature is already in the TARGET promo. */
+  samePromo: boolean;
+}
+
+function periodsOverlap(a: PromoCampaign, b: PromoCampaign): boolean {
+  return a.startDate <= b.endDate && b.startDate <= a.endDate;
+}
+
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString("ru-RU");
+}
+
+/**
+ * Detect whether a nomenclature already participates in this promo, or in another
+ * (non-cancelled) promo with an overlapping period (§8.2.1). Returns the first hit
+ * or null. Adding is never blocked — the caller confirms and marks «дубль».
+ */
+export function detectDuplicate(
+  nomenclatureId: string,
+  targetCampaign: PromoCampaign,
+  allLines: PromoLine[],
+  campaignsById: Map<string, PromoCampaign>
+): DuplicateHit | null {
+  // 1) Already in this promo?
+  if (
+    allLines.some(
+      (l) =>
+        l.campaignId === targetCampaign.id &&
+        l.nomenclatureId === nomenclatureId
+    )
+  ) {
+    return {
+      promoId: targetCampaign.id,
+      promoName: targetCampaign.name,
+      samePromo: true,
+    };
+  }
+  // 2) In another non-cancelled promo with an overlapping period?
+  for (const l of allLines) {
+    if (l.nomenclatureId !== nomenclatureId) continue;
+    if (l.campaignId === targetCampaign.id) continue;
+    const other = campaignsById.get(l.campaignId);
+    if (!other || other.cancelled) continue;
+    if (periodsOverlap(targetCampaign, other)) {
+      const from = new Date(
+        Math.max(targetCampaign.startDate.getTime(), other.startDate.getTime())
+      );
+      const to = new Date(
+        Math.min(targetCampaign.endDate.getTime(), other.endDate.getTime())
+      );
+      return {
+        promoId: other.id,
+        promoName: other.name,
+        overlap: `${fmtDate(from)} — ${fmtDate(to)}`,
+        samePromo: false,
+      };
+    }
+  }
+  return null;
 }
 
 /** Whether a campaign's тип bears a gift (requires gift nomenclature fields, §8.8). */

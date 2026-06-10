@@ -5,7 +5,7 @@ import { cn } from "@texnomart/ui/utils";
 import { Card } from "@texnomart/ui/card";
 import { Checkbox } from "@texnomart/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
-import { AlertCircle, Clock, Copy, Lock } from "lucide-react";
+import { AlertCircle, Clock, Copy, Gift, Lock, Plus } from "lucide-react";
 import { Money } from "../../../components/Money";
 import { RuDate } from "../../../components/RuDate";
 import {
@@ -80,6 +80,8 @@ function isRequiredFor(colId: string, gift: boolean): boolean {
 interface CellCtx {
   access: FullCalendarAccess;
   onEdit: (lineId: string, patch: Partial<PromoLine>) => void;
+  /** Open the 1С picker to (re)select this line's gift nomenclature (§8.2.1 / §8.8). */
+  onGiftPick: (lineId: string) => void;
   gift: boolean;
 }
 
@@ -232,18 +234,42 @@ function CellValue({
 
     // ── Маркетинг ──
     case "giftNomenclature": {
-      // Selection of gift nomenclature is nomenclature-entry (Phase 3) — read-only here.
+      // КМ selects gift nomenclature from the 1С reference (no free-text, §8.2.1).
       const gift = line.giftNomenclatureId
         ? getNomenclatureItem(line.giftNomenclatureId)
         : undefined;
+      if (!editable) {
+        // Read-only roles: show the name, or the required marker when empty.
+        if (gift) return <span className="truncate">{gift.name}</span>;
+        return required ? (
+          <span className="text-xs font-medium text-red-500">не заполнено</span>
+        ) : (
+          <Dash />
+        );
+      }
       return (
-        <EditableCell
-          value={gift?.name}
-          kind="text"
-          editable={false}
-          required={required}
-          onCommit={() => undefined}
-        />
+        <button
+          type="button"
+          onClick={() => ctx.onGiftPick(line.id)}
+          className={cn(
+            "flex h-7 w-full items-center gap-1 truncate rounded px-1 text-left text-sm hover:bg-gray-100",
+            gift ? "text-gray-900" : "text-muted-foreground"
+          )}
+        >
+          {gift ? (
+            <span className="truncate">{gift.name}</span>
+          ) : (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1",
+                required && "font-medium text-red-500"
+              )}
+            >
+              <Gift className="size-3.5" />
+              {required ? "не заполнено" : "выбрать"}
+            </span>
+          )}
+        </button>
       );
     }
     case "giftStock":
@@ -324,6 +350,10 @@ interface FullCalendarGridProps {
   /** Edited lines for a campaign (from the page-level store). */
   linesFor: (campaignId: string) => PromoLine[];
   onEdit: (lineId: string, patch: Partial<PromoLine>) => void;
+  /** Open the 1С picker to add a line to a campaign (§8.2.1; editor roles only). */
+  onAddRequest: (campaignId: string) => void;
+  /** Open the 1С picker to (re)select a line's gift nomenclature. */
+  onGiftPick: (lineId: string) => void;
   /** Bulk-select state (shown only for editor roles). */
   selectedIds: Set<string>;
   onToggleSelect: (lineId: string) => void;
@@ -336,6 +366,8 @@ export function FullCalendarGrid({
   access,
   linesFor,
   onEdit,
+  onAddRequest,
+  onGiftPick,
   selectedIds,
   onToggleSelect,
   onToggleGroup,
@@ -414,6 +446,16 @@ export function FullCalendarGrid({
                   <span className="font-normal text-muted-foreground">
                     · {lines.length} стр.
                   </span>
+                  {access.canEditOwnLines && !campaign.cancelled && (
+                    <button
+                      type="button"
+                      onClick={() => onAddRequest(campaign.id)}
+                      className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
+                    >
+                      <Plus className="size-3" />
+                      Добавить номенклатуру
+                    </button>
+                  )}
                 </div>
 
                 {/* lines */}
@@ -512,7 +554,7 @@ export function FullCalendarGrid({
             {/* groups */}
             {groups.map(({ campaign, lines }) => {
               const gift = isGiftType(campaign.type);
-              const ctx: CellCtx = { access, onEdit, gift };
+              const ctx: CellCtx = { access, onEdit, onGiftPick, gift };
               return (
                 <div key={campaign.id}>
                   {/* group band (scroll side) — campaign context */}
@@ -630,9 +672,26 @@ function LineMarkers({ line }: { line: PromoLine }) {
               дубль
             </span>
           </TooltipTrigger>
-          <TooltipContent className="max-w-[240px]">
-            Номенклатура уже участвует в промо-акции (или в акции с пересекающимся
-            периодом). Добавление не блокируется — отметка видна проверяющим.
+          <TooltipContent className="max-w-[260px]">
+            {line.duplicateInfo ? (
+              <span className="space-y-0.5">
+                <span className="block font-medium">
+                  {line.duplicateInfo.samePromo
+                    ? "Уже добавлена в эту акцию."
+                    : `Уже участвует в акции ${line.duplicateInfo.promoId} «${line.duplicateInfo.promoName}».`}
+                </span>
+                {line.duplicateInfo.overlap && (
+                  <span className="block">
+                    Пересечение периодов: {line.duplicateInfo.overlap}
+                  </span>
+                )}
+                <span className="block text-muted-foreground">
+                  Добавление не блокируется — отметка видна проверяющим.
+                </span>
+              </span>
+            ) : (
+              "Номенклатура уже участвует в промо-акции (или в акции с пересекающимся периодом). Добавление не блокируется — отметка видна проверяющим."
+            )}
           </TooltipContent>
         </Tooltip>
       )}

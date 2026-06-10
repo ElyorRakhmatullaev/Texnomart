@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Ban, Check, Info, Plus, Send, Upload, X } from "lucide-react";
+import { Ban, Check, Copy, Info, Plus, Send, Upload, X } from "lucide-react";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { FilterBar } from "@texnomart/shared/components/filter-bar";
 import type { FilterConfig } from "@texnomart/shared/types";
@@ -15,14 +15,28 @@ import {
 import { useRole } from "../../role-context";
 import { FullCalendarGrid } from "./FullCalendarGrid";
 import { ColumnGroupToggle } from "./ColumnGroupToggle";
+import { AddNomenclatureDialog } from "./AddNomenclatureDialog";
 import { DEFAULT_VISIBLE_GROUPS, type ColumnGroupKey } from "./gridFields";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@texnomart/ui/dialog";
+import {
+  CAMPAIGNS,
   CATEGORY_MANAGERS,
   PROMO_LINES,
   PROMO_TYPES,
+  createPromoLine,
+  detectDuplicate,
   getCampaignsWithLines,
   getFullCalendarAccess,
+  getNomenclatureItem,
   isLineValid,
+  type DuplicateHit,
   type PromoLine,
 } from "../../../lib/promo-mock-data";
 
@@ -75,6 +89,7 @@ function seedLineMap(): LineMap {
 
 type LineAction =
   | { type: "edit"; id: string; patch: Partial<PromoLine> }
+  | { type: "add"; line: PromoLine }
   | { type: "bulkAdv"; ids: string[]; field: keyof PromoLine; value: boolean };
 
 function lineReducer(state: LineMap, action: LineAction): LineMap {
@@ -84,6 +99,11 @@ function lineReducer(state: LineMap, action: LineAction): LineMap {
       if (!cur) return state;
       const next = new Map(state);
       next.set(action.id, { ...cur, ...action.patch });
+      return next;
+    }
+    case "add": {
+      const next = new Map(state);
+      next.set(action.line.id, action.line);
       return next;
     }
     case "bulkAdv": {
@@ -116,10 +136,26 @@ export function FullCalendarPage() {
     priznak: ALL,
   });
 
+  // Nomenclature-entry state (§8.2.1): which campaign's add-picker is open, which
+  // line's gift-picker is open, and a pending duplicate awaiting confirmation.
+  const [addCampaignId, setAddCampaignId] = React.useState<string | null>(null);
+  const [giftLineId, setGiftLineId] = React.useState<string | null>(null);
+  const [pendingDup, setPendingDup] = React.useState<{
+    campaignId: string;
+    kmId: string;
+    nomenclatureId: string;
+    hit: DuplicateHit;
+  } | null>(null);
+
   // Clear any selection when the role changes (gating differs per role).
   React.useEffect(() => {
     setSelectedIds(new Set());
   }, [currentRole]);
+
+  const campaignsById = React.useMemo(
+    () => new Map(CAMPAIGNS.map((c) => [c.id, c])),
+    []
+  );
 
   const linesFor = React.useCallback(
     (campaignId: string) => {
@@ -186,6 +222,103 @@ export function FullCalendarPage() {
       return next;
     });
   }, []);
+
+  // ── Nomenclature entry (§8.2.1) ──────────────────────────────────────────────
+  // КМ for a new line: no per-person identity in the mock, so we attach the line
+  // to the campaign's first existing КМ (else its first participant / a default).
+  const kmForCampaign = React.useCallback(
+    (campaignId: string): string => {
+      const existing = lines.values();
+      for (const l of existing) if (l.campaignId === campaignId) return l.kmId;
+      const c = campaignsById.get(campaignId);
+      return c?.participatingKmIds[0] ?? CATEGORY_MANAGERS[0].id;
+    },
+    [lines, campaignsById]
+  );
+
+  const commitAdd = React.useCallback(
+    (campaignId: string, nomenclatureId: string, hit: DuplicateHit | null) => {
+      const kmId = kmForCampaign(campaignId);
+      const line = createPromoLine(campaignId, kmId, nomenclatureId);
+      if (hit) {
+        line.duplicate = true;
+        line.duplicateInfo = hit;
+        line.history = [
+          {
+            what: "Добавлен дубль номенклатуры",
+            promoId: hit.promoId,
+            promoName: hit.promoName,
+            overlap: hit.overlap,
+            user: currentRole,
+            at: new Date().toISOString(),
+          },
+        ];
+      }
+      dispatch({ type: "add", line });
+      const name = getNomenclatureItem(nomenclatureId)?.name ?? nomenclatureId;
+      toast.success(`${hit ? "Дубль добавлен" : "Номенклатура добавлена"}: ${name}`);
+    },
+    [kmForCampaign, currentRole]
+  );
+
+  // Picking a nomenclature for the add-picker: run duplicate detection first.
+  const onPickForAdd = React.useCallback(
+    (nomenclatureId: string) => {
+      const campaignId = addCampaignId;
+      if (!campaignId) return;
+      const campaign = campaignsById.get(campaignId);
+      if (!campaign) return;
+      const hit = detectDuplicate(
+        nomenclatureId,
+        campaign,
+        [...lines.values()],
+        campaignsById
+      );
+      if (hit) {
+        // Don't block — ask for confirmation, then mark «дубль» (§8.2.1).
+        setPendingDup({
+          campaignId,
+          kmId: kmForCampaign(campaignId),
+          nomenclatureId,
+          hit,
+        });
+      } else {
+        commitAdd(campaignId, nomenclatureId, null);
+      }
+    },
+    [addCampaignId, campaignsById, lines, kmForCampaign, commitAdd]
+  );
+
+  const confirmDup = () => {
+    if (!pendingDup) return;
+    commitAdd(pendingDup.campaignId, pendingDup.nomenclatureId, pendingDup.hit);
+    setPendingDup(null);
+  };
+
+  // Defer the open past the current click: a controlled Radix dialog opened from an
+  // outside button (no DialogTrigger to exclude it) is otherwise dismissed by the
+  // same pointer interaction. setTimeout(0) lets the click fully settle first.
+  const onAddRequest = React.useCallback((campaignId: string) => {
+    setTimeout(() => setAddCampaignId(campaignId), 0);
+  }, []);
+
+  const onGiftPick = React.useCallback((lineId: string) => {
+    setTimeout(() => setGiftLineId(lineId), 0);
+  }, []);
+
+  const onPickForGift = React.useCallback(
+    (nomenclatureId: string) => {
+      if (!giftLineId) return;
+      const nom = getNomenclatureItem(nomenclatureId);
+      dispatch({
+        type: "edit",
+        id: giftLineId,
+        patch: { giftNomenclatureId: nomenclatureId, giftStock: nom?.stock },
+      });
+      toast.success(`Подарок выбран: ${nom?.name ?? nomenclatureId}`);
+    },
+    [giftLineId]
+  );
 
   if (!access.canView) {
     return <AccessDenied note={access.note} />;
@@ -307,12 +440,82 @@ export function FullCalendarPage() {
             access={access}
             linesFor={linesFor}
             onEdit={onEdit}
+            onAddRequest={onAddRequest}
+            onGiftPick={onGiftPick}
             selectedIds={selectedIds}
             onToggleSelect={onToggleSelect}
             onToggleGroup={onToggleGroup}
           />
         </div>
       </div>
+
+      {/* Add-a-line picker (§8.2.1) — searchable 1С reference, no free-text. */}
+      <AddNomenclatureDialog
+        open={addCampaignId !== null}
+        onOpenChange={(open) => !open && setAddCampaignId(null)}
+        title="Добавить номенклатуру"
+        description="Выберите товар из справочника 1С — свободный ввод недоступен."
+        onPick={onPickForAdd}
+      />
+
+      {/* Gift-nomenclature picker (§8.8) — same 1С reference. */}
+      <AddNomenclatureDialog
+        open={giftLineId !== null}
+        onOpenChange={(open) => !open && setGiftLineId(null)}
+        title="Выбор подарочной номенклатуры"
+        description="Выберите подарочный товар из справочника 1С."
+        onPick={onPickForGift}
+      />
+
+      {/* Duplicate-confirmation dialog (§8.2.1) — adding is NOT blocked. */}
+      <Dialog
+        open={pendingDup !== null}
+        onOpenChange={(open) => !open && setPendingDup(null)}
+      >
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Дубль номенклатуры</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  Данная номенклатура уже участвует в промо-акции. Вы уверены, что
+                  хотите добавить дубль?
+                </p>
+                {pendingDup && (
+                  <div className="rounded-md bg-amber-50 px-3 py-2 text-amber-900">
+                    {pendingDup.hit.samePromo ? (
+                      <span>Уже добавлена в эту акцию ({pendingDup.campaignId}).</span>
+                    ) : (
+                      <span>
+                        Уже участвует в акции {pendingDup.hit.promoId} «
+                        {pendingDup.hit.promoName}».
+                      </span>
+                    )}
+                    {pendingDup.hit.overlap && (
+                      <span className="mt-0.5 block">
+                        Пересечение периодов: {pendingDup.hit.overlap}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <p className="text-muted-foreground">
+                  Отметка «дубль» останется видна проверяющим, запись добавится в
+                  историю строки.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setPendingDup(null)}>
+              Отмена
+            </Button>
+            <Button onClick={confirmDup}>
+              <Copy className="size-4" />
+              Добавить дубль
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Sticky bottom action bar (fixed footer) — flush to the main edges. */}
       <div className="-mx-3 -mb-3 shrink-0 border-t bg-white px-3 py-3 md:-mx-4 md:-mb-4 md:px-4">
