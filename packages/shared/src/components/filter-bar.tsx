@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { X } from "lucide-react";
+import { cn } from "@texnomart/ui/utils";
 import { Button } from "@texnomart/ui/button";
 import {
   Select,
@@ -19,6 +20,8 @@ interface FilterBarProps {
   onClear: () => void;
   resultCount?: number;
   children?: React.ReactNode;
+  /** Override container classes (e.g. drop the gray box / horizontal padding). */
+  className?: string;
 }
 
 export function FilterBar({
@@ -28,11 +31,17 @@ export function FilterBar({
   onClear,
   resultCount,
   children,
+  className,
 }: FilterBarProps) {
   const hasActiveFilters = Object.values(values).some((v) => v !== "all");
 
   return (
-    <div className="flex items-center gap-2 flex-wrap shrink-0 bg-gray-50 rounded-md px-3 py-2">
+    <div
+      className={cn(
+        "flex items-center gap-2 flex-wrap shrink-0 bg-gray-50 rounded-md px-3 py-2",
+        className
+      )}
+    >
       {filters.map((filter) => (
         <Select
           key={filter.key}

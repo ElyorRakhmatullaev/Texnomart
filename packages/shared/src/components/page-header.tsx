@@ -76,7 +76,7 @@ export function PageHeader({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 h-auto sm:h-14 pt-3 pb-6">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 h-auto sm:min-h-14 pt-3 pb-6">
       <div>
         <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-gray-900">
           {title}
