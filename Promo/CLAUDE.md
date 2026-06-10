@@ -9,7 +9,7 @@ Internal, role-based B2B workspace for planning and approving **planned & unplan
 
 ## Status
 
-**Bootstrap + Master shell + S1 complete; S2 grid skeleton (Phase 1) complete.** The app runs (`pnpm dev:promo`): auth flow, 7-module nav, the 9-role switcher, Promo primitives, seed mock data, the real **Краткий промо-календарь (S1)** screen, and the **Полный промо-календарь (S2)** read-only grid skeleton (Pattern F split-pane, 38-field dictionary, role gating, column-group chooser, inert action bar). S2 Phases 2–5 (inline editing, nomenclature entry, Excel import, 1С states, unplanned creation, mobile) and screens S3–S8 are **pending** (S3–S8 still placeholders).
+**Bootstrap + Master shell + S1 complete; S2 Phases 1–2 complete.** The app runs (`pnpm dev:promo`): auth flow, 7-module nav, the 9-role switcher, Promo primitives, seed mock data, the real **Краткий промо-календарь (S1)** screen, and the **Полный промо-календарь (S2)** editable grid (Pattern F split-pane, 38-field dictionary, role gating, column-group chooser; **Phase 2**: inline editing of КМ fields with live validation, остаток ✏️ + warehouse-breakdown popover, installment auto-recalc, gift conditional fields, «В рекламу» checkboxes + bulk-select, and a functional draft/submit action bar — mock toasts). S2 Phases 3–5 (nomenclature entry, Excel import, full 1С states, unplanned creation, mobile per-line Sheet) and screens S3–S8 are **pending** (S3–S8 still placeholders).
 
 ## Commands
 
@@ -42,10 +42,12 @@ Promo/
           AggregatedIndicators.tsx  #   §4.6 four count-chips cluster
           PlanMode.tsx              #   «План акций» stepper + role-aware approval + create-row dialog
           ShortCalendarDetailPage.tsx #  Pattern D full page /short-calendar/:promoId
-        full-calendar/              # S2 — Полный промо-календарь (Phase 1: read-only grid skeleton)
-          FullCalendarPage.tsx      #   shell: role gate + PageHeader + column chooser + FilterBar + inert fixed-footer action bar
-          FullCalendarGrid.tsx      #   Pattern F split-pane grid (frozen № промо/ФИО КМ/Номенклатура + scrolling 38-field block), campaign group bands, lock/required/rejected/duplicate/1С markers
-          gridFields.ts             #   38-field column dictionary (Appendix C): groups, widths, source→lock, required
+        full-calendar/              # S2 — Полный промо-календарь (Phases 1–2: editable grid)
+          FullCalendarPage.tsx      #   shell: role gate + PageHeader + column chooser + FilterBar + editable line store (useReducer Map) + bulk-select strip + live-validation fixed-footer action bar (functional draft/submit, mock toasts)
+          FullCalendarGrid.tsx      #   Pattern F split-pane grid (frozen select/№ промо/ФИО КМ/Номенклатура + scrolling 38-field block); editable КМ cells, editable «В рекламу» checkboxes, row/group select for bulk; campaign group bands, lock/required/rejected/duplicate/1С markers
+          EditableCell.tsx          #   inline number/money/percent/text input — commit on blur/Enter, Esc cancels, required «не заполнено» marker + ✏️ manual pencil; fixed height keeps panes aligned
+          WarehousePopover.tsx      #   per-warehouse остаток breakdown + total (§8.2.2, read-only from 1С); native-button trigger beside the editable остаток
+          gridFields.ts             #   38-field column dictionary (Appendix C): groups, widths, source→lock (km editable; auto/1С/calc locked), required
           ColumnGroupToggle.tsx     #   «Колонки N из 5» popover with group checkboxes
         auth/                       # Login, 2FA, ForgotPassword, ResetPassword, AuthLayout, AuthContext (re-export), RequireAuth (re-export)
     components/                     # Promo-specific shared primitives (reused by every screen)
@@ -56,7 +58,7 @@ Promo/
       VersionHistoryDrawer.tsx      # right Sheet, version list + «только изменения» toggle (stub → S4)
       DeadlineChips.tsx             # calendar-deadline chips (46/21/17 дн., «календарные»)
     lib/
-      promo-mock-data.ts            # seed: 8 campaigns, 6 КМ, 30 SKUs, 7 promo types; S2 PromoLine model + 9 lines, warehouse breakdown, installment + full-calendar-access helpers
+      promo-mock-data.ts            # seed: 8 campaigns, 6 КМ, 30 SKUs, 7 promo types; S2 PromoLine model + 9 lines, warehouse breakdown, installment + full-calendar-access helpers, isGiftType / missingRequiredFields / isLineValid validators
     styles/                         # index/tailwind/theme/fonts/globals (copied from Dashboard)
 ```
 
@@ -68,7 +70,7 @@ Promo/
 | `/` | → redirects to `/short-calendar` | Done |
 | `/short-calendar` | ShortCalendarPage | **Done (S1)** — table + «План акций» mode |
 | `/short-calendar/:promoId` | ShortCalendarDetailPage | **Done (S1)** — Pattern D full page |
-| `/full-calendar` | FullCalendarPage | **Done (S2 — Phase 1)** — read-only Pattern F grid skeleton (Phases 2–5 pending) |
+| `/full-calendar` | FullCalendarPage | **Done (S2 — Phases 1–2)** — editable Pattern F grid: inline editing, live validation, warehouse popover, bulk-select, functional action bar (Phases 3–5 pending) |
 | `/approvals` `/approvals/:id` | ApprovalsPage | Placeholder (S3) |
 | `/reports` | ReportsPage | Placeholder (S5) |
 | `/notifications` | NotificationsPage | Placeholder (S6) |
