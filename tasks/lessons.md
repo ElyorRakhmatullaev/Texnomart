@@ -475,3 +475,25 @@ Documented mistakes, gotchas, and learnings from project work. Never remove old 
 
 ### Wiring a Previously-Inert Shared Control = One Optional Prop + Make the Surrounding Primitive Controlled
 - The shared AppShell bell popover already had a dead «Показать все» button. To wire it without breaking Dashboard: add an optional `notificationsHref?: string`; when present, the button closes the popover and navigates. The catch — to close the popover programmatically the `<Popover>` had to become controlled (`open={notifOpen} onOpenChange={setNotifOpen}`); an uncontrolled Popover can't be dismissed from a child click handler. Backward-compatible: Dashboard passes no `notificationsHref`, the button stays inert, and the controlled-vs-uncontrolled switch is invisible to it. Same additive-optional-prop discipline as `roleSwitcher`/`maxWidth`/`className` — verify with `build:dashboard`, not just `build:promo`.
+
+---
+
+## 2026-06-11 — Texnomart Promo S7 (Настройки типов промо)
+
+### Derive a Config Checklist From the Existing Column Dictionary — Don't Re-list the Fields
+- S7's required-field checklist IS the full-calendar field set (Appendix C). Re-typing those ~33 fields + categories in a new constant would drift from `gridFields.ts` the first time a column is renamed/added. Instead derive `RULE_FIELD_GROUPS` from the single `COLUMNS`/`COLUMN_GROUPS` dictionary at module load (map each group → its columns), and only **prepend** the 3 spec-frozen identity columns (№ промо / ФИО КМ / Номенклатура) that live in the grid's frozen pane and aren't in `COLUMNS`. One source of truth: the checklist labels/categories track the actual calendar columns for free.
+
+### Two Sibling Routes Sharing a Store = a Layout Route With the Provider (Same as S3) — Not Page State
+- `/promo-types` (list) and `/promo-types/:ruleId` (selected rule) are siblings; if each rendered its own page with a local `useReducer`, navigating between them (which is how you select a rule) would remount and reset the store. Reuse the S3 `ApprovalsLayout` pattern: a `PromoTypesLayout` renders `<PromoTypesProvider><Outlet/></PromoTypesProvider>` with both routes as children, so selection-navigation keeps the provider mounted. Selecting a rule is just `navigate(\`/promo-types/${id}\`)`; deep-links work, and a stale `:ruleId` after a reload-reseed falls back to the list via an effect.
+
+### `create`/`copy` Must Mint the Id OUTSIDE the Reducer So the Caller Can Navigate to the New Row
+- A reducer can't return the new id, but the UX needs to navigate to the freshly created/copied rule. Generate the id in the action-creator (`nextRuleId(rulesRef.current)` — a `useRef` mirroring the live array so it's not a stale closure), dispatch it INTO the action, and return it from `create()`/`copy()` so the panel does `navigate(\`/promo-types/${create(role)}\`)`. Mirrors the S2 unplanned-campaign id-generation approach.
+
+### Model «Edit Invalidates Approval» (§9.5) Inside the Save Reducer, Keyed on Status + Actual Change
+- The re-confirmation rule (editing an approved rule needs КД to re-confirm) is cleanest as a pure transition in the `save` case: if `status === 'approved'` AND the fields/types actually changed (compare sorted id arrays, not a dirty flag — a no-op save shouldn't invalidate), drop to `draft`, clear `confirmedBy/At`, and append a history note containing «повторного». The editor then surfaces an amber banner by detecting that note. Keep the detection in data (status + history), not a separate `needsReconfirm` boolean that can desync.
+
+### No MultiSelect Primitive in the Kit → Toggle Chips Over a Small Fixed Set
+- Promo-types is a 7-item set, so a row of toggle **chips** (native `<button>` with a checked tint + a CheckCircle2 icon) is clearer and zero-dep vs. wiring a Command/Popover multi-select. For the field checklist (larger, categorized) the shadcn `Checkbox` with a per-group select-all that computes `indeterminate` (`allOn ? true : someOn ? "indeterminate" : false`) reads better than chips. Match the control to the set size: chips for a handful, grouped checkboxes for many.
+
+### A Clickable Card Containing Another Button Must Be a `div role="button"`, Not a `<button>`
+- The rule-list row is clickable (selects the rule) AND contains a «Копировать» `<button>`. A `<button>` inside a `<button>` is invalid HTML (and the inner click is unreliable). Make the row a `<div role="button" tabIndex={0}>` with `onClick` + an Enter/Space `onKeyDown`, so the nested real button is valid and keyboard access is preserved. The a11y tree still reports it as a button.
