@@ -4,6 +4,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import {
   Ban,
+  CalendarClock,
   Check,
   Clock,
   Copy,
@@ -18,11 +19,14 @@ import { PageHeader } from "@texnomart/shared/components/page-header";
 import { FilterBar } from "@texnomart/shared/components/filter-bar";
 import type { FilterConfig } from "@texnomart/shared/types";
 import { Button } from "@texnomart/ui/button";
+import { Switch } from "@texnomart/ui/switch";
+import { Label } from "@texnomart/ui/label";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@texnomart/ui/tooltip";
+import { ReasonDialog } from "../../../components/ReasonDialog";
 import { useRole } from "../../role-context";
 import { FullCalendarGrid } from "./FullCalendarGrid";
 import { ColumnGroupToggle } from "./ColumnGroupToggle";
@@ -47,12 +51,20 @@ import {
   PROMO_LINES,
   PROMO_TYPES,
   buildCampaignReport,
+  buildCancellationVersion,
+  buildLineRemovalVersion,
   buildSentVersion,
+  canApproveDeadline,
+  canApproveLineRemoval,
+  canCancelCampaign,
+  canManageDeadline,
+  canRequestLineRemoval,
   createImportedLine,
   createPromoLine,
   createUnplannedCampaign,
   detectDuplicate,
   diffCampaignChanges,
+  effectiveFillDeadline,
   getCampaignVersions,
   getCampaignsWithLines,
   getFullCalendarAccess,
@@ -61,7 +73,9 @@ import {
   isLineValid,
   parseImportCsv,
   type CampaignChangeSet,
+  type CampaignStatus,
   type CampaignVersion,
+  type DeadlineChangeRequest,
   type DuplicateHit,
   type ImportParseResult,
   type ParsedImportRow,
@@ -121,7 +135,11 @@ type LineAction =
   | { type: "add"; line: PromoLine }
   | { type: "addMany"; lines: PromoLine[] }
   | { type: "recheck1C" }
-  | { type: "bulkAdv"; ids: string[]; field: keyof PromoLine; value: boolean };
+  | { type: "bulkAdv"; ids: string[]; field: keyof PromoLine; value: boolean }
+  // Line cancellation / removal (§5.3): КМ requests, КД approves/rejects.
+  | { type: "requestRemoval"; id: string; reason: string; by: string }
+  | { type: "approveRemoval"; id: string }
+  | { type: "rejectRemoval"; id: string };
 
 function lineReducer(state: LineMap, action: LineAction): LineMap {
   switch (action.type) {
@@ -156,6 +174,37 @@ function lineReducer(state: LineMap, action: LineAction): LineMap {
         const cur = next.get(id);
         if (cur) next.set(id, { ...cur, [action.field]: action.value });
       }
+      return next;
+    }
+    case "requestRemoval": {
+      const cur = state.get(action.id);
+      if (!cur) return state;
+      const next = new Map(state);
+      next.set(action.id, {
+        ...cur,
+        removalPending: true,
+        removalReason: action.reason,
+        removalRequestedBy: action.by,
+      });
+      return next;
+    }
+    case "approveRemoval": {
+      const cur = state.get(action.id);
+      if (!cur) return state;
+      const next = new Map(state);
+      next.set(action.id, { ...cur, removed: true, removalPending: false });
+      return next;
+    }
+    case "rejectRemoval": {
+      const cur = state.get(action.id);
+      if (!cur) return state;
+      const next = new Map(state);
+      next.set(action.id, {
+        ...cur,
+        removalPending: false,
+        removalReason: undefined,
+        removalRequestedBy: undefined,
+      });
       return next;
     }
     default:
@@ -217,6 +266,16 @@ export function FullCalendarPage() {
     new Set()
   );
   const [periodEditId, setPeriodEditId] = React.useState<string | null>(null);
+  // ── Cancellation + deadline change (S4 Phase 3, §5.3 / §4.7) ────────────────
+  // «Скрыть отменённое» — ON by default; hides cancelled campaigns AND removed lines.
+  const [hideCancelled, setHideCancelled] = React.useState(true);
+  // Page-hosted dialogs (deferred open): cancel-campaign reason, КМ line-removal
+  // reason, and the deadline-change request.
+  const [cancelCampaignId, setCancelCampaignId] = React.useState<string | null>(null);
+  const [removalLineId, setRemovalLineId] = React.useState<string | null>(null);
+  const [deadlineCampaignId, setDeadlineCampaignId] = React.useState<string | null>(
+    null
+  );
   const [pendingDup, setPendingDup] = React.useState<{
     campaignId: string;
     kmId: string;
@@ -253,6 +312,17 @@ export function FullCalendarPage() {
       return out;
     },
     [lines]
+  );
+
+  // Lines as shown in the grid — removed («исключённые») lines drop out while
+  // «Скрыть отменённое» is ON (§5.3). The full set (linesFor) still backs the
+  // version report so excluded positions stay in history with a marker.
+  const displayLinesFor = React.useCallback(
+    (campaignId: string) =>
+      hideCancelled
+        ? linesFor(campaignId).filter((l) => !l.removed)
+        : linesFor(campaignId),
+    [linesFor, hideCancelled]
   );
 
   // ── Edit-after-approval diff (§5.1) ──────────────────────────────────────────
@@ -298,6 +368,8 @@ export function FullCalendarPage() {
 
   const filtered = React.useMemo(() => {
     return visibleCampaigns.filter((c) => {
+      // «Скрыть отменённое» (§5.3) — ON by default, hides cancelled campaigns.
+      if (hideCancelled && c.cancelled) return false;
       if (values.type !== ALL && c.type !== values.type) return false;
       if (values.status !== ALL && c.status !== values.status) return false;
       if (values.priznak !== ALL) {
@@ -309,18 +381,20 @@ export function FullCalendarPage() {
       }
       return true;
     });
-  }, [values, linesFor, visibleCampaigns]);
+  }, [values, linesFor, visibleCampaigns, hideCancelled]);
 
   const totalLines = React.useMemo(
-    () => filtered.reduce((s, c) => s + linesFor(c.id).length, 0),
-    [filtered, linesFor]
+    () => filtered.reduce((s, c) => s + displayLinesFor(c.id).length, 0),
+    [filtered, displayLinesFor]
   );
 
   // Live validation — lines missing any required field (forecast / gift fields).
+  // Removed («исключённые») lines are out of the promo and never gate the send.
   const invalidLines = React.useMemo(() => {
     let n = 0;
     for (const c of filtered) {
-      for (const l of linesFor(c.id)) if (!isLineValid(l, c)) n++;
+      for (const l of linesFor(c.id))
+        if (!l.removed && !isLineValid(l, c)) n++;
     }
     return n;
   }, [filtered, linesFor]);
@@ -329,7 +403,7 @@ export function FullCalendarPage() {
   const pending1CCount = React.useMemo(() => {
     let n = 0;
     for (const c of filtered) {
-      for (const l of linesFor(c.id)) if (l.pending1CCheck) n++;
+      for (const l of linesFor(c.id)) if (!l.removed && l.pending1CCheck) n++;
     }
     return n;
   }, [filtered, linesFor]);
@@ -621,6 +695,152 @@ export function FullCalendarPage() {
     [changeSetFor, versionsFor, linesFor, campaignsById, currentRole]
   );
 
+  // ── Campaign cancellation (§5.3) — КД only, required reason ──────────────────
+  const onCancelRequest = React.useCallback((campaignId: string) => {
+    setTimeout(() => setCancelCampaignId(campaignId), 0);
+  }, []);
+
+  const onCancelConfirm = React.useCallback(
+    (reason: string) => {
+      const campaignId = cancelCampaignId;
+      if (!campaignId) return;
+      const prevVersions = versionsFor(campaignId);
+      const nextNo = (prevVersions[0]?.version ?? 0) + 1;
+      const version = buildCancellationVersion(
+        campaignId,
+        reason,
+        nextNo,
+        new Date(),
+        currentRole
+      );
+      setLiveVersions((prev) =>
+        new Map(prev).set(campaignId, [version, ...prevVersions])
+      );
+      setVisibleCampaigns((prev) =>
+        prev.map((c) =>
+          c.id === campaignId
+            ? {
+                ...c,
+                cancelled: true,
+                status: "Отменена" as CampaignStatus,
+                cancelReason: reason,
+                cancelledBy: currentRole,
+                cancelledAt: new Date().toISOString(),
+              }
+            : c
+        )
+      );
+      setSelectedIds(new Set());
+      setCancelCampaignId(null);
+      toast.success(
+        "Акция отменена. Отдельное уведомление «Акция отменена» направлено всем смежным отделам."
+      );
+    },
+    [cancelCampaignId, versionsFor, currentRole]
+  );
+
+  // ── Line removal / exclusion (§5.3) — КМ requests, КД approves ───────────────
+  const onRemovalRequest = React.useCallback((lineId: string) => {
+    setTimeout(() => setRemovalLineId(lineId), 0);
+  }, []);
+
+  const onRemovalConfirm = React.useCallback(
+    (reason: string) => {
+      const lineId = removalLineId;
+      if (!lineId) return;
+      dispatch({ type: "requestRemoval", id: lineId, reason, by: currentRole });
+      setRemovalLineId(null);
+      toast.success(
+        "Запрос на исключение позиции отправлен на согласование коммерческому директору."
+      );
+    },
+    [removalLineId, currentRole]
+  );
+
+  const onApproveRemoval = React.useCallback(
+    (lineId: string) => {
+      const line = lines.get(lineId);
+      if (!line) return;
+      dispatch({ type: "approveRemoval", id: lineId });
+      const name =
+        getNomenclatureItem(line.nomenclatureId)?.name ?? line.nomenclatureId;
+      const prevVersions = versionsFor(line.campaignId);
+      const nextNo = (prevVersions[0]?.version ?? 0) + 1;
+      const version = buildLineRemovalVersion(
+        line.campaignId,
+        name,
+        line.removalReason ?? "—",
+        nextNo,
+        new Date(),
+        currentRole
+      );
+      setLiveVersions((prev) =>
+        new Map(prev).set(line.campaignId, [version, ...prevVersions])
+      );
+      toast.success(
+        `Позиция исключена из акции: ${name}. Отделы уведомлены инкрементально.`
+      );
+    },
+    [lines, versionsFor, currentRole]
+  );
+
+  const onRejectRemoval = React.useCallback((lineId: string) => {
+    dispatch({ type: "rejectRemoval", id: lineId });
+    toast.success("Запрос на исключение отклонён — позиция остаётся в акции.");
+  }, []);
+
+  // ── Deadline change (§4.7) — КД initiates, Операционный директор approves ────
+  const onDeadlineRequest = React.useCallback((campaignId: string) => {
+    setTimeout(() => setDeadlineCampaignId(campaignId), 0);
+  }, []);
+
+  const onDeadlineApply = React.useCallback(
+    (campaignId: string, newDeadline: Date, reason: string) => {
+      const c = campaignsById.get(campaignId);
+      if (!c) return;
+      const req: DeadlineChangeRequest = {
+        initiator: currentRole,
+        reason,
+        oldDeadline: effectiveFillDeadline(c),
+        newDeadline,
+        requestedAt: new Date().toISOString(),
+        status: "pending",
+      };
+      setVisibleCampaigns((prev) =>
+        prev.map((x) => (x.id === campaignId ? { ...x, deadlineChange: req } : x))
+      );
+      setDeadlineCampaignId(null);
+      toast.success(
+        "Запрос на изменение дедлайна отправлен на утверждение (Операционный директор)."
+      );
+    },
+    [campaignsById, currentRole]
+  );
+
+  const onApproveDeadline = React.useCallback(
+    (campaignId: string) => {
+      setVisibleCampaigns((prev) =>
+        prev.map((x) => {
+          if (x.id !== campaignId || !x.deadlineChange) return x;
+          return {
+            ...x,
+            fillDeadlineOverride: x.deadlineChange.newDeadline,
+            deadlineChange: {
+              ...x.deadlineChange,
+              status: "approved",
+              approvedBy: currentRole,
+              approvedAt: new Date().toISOString(),
+            },
+          };
+        })
+      );
+      toast.success(
+        "Изменение дедлайна утверждено и вступило в силу. Инициатор уведомлён."
+      );
+    },
+    [currentRole]
+  );
+
   const onCreateUnplanned = React.useCallback(
     (input: Omit<UnplannedCampaignInput, "kmId">) => {
       // No per-person КМ identity in the mock — attach the new campaign to a default КМ.
@@ -668,6 +888,13 @@ export function FullCalendarPage() {
   const editCampaign = editCampaignId
     ? campaignsById.get(editCampaignId) ?? null
     : null;
+  const cancelCampaign = cancelCampaignId
+    ? campaignsById.get(cancelCampaignId) ?? null
+    : null;
+  const removalLine = removalLineId ? lines.get(removalLineId) : undefined;
+  const removalNom = removalLine
+    ? getNomenclatureItem(removalLine.nomenclatureId)
+    : undefined;
   const editLine = editLineId ? lines.get(editLineId) : undefined;
   const editLineCampaign = editLine
     ? campaignsById.get(editLine.campaignId)
@@ -781,6 +1008,19 @@ export function FullCalendarPage() {
             resultCount={filtered.length}
             className="bg-transparent px-0"
           >
+            <label className="flex h-9 items-center gap-2 rounded-md border bg-white px-3">
+              <Switch
+                id="hide-cancelled"
+                checked={hideCancelled}
+                onCheckedChange={setHideCancelled}
+              />
+              <Label
+                htmlFor="hide-cancelled"
+                className="cursor-pointer text-sm text-muted-foreground"
+              >
+                Скрыть отменённое
+              </Label>
+            </label>
             <ColumnGroupToggle
               visible={visibleGroups}
               onChange={setVisibleGroups}
@@ -843,7 +1083,7 @@ export function FullCalendarPage() {
             campaigns={filtered}
             visibleGroups={visibleGroups}
             access={access}
-            linesFor={linesFor}
+            linesFor={displayLinesFor}
             onEdit={onEdit}
             onAddRequest={onAddRequest}
             onGiftPick={onGiftPick}
@@ -854,6 +1094,24 @@ export function FullCalendarPage() {
               currentRole === "Коммерческий директор"
                 ? onPeriodEditRequest
                 : undefined
+            }
+            onCancelCampaign={
+              canCancelCampaign(currentRole) ? onCancelRequest : undefined
+            }
+            onEditDeadline={
+              canManageDeadline(currentRole) ? onDeadlineRequest : undefined
+            }
+            onApproveDeadline={
+              canApproveDeadline(currentRole) ? onApproveDeadline : undefined
+            }
+            onRequestRemoval={
+              canRequestLineRemoval(currentRole) ? onRemovalRequest : undefined
+            }
+            onApproveRemoval={
+              canApproveLineRemoval(currentRole) ? onApproveRemoval : undefined
+            }
+            onRejectRemoval={
+              canApproveLineRemoval(currentRole) ? onRejectRemoval : undefined
             }
             changedCells={changedCells}
             changeBadges={changeBadges}
@@ -916,6 +1174,30 @@ export function FullCalendarPage() {
         access={access}
         onEdit={onEdit}
         onGiftPick={onGiftPick}
+        onRequestRemoval={
+          canRequestLineRemoval(currentRole)
+            ? (id) => {
+                setEditLineId(null);
+                onRemovalRequest(id);
+              }
+            : undefined
+        }
+        onApproveRemoval={
+          canApproveLineRemoval(currentRole)
+            ? (id) => {
+                setEditLineId(null);
+                onApproveRemoval(id);
+              }
+            : undefined
+        }
+        onRejectRemoval={
+          canApproveLineRemoval(currentRole)
+            ? (id) => {
+                setEditLineId(null);
+                onRejectRemoval(id);
+              }
+            : undefined
+        }
       />
 
       {/* Version history & changes (§5.1) — 3 views + diff; «Создать корректировку»
@@ -930,6 +1212,7 @@ export function FullCalendarPage() {
         }
         versions={historyVersions}
         currentReport={historyReport}
+        deadlineChange={historyCampaign?.deadlineChange}
         pendingChanges={historyChangeSet?.changes}
         reapprovalState={historyReapproval}
         onMarketingReapprove={
@@ -958,6 +1241,49 @@ export function FullCalendarPage() {
         campaign={periodEditId ? campaignsById.get(periodEditId) ?? null : null}
         onOpenChange={(open) => !open && setPeriodEditId(null)}
         onApply={onPeriodApply}
+      />
+
+      {/* Cancel whole campaign (§5.3) — КД only, required reason. */}
+      <ReasonDialog
+        open={cancelCampaignId !== null}
+        onOpenChange={(open) => !open && setCancelCampaignId(null)}
+        title="Отменить акцию"
+        description={
+          cancelCampaign
+            ? `${cancelCampaign.id} «${cancelCampaign.name}». Все смежные отделы получат отдельное уведомление «Акция отменена». Отмена — отдельное состояние; отменённую акцию можно посмотреть, сняв «Скрыть отменённое».`
+            : undefined
+        }
+        destructive
+        reasonLabel="Причина отмены"
+        confirmLabel="Отменить акцию"
+        onConfirm={onCancelConfirm}
+      />
+
+      {/* Request line exclusion (§5.3) — КМ, required reason → КД re-approval. */}
+      <ReasonDialog
+        open={removalLineId !== null}
+        onOpenChange={(open) => !open && setRemovalLineId(null)}
+        title="Исключить позицию из акции"
+        description={
+          removalLine
+            ? `${removalNom?.name ?? removalLine.nomenclatureId}. Исключение требует повторного согласования коммерческим директором; после согласования смежные отделы уведомляются инкрементально, позиция помечается «Исключена из акции».`
+            : undefined
+        }
+        destructive
+        reasonLabel="Причина исключения"
+        confirmLabel="Отправить на согласование"
+        onConfirm={onRemovalConfirm}
+      />
+
+      {/* Deadline change (§4.7) — КД initiates → Операционный директор approves. */}
+      <DeadlineChangeDialog
+        campaign={
+          deadlineCampaignId
+            ? campaignsById.get(deadlineCampaignId) ?? null
+            : null
+        }
+        onOpenChange={(open) => !open && setDeadlineCampaignId(null)}
+        onApply={onDeadlineApply}
       />
 
       {/* Duplicate-confirmation dialog (§8.2.1) — adding is NOT blocked. */}
@@ -1141,6 +1467,98 @@ function PeriodEditDialog({
             onClick={() => campaign && s && e && onApply(campaign.id, s, e)}
           >
             Применить
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Deadline-change request editor (§4.7). КД picks a new «заполнение КМ» deadline
+ * and gives a required reason; the request takes effect only after Операционный
+ * директор approves it. Reuses the local-tz date helpers above.
+ */
+function DeadlineChangeDialog({
+  campaign,
+  onOpenChange,
+  onApply,
+}: {
+  campaign: PromoCampaign | null;
+  onOpenChange: (open: boolean) => void;
+  onApply: (campaignId: string, newDeadline: Date, reason: string) => void;
+}) {
+  const [date, setDate] = React.useState("");
+  const [reason, setReason] = React.useState("");
+
+  React.useEffect(() => {
+    if (campaign) {
+      setDate(toInputDate(effectiveFillDeadline(campaign)));
+      setReason("");
+    }
+  }, [campaign]);
+
+  const d = fromInputDate(date);
+  const current = campaign ? effectiveFillDeadline(campaign) : null;
+  const changed =
+    !!d && !!current && d.getTime() !== current.getTime();
+  const valid = !!d && changed && reason.trim().length > 0;
+
+  return (
+    <Dialog open={campaign !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarClock className="size-5" />
+            Изменить дедлайн заполнения
+          </DialogTitle>
+          <DialogDescription>
+            Изменение крайнего срока заполнения КМ вступает в силу только после
+            утверждения вышестоящим руководством (Операционный директор).
+            Инициатор, причина, дата и старый/новый дедлайн фиксируются в истории.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <div className="rounded-md bg-gray-50 px-3 py-2 text-sm text-muted-foreground">
+            Текущий дедлайн:{" "}
+            <span className="font-medium text-gray-900 tabular-nums">
+              {current ? current.toLocaleDateString("ru-RU") : "—"}
+            </span>{" "}
+            <span className="text-xs">(календарные дни)</span>
+          </div>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-muted-foreground">Новый дедлайн</span>
+            <input
+              type="date"
+              value={date}
+              onChange={(ev) => setDate(ev.target.value)}
+              className="h-9 rounded-md border px-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-muted-foreground">
+              Причина изменения <span className="text-destructive">*</span>
+            </span>
+            <textarea
+              value={reason}
+              onChange={(ev) => setReason(ev.target.value)}
+              placeholder="Укажите причину…"
+              rows={3}
+              className="rounded-md border px-2 py-1.5 text-sm"
+            />
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            Отмена
+          </Button>
+          <Button
+            disabled={!valid}
+            onClick={() =>
+              campaign && d && onApply(campaign.id, d, reason.trim())
+            }
+          >
+            Отправить на утверждение
           </Button>
         </DialogFooter>
       </DialogContent>

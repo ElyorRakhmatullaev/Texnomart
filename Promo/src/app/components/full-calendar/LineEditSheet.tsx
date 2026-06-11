@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Gift } from "lucide-react";
+import { Ban, Check, Gift, X } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -20,6 +20,7 @@ import { EditableCell, type EditableKind } from "./EditableCell";
 import { WarehousePopover } from "./WarehousePopover";
 import {
   getNomenclatureItem,
+  isApprovedCampaign,
   isGiftType,
   type FullCalendarAccess,
   type PromoCampaign,
@@ -44,6 +45,9 @@ export function LineEditSheet({
   access,
   onEdit,
   onGiftPick,
+  onRequestRemoval,
+  onApproveRemoval,
+  onRejectRemoval,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -52,6 +56,11 @@ export function LineEditSheet({
   access: FullCalendarAccess;
   onEdit: (lineId: string, patch: Partial<PromoLine>) => void;
   onGiftPick: (lineId: string) => void;
+  /** КМ requests exclusion of this line (§5.3; approved campaigns only). */
+  onRequestRemoval?: (lineId: string) => void;
+  /** КД confirms/rejects a pending exclusion (§5.3). */
+  onApproveRemoval?: (lineId: string) => void;
+  onRejectRemoval?: (lineId: string) => void;
 }) {
   const nom = line ? getNomenclatureItem(line.nomenclatureId) : undefined;
   const gift = campaign ? isGiftType(campaign.type) : false;
@@ -264,6 +273,76 @@ export function LineEditSheet({
                 onChange={(c) => edit({ advSelectedMarketing: c })}
               />
             </Section>
+
+            {/* ── Исключение из акции (§5.3) ── */}
+            {(line.removed ||
+              line.removalPending ||
+              (onRequestRemoval && isApprovedCampaign(campaign))) && (
+              <Section title="Участие в акции">
+                {line.removed ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <Ban className="size-4" />
+                      Позиция исключена из акции
+                    </span>
+                    {line.removalReason && (
+                      <p className="mt-1 text-xs">{line.removalReason}</p>
+                    )}
+                  </div>
+                ) : line.removalPending ? (
+                  <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-orange-800">
+                      <Ban className="size-4" />
+                      Запрошено исключение — ожидает согласования КД
+                    </span>
+                    {line.removalReason && (
+                      <p className="mt-1 text-xs text-orange-700">
+                        {line.removalReason}
+                      </p>
+                    )}
+                    {(onApproveRemoval || onRejectRemoval) && (
+                      <div className="mt-3 flex gap-2">
+                        {onApproveRemoval && (
+                          <Button
+                            className="min-h-11 flex-1"
+                            onClick={() => onApproveRemoval(line.id)}
+                          >
+                            <Check className="size-4" />
+                            Подтвердить
+                          </Button>
+                        )}
+                        {onRejectRemoval && (
+                          <Button
+                            variant="secondary"
+                            className="min-h-11 flex-1"
+                            onClick={() => onRejectRemoval(line.id)}
+                          >
+                            <X className="size-4" />
+                            Отклонить
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      Исключение требует повторного согласования коммерческим
+                      директором; после согласования смежные отделы уведомляются
+                      инкрементально (§5.3).
+                    </p>
+                    <Button
+                      variant="secondary"
+                      className="min-h-11 w-full text-red-600 hover:text-red-700"
+                      onClick={() => onRequestRemoval!(line.id)}
+                    >
+                      <Ban className="size-4" />
+                      Исключить позицию из акции
+                    </Button>
+                  </div>
+                )}
+              </Section>
+            )}
           </div>
         ) : (
           <div className="flex-1" />

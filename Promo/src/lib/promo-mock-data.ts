@@ -155,6 +155,37 @@ export interface PromoCampaign {
    * once the change is sent to departments (re-baselined).
    */
   periodChanged?: boolean;
+  /** Cancellation metadata (§5.3) — required reason + actor + timestamp. */
+  cancelReason?: string;
+  cancelledBy?: string;
+  cancelledAt?: string;
+  /**
+   * Approved override of the «заполнение КМ» deadline (§4.7). When set, it wins
+   * over the derived `getFillDeadline`. Applied only after senior-leadership approval.
+   */
+  fillDeadlineOverride?: Date;
+  /** Pending/approved deadline-change request (§4.7). */
+  deadlineChange?: DeadlineChangeRequest;
+}
+
+/**
+ * A deadline-change request (§4.7 «Изменение дедлайнов»). КД initiates with a
+ * required reason; it takes effect only after senior-leadership approval (here:
+ * Операционный директор). The full request is logged for the audit trail.
+ */
+export interface DeadlineChangeRequest {
+  /** Role label of the initiator (КД in the mock). */
+  initiator: string;
+  reason: string;
+  /** Old «заполнение КМ» deadline at request time. */
+  oldDeadline: Date;
+  /** Proposed new deadline. */
+  newDeadline: Date;
+  requestedAt: string;
+  status: "pending" | "approved";
+  /** Approver (Операционный директор) — set once approved. */
+  approvedBy?: string;
+  approvedAt?: string;
 }
 
 export const CAMPAIGNS: PromoCampaign[] = [
@@ -405,6 +436,15 @@ export function getFillDeadline(campaign: PromoCampaign): Date {
 }
 
 /**
+ * Effective «заполнение КМ» deadline (§4.7): an APPROVED override wins over the
+ * derived `getFillDeadline`. A pending change has NOT taken effect yet, so it does
+ * not move the effective deadline until senior leadership approves it.
+ */
+export function effectiveFillDeadline(campaign: PromoCampaign): Date {
+  return campaign.fillDeadlineOverride ?? getFillDeadline(campaign);
+}
+
+/**
  * Whole calendar days a deadline is overdue relative to `ref` (default: now).
  * 0 (or negative) means not overdue. Never blocks — purely a signal (spec).
  */
@@ -515,6 +555,18 @@ export interface PromoLine {
   history?: LineHistoryEntry[];
   /** 1С availability — saved as draft awaiting a 1С re-check (§8.3). */
   pending1CCheck?: boolean;
+  /**
+   * Line cancellation / removal (§5.3) — DISTINCT from the S3 reviewer `rejected`
+   * flag. КМ requests removal (→ `removalPending`), КД re-approves it (→ `removed`).
+   * A removed line is «Исключена из акции / Отменена»: kept for history/reports
+   * with a marker, hidden by the «Скрыть отменённое» filter when ON.
+   */
+  removalPending?: boolean;
+  removed?: boolean;
+  /** Required reason for the removal request (§5.3). */
+  removalReason?: string;
+  /** Actor who requested removal — role label (no per-person identity in the mock). */
+  removalRequestedBy?: string;
 }
 
 /** A single line-history record (§8.2.1 stores {what, which promo, overlap, user, date/time}). */
@@ -548,6 +600,9 @@ type LineSeed = {
   rejectComment?: string;
   duplicate?: boolean;
   pending1CCheck?: boolean;
+  removalPending?: boolean;
+  removed?: boolean;
+  removalReason?: string;
   gift?: string;
   utp?: string;
   advKm?: boolean;
@@ -591,6 +646,17 @@ const LINE_SEED: LineSeed[] = [
   { id: "L-0013", campaignId: "PR-2026-006", kmId: "km-6", nomenclatureId: "1C-10029", off: 0.2 },
   // PR-2026-007 km-5 (at Старший КМ) — Ноутбуки.
   { id: "L-0014", campaignId: "PR-2026-007", kmId: "km-5", nomenclatureId: "1C-10023", off: 0.07, forecast: 40 },
+
+  // S4 Phase 3 — cancellation demos.
+  // PR-2026-004 «Распродажа ТВ и аудио» is a CANCELLED campaign (status «Отменена»):
+  // seed it with lines so the «Скрыть отменённое» switch visibly hides/shows it.
+  { id: "L-0017", campaignId: "PR-2026-004", kmId: "km-1", nomenclatureId: "1C-10001", off: 0.22, forecast: 80 },
+  { id: "L-0018", campaignId: "PR-2026-004", kmId: "km-1", nomenclatureId: "1C-10004", off: 0.25, forecast: 110 },
+  // UN-2026-015 «Срочная скидка на холодильники» is APPROVED («…отправлено смежным
+  // отделам»): one normal line + one already-requested removal (removalPending) so
+  // the КД «Подтвердить исключение» path is demoable on load.
+  { id: "L-0019", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10008", off: 0.11, forecast: 22 },
+  { id: "L-0020", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10009", off: 0.09, forecast: 30, removalPending: true, removalReason: "Снят с продаж поставщиком — исключить из акции." },
 ];
 
 function roundTo(value: number, step: number): number {
@@ -627,6 +693,10 @@ export const PROMO_LINES: PromoLine[] = LINE_SEED.map((s) => {
     rejectComment: s.rejectComment,
     duplicate: s.duplicate,
     pending1CCheck: s.pending1CCheck,
+    removalPending: s.removalPending,
+    removed: s.removed,
+    removalReason: s.removalReason,
+    removalRequestedBy: s.removalPending || s.removed ? "Категорийный менеджер (КМ)" : undefined,
   };
 });
 
@@ -1510,7 +1580,8 @@ export function buildCampaignReport(lines: PromoLine[]): CampaignReportRow[] {
       lineId: l.id,
       nomenclature: nom?.name ?? l.nomenclatureId,
       code: l.nomenclatureId,
-      removed: l.rejected,
+      // «Исключена из акции» (§5.3) or a reviewer rejection both render struck-through.
+      removed: l.removed || l.rejected,
       fields,
     };
   });
@@ -1829,5 +1900,90 @@ export function buildSentVersion(
     summary:
       "Изменения согласованы и отправлены смежным отделам (инкрементально, только изменённые/добавленные данные).",
     changes: changeSet.changes,
+  };
+}
+
+// ── Cancellation + deadline change (S4 Phase 3, §5.3 / §4.7) ───────────────────
+
+/** Whole-campaign cancellation is restricted to Коммерческий директор (§5.3). */
+export function canCancelCampaign(role: PromoRole): boolean {
+  return role === "Коммерческий директор";
+}
+
+/** КМ requesting removal of their own line (§5.3). КД re-approves it. */
+export function canRequestLineRemoval(role: PromoRole): boolean {
+  return role === "Категорийный менеджер (КМ)" || role === "Старший КМ";
+}
+
+/** КД re-approval of a КМ line-removal request (§5.3). */
+export function canApproveLineRemoval(role: PromoRole): boolean {
+  return role === "Коммерческий директор";
+}
+
+/** Initiating a deadline change — Коммерческий директор (§4.7). */
+export function canManageDeadline(role: PromoRole): boolean {
+  return role === "Коммерческий директор";
+}
+
+/** Approving a deadline change — senior leadership; here Операционный директор (§4.7). */
+export function canApproveDeadline(role: PromoRole): boolean {
+  return role === "Операционный директор";
+}
+
+/**
+ * Build the immutable «Отмена» version entry appended when КД cancels a campaign
+ * (§5.3). The reason is recorded so it stays visible in the history/audit trail.
+ */
+export function buildCancellationVersion(
+  campaignId: string,
+  reason: string,
+  nextVersion: number,
+  date: Date,
+  role: string
+): CampaignVersion {
+  return {
+    id: `${campaignId}-v${nextVersion}`,
+    campaignId,
+    version: nextVersion,
+    date,
+    author: role,
+    role,
+    changeType: "Отмена",
+    summary: `Акция отменена. Причина: ${reason}`,
+    changes: [],
+  };
+}
+
+/**
+ * Build the «Корректировка» version entry appended when КД approves a line
+ * removal and it is sent incrementally to departments (§5.3). The excluded line
+ * shows as a `removed` change in the diff.
+ */
+export function buildLineRemovalVersion(
+  campaignId: string,
+  nomenclatureName: string,
+  reason: string,
+  nextVersion: number,
+  date: Date,
+  role: string
+): CampaignVersion {
+  return {
+    id: `${campaignId}-v${nextVersion}`,
+    campaignId,
+    version: nextVersion,
+    date,
+    author: role,
+    role,
+    changeType: "Корректировка",
+    summary: `Позиция исключена из акции: ${nomenclatureName}. Причина: ${reason}. Отделы уведомлены.`,
+    changes: [
+      {
+        scope: nomenclatureName,
+        field: "Позиция",
+        from: "в акции",
+        to: "исключена из акции",
+        kind: "removed",
+      },
+    ],
   };
 }

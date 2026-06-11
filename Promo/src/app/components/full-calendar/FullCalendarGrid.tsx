@@ -7,7 +7,10 @@ import { Checkbox } from "@texnomart/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import {
   AlertCircle,
+  Ban,
+  CalendarCheck,
   CalendarClock,
+  Check,
   ChevronRight,
   Clock,
   Copy,
@@ -16,10 +19,12 @@ import {
   Lock,
   Pencil,
   Plus,
+  X,
 } from "lucide-react";
 import { Money } from "../../../components/Money";
 import { RuDate } from "../../../components/RuDate";
 import {
+  effectiveFillDeadline,
   getCategoryManager,
   getNomenclatureItem,
   installmentTerm,
@@ -374,6 +379,17 @@ interface FullCalendarGridProps {
   onHistory?: (campaignId: string) => void;
   /** Edit an approved campaign's period (§11.5; provided only for КД). */
   onEditPeriod?: (campaignId: string) => void;
+  /** Cancel the whole campaign (§5.3; provided only for КД). */
+  onCancelCampaign?: (campaignId: string) => void;
+  /** Request a deadline change (§4.7; provided only for КД). */
+  onEditDeadline?: (campaignId: string) => void;
+  /** Approve a pending deadline change (§4.7; provided only for Операционный директор). */
+  onApproveDeadline?: (campaignId: string) => void;
+  /** Request exclusion of a line (§5.3; provided only for КМ). */
+  onRequestRemoval?: (lineId: string) => void;
+  /** Approve/reject a pending line exclusion (§5.3; provided only for КД). */
+  onApproveRemoval?: (lineId: string) => void;
+  onRejectRemoval?: (lineId: string) => void;
   /** `${lineId}:${field}` keys of cells changed after approval — amber highlight. */
   changedCells?: Set<string>;
   /** Per-campaign change-after-approval badge (count + awaiting-marketing). */
@@ -396,6 +412,12 @@ export function FullCalendarGrid({
   onEditCampaign,
   onHistory,
   onEditPeriod,
+  onCancelCampaign,
+  onEditDeadline,
+  onApproveDeadline,
+  onRequestRemoval,
+  onApproveRemoval,
+  onRejectRemoval,
   changedCells,
   changeBadges,
   selectedIds,
@@ -498,7 +520,9 @@ export function FullCalendarGrid({
                         ROW_H,
                         selectedIds.has(line.id) && "bg-[#FFD60A]/5",
                         line.pending1CCheck && "bg-amber-50/50",
-                        line.rejected && "bg-red-50/70 hover:bg-red-50"
+                        line.rejected && "bg-red-50/70 hover:bg-red-50",
+                        line.removalPending && "bg-orange-50/60",
+                        line.removed && "bg-red-50/70 opacity-70 hover:bg-red-50"
                       )}
                     >
                       {editorMode && (
@@ -537,16 +561,25 @@ export function FullCalendarGrid({
                           </TooltipContent>
                         </Tooltip>
                         <LineMarkers line={line} />
-                        {onLineTap && (
-                          <button
-                            type="button"
-                            onClick={() => onLineTap(line.id)}
-                            aria-label="Редактировать строку"
-                            className="ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 hover:text-gray-900 md:hidden"
-                          >
-                            <ChevronRight className="size-4" />
-                          </button>
-                        )}
+                        <span className="ml-auto flex shrink-0 items-center gap-0.5">
+                          <LineRowActions
+                            line={line}
+                            campaign={campaign}
+                            onRequestRemoval={onRequestRemoval}
+                            onApproveRemoval={onApproveRemoval}
+                            onRejectRemoval={onRejectRemoval}
+                          />
+                          {onLineTap && (
+                            <button
+                              type="button"
+                              onClick={() => onLineTap(line.id)}
+                              aria-label="Редактировать строку"
+                              className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 hover:text-gray-900 md:hidden"
+                            >
+                              <ChevronRight className="size-4" />
+                            </button>
+                          )}
+                        </span>
                       </div>
                     </div>
                   );
@@ -655,10 +688,23 @@ export function FullCalendarGrid({
                         </Tooltip>
                       )}
                     </span>
+                    {campaign.planned && <DeadlineChip campaign={campaign} />}
                     {changeBadges?.get(campaign.id) && (
                       <ChangeBadge info={changeBadges.get(campaign.id)!} />
                     )}
                     <div className="ml-auto flex shrink-0 items-center gap-1">
+                      {/* Операционный директор: approve a pending deadline change (§4.7). */}
+                      {onApproveDeadline &&
+                        campaign.deadlineChange?.status === "pending" && (
+                          <button
+                            type="button"
+                            onClick={() => onApproveDeadline(campaign.id)}
+                            className="inline-flex shrink-0 items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                          >
+                            <CalendarCheck className="size-3" />
+                            Утвердить дедлайн
+                          </button>
+                        )}
                       {onEditPeriod &&
                         campaign.planned &&
                         isApprovedCampaign(campaign) && (
@@ -669,6 +715,19 @@ export function FullCalendarGrid({
                           >
                             <CalendarClock className="size-3" />
                             Изменить период
+                          </button>
+                        )}
+                      {/* КД: request a deadline change (planned, not cancelled, §4.7). */}
+                      {onEditDeadline &&
+                        campaign.planned &&
+                        !campaign.cancelled && (
+                          <button
+                            type="button"
+                            onClick={() => onEditDeadline(campaign.id)}
+                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
+                          >
+                            <CalendarClock className="size-3" />
+                            Изменить дедлайн
                           </button>
                         )}
                       {onEditCampaign &&
@@ -695,6 +754,23 @@ export function FullCalendarGrid({
                           История
                         </button>
                       )}
+                      {/* КД: cancel the whole campaign (§5.3). */}
+                      {onCancelCampaign && !campaign.cancelled && (
+                        <button
+                          type="button"
+                          onClick={() => onCancelCampaign(campaign.id)}
+                          className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 hover:text-red-700"
+                        >
+                          <Ban className="size-3" />
+                          Отменить акцию
+                        </button>
+                      )}
+                      {campaign.cancelled && (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                          <Ban className="size-3" />
+                          Отменена
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -709,7 +785,9 @@ export function FullCalendarGrid({
                           ROW_H,
                           selectedIds.has(line.id) && "bg-[#FFD60A]/5",
                           line.pending1CCheck && "bg-amber-50/50",
-                          line.rejected && "bg-red-50/70 hover:bg-red-50"
+                          line.rejected && "bg-red-50/70 hover:bg-red-50",
+                          line.removalPending && "bg-orange-50/60",
+                          line.removed && "bg-red-50/70 opacity-70 hover:bg-red-50"
                         )}
                       >
                         {cols.map((col) => (
@@ -865,6 +943,173 @@ function LineMarkers({ line }: { line: PromoLine }) {
           </TooltipContent>
         </Tooltip>
       )}
+      {line.removalPending && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-0.5 rounded bg-orange-100 px-1 py-0.5 text-[10px] font-medium text-orange-800">
+              <Ban className="size-2.5" />
+              ожидает исключения
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[260px]">
+            {line.removalReason
+              ? `Запрошено исключение из акции: ${line.removalReason} Ожидает согласования коммерческого директора.`
+              : "Запрошено исключение из акции — ожидает согласования коммерческого директора (§5.3)."}
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {line.removed && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[10px] font-medium text-red-700">
+              <Ban className="size-2.5" />
+              исключена
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[260px]">
+            {line.removalReason
+              ? `Исключена из акции: ${line.removalReason} Сохраняется в истории и отчётах с отметкой.`
+              : "Позиция исключена из акции (§5.3). Сохраняется в истории и отчётах с отметкой."}
+          </TooltipContent>
+        </Tooltip>
+      )}
     </span>
+  );
+}
+
+/**
+ * Trailing per-line removal controls in the frozen pane (§5.3): КМ requests
+ * exclusion (hover-revealed, approved campaigns only); КД confirms/rejects a
+ * pending exclusion (always visible while pending).
+ */
+function LineRowActions({
+  line,
+  campaign,
+  onRequestRemoval,
+  onApproveRemoval,
+  onRejectRemoval,
+}: {
+  line: PromoLine;
+  campaign: PromoCampaign;
+  onRequestRemoval?: (lineId: string) => void;
+  onApproveRemoval?: (lineId: string) => void;
+  onRejectRemoval?: (lineId: string) => void;
+}) {
+  if (line.removed) return null;
+
+  if (line.removalPending) {
+    if (!onApproveRemoval && !onRejectRemoval) return null;
+    return (
+      <>
+        {onApproveRemoval && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => onApproveRemoval(line.id)}
+                aria-label="Подтвердить исключение"
+                className="inline-flex size-7 items-center justify-center rounded text-emerald-600 hover:bg-emerald-50"
+              >
+                <Check className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Подтвердить исключение</TooltipContent>
+          </Tooltip>
+        )}
+        {onRejectRemoval && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => onRejectRemoval(line.id)}
+                aria-label="Отклонить исключение"
+                className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 hover:text-gray-900"
+              >
+                <X className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Отклонить исключение — позиция остаётся</TooltipContent>
+          </Tooltip>
+        )}
+      </>
+    );
+  }
+
+  // Active line — КМ may request exclusion of an already-approved campaign's line.
+  if (onRequestRemoval && isApprovedCampaign(campaign)) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => onRequestRemoval(line.id)}
+            aria-label="Исключить из акции"
+            className="hidden size-7 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover/row:opacity-100 md:inline-flex"
+          >
+            <Ban className="size-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Исключить позицию из акции (§5.3)</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return null;
+}
+
+/**
+ * Campaign band «заполнение КМ» deadline chip (§4.7). Shows the effective
+ * calendar deadline; an approved override reads as the new date with a ✓, a
+ * pending change reads amber as «old → new · на утверждении».
+ */
+function DeadlineChip({ campaign }: { campaign: PromoCampaign }) {
+  const dc = campaign.deadlineChange;
+  const eff = effectiveFillDeadline(campaign);
+  const fmt = (d: Date) => d.toLocaleDateString("ru-RU");
+
+  if (dc?.status === "pending") {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+            <CalendarClock className="size-2.5" />
+            дедлайн: {fmt(dc.oldDeadline)} → {fmt(dc.newDeadline)} · на утверждении
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[260px]">
+          Запрошено изменение дедлайна заполнения (инициатор: {dc.initiator}).
+          {dc.reason ? ` Причина: ${dc.reason}` : ""} Вступит в силу после
+          утверждения вышестоящим руководством (Операционный директор) (§4.7).
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
+            campaign.fillDeadlineOverride
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-gray-100 text-gray-600"
+          )}
+        >
+          {campaign.fillDeadlineOverride ? (
+            <CalendarCheck className="size-2.5" />
+          ) : (
+            <CalendarClock className="size-2.5" />
+          )}
+          дедлайн: {fmt(eff)}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-[260px]">
+        Крайний срок заполнения КМ (календарные дни).
+        {campaign.fillDeadlineOverride
+          ? " Изменён и утверждён вышестоящим руководством (§4.7)."
+          : ""}
+      </TooltipContent>
+    </Tooltip>
   );
 }

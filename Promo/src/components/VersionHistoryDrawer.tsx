@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   AlertTriangle,
   ArrowRight,
+  CalendarClock,
   Check,
   FileClock,
   FilePlus2,
@@ -30,6 +31,7 @@ import { RuDate } from "./RuDate";
 import type {
   CampaignReportRow,
   CampaignVersion,
+  DeadlineChangeRequest,
   ReviewComment,
   VersionChangeType,
   VersionFieldChange,
@@ -102,6 +104,8 @@ interface VersionHistoryDrawerProps {
   reviewComments?: ReviewComment[];
   /** Non-blocking просрочка note (КД exceeded the review SLA) — shown in red. */
   overdueDays?: number;
+  /** S4 Phase 3 deadline-change request (§4.7) — surfaced as a log entry. */
+  deadlineChange?: DeadlineChangeRequest;
 }
 
 /**
@@ -125,6 +129,7 @@ export function VersionHistoryDrawer({
   onSendToDepartments,
   reviewComments,
   overdueDays = 0,
+  deadlineChange,
 }: VersionHistoryDrawerProps) {
   const [view, setView] = React.useState<ViewKey>("history");
   const hasPending = !!pendingChanges && pendingChanges.length > 0;
@@ -286,6 +291,49 @@ export function VersionHistoryDrawer({
                   Просрочка проверки: +{overdueDays}{" "}
                   {overdueDays === 1 ? "рабочий день" : "раб. дн."}. Не блокирует
                   отправку — зафиксировано в истории.
+                </p>
+              </div>
+            )}
+
+            {deadlineChange && (
+              <div
+                className={cn(
+                  "rounded-lg border p-3",
+                  deadlineChange.status === "approved"
+                    ? "border-emerald-200 bg-emerald-50"
+                    : "border-amber-200 bg-amber-50"
+                )}
+              >
+                <h3
+                  className={cn(
+                    "flex items-center gap-1.5 text-sm font-semibold",
+                    deadlineChange.status === "approved"
+                      ? "text-emerald-800"
+                      : "text-amber-800"
+                  )}
+                >
+                  <CalendarClock className="size-4" />
+                  Изменение дедлайна заполнения
+                  <span className="ml-auto rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-medium">
+                    {deadlineChange.status === "approved"
+                      ? "утверждено"
+                      : "на утверждении"}
+                  </span>
+                </h3>
+                <p className="mt-1.5 text-sm tabular-nums text-gray-800">
+                  {deadlineChange.oldDeadline.toLocaleDateString("ru-RU")} →{" "}
+                  <span className="font-semibold">
+                    {deadlineChange.newDeadline.toLocaleDateString("ru-RU")}
+                  </span>
+                </p>
+                <p className="mt-0.5 text-xs text-gray-600">
+                  Причина: {deadlineChange.reason}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Инициатор: {deadlineChange.initiator}
+                  {deadlineChange.approvedBy
+                    ? ` · Утвердил: ${deadlineChange.approvedBy}`
+                    : " · Требуется утверждение вышестоящего руководства (§4.7)"}
                 </p>
               </div>
             )}
