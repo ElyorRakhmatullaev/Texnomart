@@ -169,6 +169,7 @@ interface AppHeaderProps {
   headerActions?: React.ReactNode;
   roleSwitcher?: RoleSwitcherConfig;
   activeRole: string;
+  notificationsHref?: string;
 }
 
 function AppHeader({
@@ -177,7 +178,9 @@ function AppHeader({
   headerActions,
   roleSwitcher,
   activeRole,
+  notificationsHref,
 }: AppHeaderProps) {
+  const [notifOpen, setNotifOpen] = React.useState(false);
   const navigate = useNavigate();
   const { logout } = useAuth();
   const { toggleSidebar } = useSidebar();
@@ -252,7 +255,7 @@ function AppHeader({
         </button>
 
         {notifications.length > 0 && (
-          <Popover>
+          <Popover open={notifOpen} onOpenChange={setNotifOpen}>
             <PopoverTrigger asChild>
               <button className="relative inline-flex items-center justify-center rounded-md transition-all size-9 hover:bg-accent hover:text-accent-foreground">
                 <Bell className="size-5" />
@@ -295,7 +298,17 @@ function AppHeader({
                 ))}
               </div>
               <div className="border-t p-2">
-                <Button variant="ghost" size="sm" className="w-full">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    if (notificationsHref) {
+                      setNotifOpen(false);
+                      navigate(notificationsHref);
+                    }
+                  }}
+                >
                   Показать все
                 </Button>
               </div>
@@ -470,6 +483,8 @@ interface AppShellProps {
   /** Optional role switcher for role-based apps; omit for single-role apps. */
   roleSwitcher?: RoleSwitcherConfig;
   maxWidth?: string;
+  /** Where the bell popover's «Показать все» navigates; omit to keep it inert. */
+  notificationsHref?: string;
 }
 
 export function AppShell({
@@ -479,6 +494,7 @@ export function AppShell({
   headerActions,
   roleSwitcher,
   maxWidth = "1400px",
+  notificationsHref,
 }: AppShellProps) {
   const location = useLocation();
   const activeRole = roleSwitcher?.current ?? config.user.role;
@@ -500,6 +516,7 @@ export function AppShell({
             headerActions={headerActions}
             roleSwitcher={roleSwitcher}
             activeRole={activeRole}
+            notificationsHref={notificationsHref}
           />
           <AppBreadcrumbs items={breadcrumbs} />
           <main className="flex-1 p-3 md:p-4 overflow-auto min-h-0 bg-gray-50 dark:bg-background">
