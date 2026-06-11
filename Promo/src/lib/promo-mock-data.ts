@@ -149,6 +149,12 @@ export interface PromoCampaign {
    * approval. Flips true on submit and locks the тип/период editing affordance.
    */
   firstSendDone?: boolean;
+  /**
+   * Period changed AFTER approval (§11.5) — the grid renders the period in bold
+   * with a ✏️ pencil. Set when an approved campaign's dates are edited; cleared
+   * once the change is sent to departments (re-baselined).
+   */
+  periodChanged?: boolean;
 }
 
 export const CAMPAIGNS: PromoCampaign[] = [
@@ -562,6 +568,12 @@ const LINE_SEED: LineSeed[] = [
   // PR-2026-002 «Рассрочка на технику к Новому году» (Рассрочка 0-0-12) — km-2, km-4, km-5
   { id: "L-0006", campaignId: "PR-2026-002", kmId: "km-5", nomenclatureId: "1C-10021", off: 0.08, forecast: 40, pending1CCheck: true },
   { id: "L-0007", campaignId: "PR-2026-002", kmId: "km-4", nomenclatureId: "1C-10016", off: 0.14, forecast: 25, stockManual: true },
+
+  // PR-2026-003 «1+1 на мелкую бытовую технику» (1+1, gift type) — km-4.
+  // Already «Согласовано и отправлено смежным отделам», so edits here are tracked
+  // as edit-after-approval corrections (§5.1) — the values match Phase-1 версии.
+  { id: "L-0015", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10017", off: 0.16, forecast: 40, regular: 14, gift: "1C-10018" },
+  { id: "L-0016", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10016", off: 0.14, forecast: 25, gift: "1C-10018", advKm: true },
 
   // PR-2026-005 «Cashback на смартфоны» (Переотправлено на корректировку) — km-3
   { id: "L-0008", campaignId: "PR-2026-005", kmId: "km-3", nomenclatureId: "1C-10013", off: 0.16, forecast: 300, rejected: true, rejectComment: "Уточните остаток — расходится с данными 1С." },
@@ -1412,4 +1424,410 @@ export function participationsForKm(
 /** Whether a КМ may still raise «Не участвует» for a participation (not yet final). */
 export function canRequestNonParticipation(status: KmStatus): boolean {
   return status !== "Не участвует" && status !== "Принято коммерческим директором";
+}
+
+// ── S4 — Версионирование и изменения (§5.1, §7.1) ──────────────────────────────
+// Every saved version forms an immutable report version; previous versions are
+// never deleted, and rollback is NOT supported (§5.2.1) — a revert is a new
+// correction that re-enters approval. The drawer renders three views over this
+// model: «Только изменения» (the diff), «Полный актуальный отчёт» (the current
+// snapshot), and «История версий» (the full version list). Mock = in-memory.
+
+/** Change-type chip values (spec §5.1). */
+export type VersionChangeType =
+  | "Первичная отправка"
+  | "Корректировка"
+  | "Добавление"
+  | "Отмена"
+  | "Отправка отчёта";
+
+/** A single changed/added/removed field within a version (drives the diff view). */
+export interface VersionFieldChange {
+  /** Scope label — the line («Samsung …») or «Кампания» for campaign-level fields. */
+  scope: string;
+  /** Field label, e.g. «Новая цена». */
+  field: string;
+  /** Previous value (RU-formatted); undefined for an addition. */
+  from?: string;
+  /** New value (RU-formatted); undefined for a removal. */
+  to?: string;
+  kind: "added" | "changed" | "removed";
+}
+
+/** One immutable report version of a campaign (§5.1). */
+export interface CampaignVersion {
+  id: string;
+  campaignId: string;
+  /** 1-based version number. */
+  version: number;
+  date: Date;
+  /** Actor — role label in the mock (no per-person identity yet). */
+  author: string;
+  role: string;
+  changeType: VersionChangeType;
+  /** One-line summary of what the version changed. */
+  summary: string;
+  /** Per-field diff vs the previous version (empty for «Первичная отправка»). */
+  changes: VersionFieldChange[];
+}
+
+/** One row of the «Полный актуальный отчёт» snapshot view. */
+export interface CampaignReportRow {
+  lineId: string;
+  nomenclature: string;
+  code: string;
+  removed?: boolean;
+  /** A compact set of the line's key fields (label + RU-formatted value). */
+  fields: { label: string; value: string }[];
+}
+
+/**
+ * Build the «Полный актуальный отчёт» rows from a campaign's current lines —
+ * the up-to-date snapshot, derived live so it reflects in-session edits.
+ */
+export function buildCampaignReport(lines: PromoLine[]): CampaignReportRow[] {
+  return lines.map((l) => {
+    const nom = getNomenclatureItem(l.nomenclatureId);
+    const fields: { label: string; value: string }[] = [
+      { label: "Остаток", value: l.stock.toLocaleString("ru-RU") },
+      {
+        label: "Новая цена",
+        value: l.newPrice ? `${l.newPrice.toLocaleString("ru-RU")} сум` : "—",
+      },
+      {
+        label: "Скидка",
+        value: l.discountPct != null ? `${l.discountPct}%` : "—",
+      },
+      {
+        label: "Прогноз продаж",
+        value:
+          l.salesForecast != null
+            ? l.salesForecast.toLocaleString("ru-RU")
+            : "не заполнено",
+      },
+    ];
+    return {
+      lineId: l.id,
+      nomenclature: nom?.name ?? l.nomenclatureId,
+      code: l.nomenclatureId,
+      removed: l.rejected,
+      fields,
+    };
+  });
+}
+
+// Seeded version histories. PR-2026-003 («Согласовано и отправлено смежным
+// отделам») carries a full chain incl. an «Отправка отчёта»; PR-2026-001 has a
+// первичная + корректировка. Every other campaign gets a single «Первичная
+// отправка» so the drawer is never empty. Dates are fixed (seed-stable).
+const CAMPAIGN_VERSIONS: Record<string, CampaignVersion[]> = {
+  "PR-2026-003": [
+    {
+      id: "PR-2026-003-v4",
+      campaignId: "PR-2026-003",
+      version: 4,
+      date: new Date(2026, 8, 29, 16, 5),
+      author: "Система",
+      role: "Автоматически",
+      changeType: "Отправка отчёта",
+      summary: "Сформирована версия отчёта и отправлена смежным отделам.",
+      changes: [],
+    },
+    {
+      id: "PR-2026-003-v3",
+      campaignId: "PR-2026-003",
+      version: 3,
+      date: new Date(2026, 8, 29, 11, 40),
+      author: "Каримов Шохрух",
+      role: "Категорийный менеджер (КМ)",
+      changeType: "Корректировка",
+      summary: "Изменена новая цена по 2 позициям после согласования.",
+      changes: [
+        {
+          scope: "Кофемашина De'Longhi",
+          field: "Новая цена",
+          from: "4 990 000 сум",
+          to: "4 690 000 сум",
+          kind: "changed",
+        },
+        {
+          scope: "Кофемашина De'Longhi",
+          field: "Скидка",
+          from: "10%",
+          to: "16%",
+          kind: "changed",
+        },
+        {
+          scope: "Пылесос Dyson V12",
+          field: "Новая цена",
+          from: "5 200 000 сум",
+          to: "4 990 000 сум",
+          kind: "changed",
+        },
+      ],
+    },
+    {
+      id: "PR-2026-003-v2",
+      campaignId: "PR-2026-003",
+      version: 2,
+      date: new Date(2026, 8, 25, 10, 12),
+      author: "Каримов Шохрух",
+      role: "Категорийный менеджер (КМ)",
+      changeType: "Добавление",
+      summary: "Добавлена 1 позиция номенклатуры.",
+      changes: [
+        {
+          scope: "Пылесос Dyson V12",
+          field: "Позиция",
+          to: "добавлена в акцию",
+          kind: "added",
+        },
+      ],
+    },
+    {
+      id: "PR-2026-003-v1",
+      campaignId: "PR-2026-003",
+      version: 1,
+      date: new Date(2026, 8, 22, 17, 48),
+      author: "Каримов Шохрух",
+      role: "Категорийный менеджер (КМ)",
+      changeType: "Первичная отправка",
+      summary: "Первичная отправка данных на согласование.",
+      changes: [],
+    },
+  ],
+  "PR-2026-001": [
+    {
+      id: "PR-2026-001-v3",
+      campaignId: "PR-2026-001",
+      version: 3,
+      date: new Date(2026, 10, 24, 14, 32),
+      author: "Алиев Бекзод",
+      role: "Категорийный менеджер (КМ)",
+      changeType: "Корректировка",
+      summary: "Изменена новая цена и прогноз по 2 позициям.",
+      changes: [
+        {
+          scope: "Samsung QLED 55\" QE55Q60D",
+          field: "Новая цена",
+          from: "7 990 000 сум",
+          to: "7 640 000 сум",
+          kind: "changed",
+        },
+        {
+          scope: "Samsung QLED 55\" QE55Q60D",
+          field: "Скидка",
+          from: "11%",
+          to: "15%",
+          kind: "changed",
+        },
+        {
+          scope: "iPhone 15 128GB",
+          field: "Прогноз продаж",
+          from: "120",
+          to: "180",
+          kind: "changed",
+        },
+      ],
+    },
+    {
+      id: "PR-2026-001-v2",
+      campaignId: "PR-2026-001",
+      version: 2,
+      date: new Date(2026, 10, 22, 9, 15),
+      author: "Исмаилов Жасур",
+      role: "Старший КМ",
+      changeType: "Добавление",
+      summary: "Добавлена 1 позиция номенклатуры.",
+      changes: [
+        {
+          scope: "Кондиционер Artel 12000 BTU",
+          field: "Позиция",
+          to: "добавлена в акцию",
+          kind: "added",
+        },
+      ],
+    },
+    {
+      id: "PR-2026-001-v1",
+      campaignId: "PR-2026-001",
+      version: 1,
+      date: new Date(2026, 10, 20, 17, 48),
+      author: "Алиев Бекзод",
+      role: "Категорийный менеджер (КМ)",
+      changeType: "Первичная отправка",
+      summary: "Первичная отправка данных на согласование.",
+      changes: [],
+    },
+  ],
+};
+
+/** Versions for a campaign, newest-first. Unknown campaigns get a single seed. */
+export function getCampaignVersions(campaignId: string): CampaignVersion[] {
+  const seeded = CAMPAIGN_VERSIONS[campaignId];
+  if (seeded) return seeded;
+  return [
+    {
+      id: `${campaignId}-v1`,
+      campaignId,
+      version: 1,
+      date: new Date(2026, 9, 1, 9, 0),
+      author: "Категорийный менеджер",
+      role: "Категорийный менеджер (КМ)",
+      changeType: "Первичная отправка",
+      summary: "Первичная отправка данных на согласование.",
+      changes: [],
+    },
+  ];
+}
+
+// ── S4 — Изменение после согласования (§5.1, §5.2, §11.8) ──────────────────────
+// After a campaign is «Согласовано и отправлено смежным отделам», any edit is a
+// tracked change detected by diffing the live lines/period against the last sent
+// version (the baseline). Until approved (Маркетинг, where required → КД) it is a
+// draft and is NOT sent to departments. КД approval forms a new version + an
+// incremental send. Adding NEW products does NOT require Маркетинг re-approval.
+
+/** The status at which edit-after-approval tracking kicks in (§5.1). */
+export const APPROVED_CAMPAIGN_STATUS: CampaignStatus =
+  "Согласовано и отправлено смежным отделам";
+
+/** Whether edit-after-approval applies to this campaign. */
+export function isApprovedCampaign(c: PromoCampaign): boolean {
+  return c.status === APPROVED_CAMPAIGN_STATUS && !c.cancelled;
+}
+
+/** КМ-editable fields tracked for the edit-after-approval diff. */
+const TRACKED_FIELDS: {
+  field: keyof PromoLine;
+  label: string;
+  kind: "money" | "percent" | "number" | "text";
+}[] = [
+  { field: "stock", label: "Остаток", kind: "number" },
+  { field: "newPrice", label: "Новая цена", kind: "money" },
+  { field: "discountPct", label: "Скидка", kind: "percent" },
+  { field: "salesForecast", label: "Прогноз продаж", kind: "number" },
+  { field: "regularSales", label: "Регулярные продажи", kind: "number" },
+  { field: "cashDiscountPct", label: "Скидка за Cash", kind: "percent" },
+  { field: "giftStock", label: "Остаток подарка", kind: "number" },
+  { field: "supplierCompensation", label: "Компенсация поставщика", kind: "money" },
+  { field: "compensationLimit", label: "Лимит компенс. кол-ва", kind: "number" },
+  { field: "utp", label: "УТП", kind: "text" },
+];
+
+function fmtTracked(
+  v: unknown,
+  kind: "money" | "percent" | "number" | "text"
+): string {
+  if (v == null || v === "") return "—";
+  if (kind === "money") return `${Number(v).toLocaleString("ru-RU")} сум`;
+  if (kind === "percent") return `${v}%`;
+  if (kind === "number") return Number(v).toLocaleString("ru-RU");
+  return String(v);
+}
+
+function fmtPeriodRu(start: Date, end: Date): string {
+  return `${start.toLocaleDateString("ru-RU")} — ${end.toLocaleDateString("ru-RU")}`;
+}
+
+/** The result of diffing a campaign's live state against its last sent version. */
+export interface CampaignChangeSet {
+  changes: VersionFieldChange[];
+  /** `${lineId}:${field}` keys of changed cells — drives the grid highlight. */
+  changedCells: string[];
+  /** A change to an EXISTING line or the period → requires Маркетинг re-approval. */
+  hasValueChange: boolean;
+  /** A new line was added → no Маркетинг re-approval needed (§11.8). */
+  hasAddition: boolean;
+  periodChanged: boolean;
+}
+
+/**
+ * Diff a campaign's current lines + period against the baseline (last sent
+ * version). Returns the per-field changes, the changed-cell keys, and the flags
+ * that drive re-approval routing.
+ */
+export function diffCampaignChanges(
+  campaign: PromoCampaign,
+  currentLines: PromoLine[],
+  baselineLines: PromoLine[],
+  baselinePeriod: { startDate: Date; endDate: Date }
+): CampaignChangeSet {
+  const baseById = new Map(baselineLines.map((l) => [l.id, l]));
+  const changes: VersionFieldChange[] = [];
+  const changedCells: string[] = [];
+  let hasValueChange = false;
+  let hasAddition = false;
+
+  const periodChanged =
+    campaign.startDate.getTime() !== baselinePeriod.startDate.getTime() ||
+    campaign.endDate.getTime() !== baselinePeriod.endDate.getTime();
+  if (periodChanged) {
+    hasValueChange = true;
+    changes.push({
+      scope: "Период акции",
+      field: "Период",
+      from: fmtPeriodRu(baselinePeriod.startDate, baselinePeriod.endDate),
+      to: fmtPeriodRu(campaign.startDate, campaign.endDate),
+      kind: "changed",
+    });
+  }
+
+  for (const line of currentLines) {
+    const base = baseById.get(line.id);
+    const nom = getNomenclatureItem(line.nomenclatureId);
+    const scope = nom?.name ?? line.nomenclatureId;
+    if (!base) {
+      hasAddition = true;
+      changes.push({
+        scope,
+        field: "Позиция",
+        to: "добавлена после согласования",
+        kind: "added",
+      });
+      continue;
+    }
+    for (const t of TRACKED_FIELDS) {
+      const a = base[t.field];
+      const b = line[t.field];
+      if (a === b || (a == null && b == null)) continue;
+      hasValueChange = true;
+      changedCells.push(`${line.id}:${String(t.field)}`);
+      changes.push({
+        scope,
+        field: t.label,
+        from: a == null ? undefined : fmtTracked(a, t.kind),
+        to: b == null ? undefined : fmtTracked(b, t.kind),
+        kind: "changed",
+      });
+    }
+  }
+
+  return { changes, changedCells, hasValueChange, hasAddition, periodChanged };
+}
+
+/**
+ * Build the new report version formed when КД approves a correction and it is
+ * sent incrementally to departments (§5.1). Additions-only → «Добавление».
+ */
+export function buildSentVersion(
+  campaignId: string,
+  changeSet: CampaignChangeSet,
+  nextVersion: number,
+  date: Date,
+  role: string
+): CampaignVersion {
+  const additionsOnly = changeSet.hasAddition && !changeSet.hasValueChange;
+  return {
+    id: `${campaignId}-v${nextVersion}`,
+    campaignId,
+    version: nextVersion,
+    date,
+    author: role,
+    role,
+    changeType: additionsOnly ? "Добавление" : "Корректировка",
+    summary:
+      "Изменения согласованы и отправлены смежным отделам (инкрементально, только изменённые/добавленные данные).",
+    changes: changeSet.changes,
+  };
 }
