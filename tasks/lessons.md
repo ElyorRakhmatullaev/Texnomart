@@ -366,3 +366,20 @@ Documented mistakes, gotchas, and learnings from project work. Never remove old 
 
 ### The Page-Hosted-Dialog Defer Applies to `ReasonDialog` Too
 - The reject `ReasonDialog` is a controlled `<Dialog open>` opened by a button click (per-line «Отклонить» X / bulk / whole-set) — same self-dismiss race as the S2 Phase 3/4/5 dialogs. Open it via `setTimeout(() => setRejectTarget(target), 0)`. Confirmed the dialog stays open. (The benign shared-`DialogOverlay` "Function components cannot be given refs" warning still fires on any shared Dialog open — not the cause, ignore it.)
+
+---
+
+## 2026-06-11 — Texnomart Promo S3 (Согласование и проверка, Phase 3 — «Не участвует» + auto-escalation)
+
+### Derive Auto-Escalation From the SLA, Don't Store It — But Route THROUGH the Derived Reviewer Everywhere
+- The 2-working-day auto-escalation (Старший КМ → КД on breach) is best **derived** from `reviewSla(submittedAt).overdue > 0`, not tracked as a flag that some background job flips — there's no scheduler in a mock, and a live derivation means the seeded "breached" items escalate automatically at today's date without time travel. `isAutoEscalated(item)` ORs the derivation with the seed flag (so an explicitly-seeded escalation still works).
+- The catch: once escalation is derived, EVERY place that asks "who acts on this?" must go through one `effectiveReviewer(item)` helper, not `reviewerForKmStatus(item.kmStatus)` directly. The item's stored `kmStatus` is still «На согл. у старшего КМ», so the raw status-based reviewer would wrongly keep it in the Старший-КМ queue. `reviewQueueFor`, the detail's `canAct`, and the «Авто-передано» tag all derive from `effectiveReviewer`/`isAutoEscalated` — fix it in one helper and the queue, the КД pickup, and the badge move together.
+
+### Model a Sub-Lifecycle by Reusing the Existing Review Statuses + a `kind` Discriminator — Diverge Only at the Terminal
+- «Не участвует» has its own КМ→Старший КМ→КД approval flow, but adding parallel statuses for it would double the `KmStatus` enum and every switch over it. Instead a `ReviewItem.kind: "data" | "non-participation"` rides the SAME in-flight statuses («На согл. у старшего КМ» → «…ожидает КД»); only the КД-approval **terminal** differs — `approvedKmStatusFor(actor, kind)` returns «Не участвует» for a non-participation request vs «Принято КД» for data. Routing, SLA, queue, and escalation code stay identical; only the terminal status + the panel copy branch on `kind`. Rejecting a non-participation request flips `kind` back to `"data"` (the КМ must now fill nomenclature), so the same item cleanly re-enters the data flow.
+
+### A КМ-Initiated Action Lives Where the КМ Already Is — Even in a "Reviewer" Workspace; Create-or-Update by Composite Key
+- The approvals workspace is reviewer-facing, but the КМ must raise «Не участвует» somewhere — putting a «Мои участия» panel on the same `/approvals` route (shown when `currentRole` is the КМ) keeps S3 self-contained rather than reaching back into the S2 calendar. The КМ may raise it on a participation that has NO pending review item yet (e.g. status «Не заполнено»), so the reducer action keys off `(campaignId, kmId)` and **creates the item if absent, updates it if present** — don't assume the store already has a row for every (campaign, КМ) pair the user can act on.
+
+### Extend the Stub Drawer Additively for Cross-Phase Reuse
+- `VersionHistoryDrawer` is an S4 stub, but S3 needed to surface review comments + the просрочка note in it now. Added optional `reviewComments?: ReviewComment[]` + `overdueDays?: number` props rendered above the (still-stub) version list — same additive pattern as the shared AppShell/FilterBar props. S4 can flesh out the version list later without touching the S3 wiring. Mobile sticky → use a `fixed bottom-0 lg:hidden` bar (not `sticky`, which floats on short detail pages — see the S2 Phase-5 / detail-page lessons); pair it with `pb-24` on the page root so content clears the bar.

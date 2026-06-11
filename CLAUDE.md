@@ -9,7 +9,7 @@ Monorepo containing Texnomart web applications with a shared design system, comp
 | Project | Path | Description | Status |
 |---|---|---|---|
 | **Broker Dashboard** | `Dashboard/` | BNPL credit broker admin panel (23 routes, React Router) | Active |
-| **Texnomart Promo** | `Promo/` | Promo-calendar: planning & approval of promo campaigns (role-based, 10 routes) | Active — bootstrap + Master shell + S1 done; **S2 complete (Phases 1–5)**; **S3 in progress (Phases 1–2 done)**; S4–S8 pending |
+| **Texnomart Promo** | `Promo/` | Promo-calendar: planning & approval of promo campaigns (role-based, 10 routes) | Active — bootstrap + Master shell + S1 done; **S2 complete (Phases 1–5)**; **S3 complete (Phases 1–3)**; S4–S8 pending |
 | **Shared UI** | `packages/ui/` | shadcn/ui component library (46 components + 2 utilities) | Active |
 | **Shared Patterns** | `packages/shared/` | Reusable pattern components, auth, hooks, formatters | Active |
 
@@ -260,7 +260,7 @@ Status colors are defined as CSS variables in each project's `src/styles/theme.c
 ## Project-Specific Docs
 
 - `Dashboard/CLAUDE.md` — Broker Dashboard routes, pages, mock data, conventions
-- `Promo/CLAUDE.md` — Texnomart Promo routes, 9-role switcher, primitives, mock data (bootstrap + Master shell + S1 done; S2 complete — Phases 1–5; S3 in progress — Phases 1–2 done, Phase 3 pending; S4–S8 pending)
+- `Promo/CLAUDE.md` — Texnomart Promo routes, 9-role switcher, primitives, mock data (bootstrap + Master shell + S1 done; S2 complete — Phases 1–5; S3 complete — Phases 1–3; S4–S8 pending)
 - `docs/AI_CONTEXT.md` — Current state snapshot, known issues, next steps
 - `docs/dashboard_prompt_pack_part2.md` — Broker Dashboard page specs (14 prompts)
 - `docs/promo_prompt_pack.md` — Texnomart Promo (promo-calendar) prompt pack: Foundation + Master + S1–S8 sections + Appendices, monorepo-adapted
