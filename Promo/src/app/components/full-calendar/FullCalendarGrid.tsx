@@ -7,10 +7,12 @@ import { Checkbox } from "@texnomart/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import {
   AlertCircle,
+  CalendarClock,
   ChevronRight,
   Clock,
   Copy,
   Gift,
+  History,
   Lock,
   Pencil,
   Plus,
@@ -21,6 +23,7 @@ import {
   getCategoryManager,
   getNomenclatureItem,
   installmentTerm,
+  isApprovedCampaign,
   isGiftType,
   programMonthly,
   type FullCalendarAccess,
@@ -367,6 +370,14 @@ interface FullCalendarGridProps {
   onLineTap?: (lineId: string) => void;
   /** Edit an unplanned, not-yet-sent campaign's тип/период (§10; editor roles only). */
   onEditCampaign?: (campaignId: string) => void;
+  /** Open the version-history & changes drawer for a campaign (§5.1; all roles). */
+  onHistory?: (campaignId: string) => void;
+  /** Edit an approved campaign's period (§11.5; provided only for КД). */
+  onEditPeriod?: (campaignId: string) => void;
+  /** `${lineId}:${field}` keys of cells changed after approval — amber highlight. */
+  changedCells?: Set<string>;
+  /** Per-campaign change-after-approval badge (count + awaiting-marketing). */
+  changeBadges?: Map<string, { count: number; awaitingMarketing: boolean }>;
   /** Bulk-select state (shown only for editor roles). */
   selectedIds: Set<string>;
   onToggleSelect: (lineId: string) => void;
@@ -383,6 +394,10 @@ export function FullCalendarGrid({
   onGiftPick,
   onLineTap,
   onEditCampaign,
+  onHistory,
+  onEditPeriod,
+  changedCells,
+  changeBadges,
   selectedIds,
   onToggleSelect,
   onToggleGroup,
@@ -619,24 +634,68 @@ export function FullCalendarGrid({
                     >
                       {campaign.name}
                     </span>
-                    <span className="tabular-nums text-muted-foreground">
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 tabular-nums",
+                        campaign.periodChanged
+                          ? "font-bold text-gray-900"
+                          : "text-muted-foreground"
+                      )}
+                    >
                       <RuDate value={campaign.startDate} /> —{" "}
                       <RuDate value={campaign.endDate} />
+                      {campaign.periodChanged && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Pencil className="size-3 text-amber-600" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Период изменён после согласования (§11.5)
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                     </span>
-                    {onEditCampaign &&
-                      !campaign.planned &&
-                      !campaign.firstSendDone &&
-                      !campaign.cancelled &&
-                      access.canEditOwnLines && (
+                    {changeBadges?.get(campaign.id) && (
+                      <ChangeBadge info={changeBadges.get(campaign.id)!} />
+                    )}
+                    <div className="ml-auto flex shrink-0 items-center gap-1">
+                      {onEditPeriod &&
+                        campaign.planned &&
+                        isApprovedCampaign(campaign) && (
+                          <button
+                            type="button"
+                            onClick={() => onEditPeriod(campaign.id)}
+                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
+                          >
+                            <CalendarClock className="size-3" />
+                            Изменить период
+                          </button>
+                        )}
+                      {onEditCampaign &&
+                        !campaign.planned &&
+                        !campaign.firstSendDone &&
+                        !campaign.cancelled &&
+                        access.canEditOwnLines && (
+                          <button
+                            type="button"
+                            onClick={() => onEditCampaign(campaign.id)}
+                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
+                          >
+                            <Pencil className="size-3" />
+                            Изменить
+                          </button>
+                        )}
+                      {onHistory && (
                         <button
                           type="button"
-                          onClick={() => onEditCampaign(campaign.id)}
-                          className="ml-auto inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
+                          onClick={() => onHistory(campaign.id)}
+                          className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
                         >
-                          <Pencil className="size-3" />
-                          Изменить
+                          <History className="size-3" />
+                          История
                         </button>
                       )}
+                    </div>
                   </div>
 
                   {/* lines */}
@@ -661,7 +720,9 @@ export function FullCalendarGrid({
                               alignClass(col) === "text-right"
                                 ? "justify-end tabular-nums"
                                 : "justify-start",
-                              isLocked(col.source) && "text-gray-500"
+                              isLocked(col.source) && "text-gray-500",
+                              changedCells?.has(`${line.id}:${col.id}`) &&
+                                "bg-amber-50 ring-1 ring-inset ring-amber-300"
                             )}
                             style={colStyle(col.width)}
                           >
@@ -719,6 +780,35 @@ function KmCell({ kmId, width }: { kmId: string; width: number }) {
         <span className="text-xs text-muted-foreground">—</span>
       )}
     </div>
+  );
+}
+
+/** Band badge for a campaign with un-sent changes after approval (§5.1 / §11.8). */
+function ChangeBadge({
+  info,
+}: {
+  info: { count: number; awaitingMarketing: boolean };
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+        <Pencil className="size-2.5" />
+        {info.count} изм. после согл.
+      </span>
+      {info.awaitingMarketing && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-800">
+              Ожидает маркетинга
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[260px]">
+            Изменения (кроме добавления новых товаров) требуют повторного
+            согласования маркетинга перед отправкой смежным отделам (§11.8).
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </span>
   );
 }
 

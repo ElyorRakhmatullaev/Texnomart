@@ -30,6 +30,7 @@ import { AddNomenclatureDialog } from "./AddNomenclatureDialog";
 import { ExcelImportDialog } from "./ExcelImportDialog";
 import { CreateCampaignDialog } from "./CreateCampaignDialog";
 import { LineEditSheet } from "./LineEditSheet";
+import { VersionHistoryDrawer } from "../../../components/VersionHistoryDrawer";
 import { DEFAULT_VISIBLE_GROUPS, type ColumnGroupKey } from "./gridFields";
 import {
   Dialog,
@@ -45,15 +46,22 @@ import {
   CATEGORY_MANAGERS,
   PROMO_LINES,
   PROMO_TYPES,
+  buildCampaignReport,
+  buildSentVersion,
   createImportedLine,
   createPromoLine,
   createUnplannedCampaign,
   detectDuplicate,
+  diffCampaignChanges,
+  getCampaignVersions,
   getCampaignsWithLines,
   getFullCalendarAccess,
   getNomenclatureItem,
+  isApprovedCampaign,
   isLineValid,
   parseImportCsv,
+  type CampaignChangeSet,
+  type CampaignVersion,
   type DuplicateHit,
   type ImportParseResult,
   type ParsedImportRow,
@@ -187,6 +195,28 @@ export function FullCalendarPage() {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editCampaignId, setEditCampaignId] = React.useState<string | null>(null);
   const [editLineId, setEditLineId] = React.useState<string | null>(null);
+  // Version-history & changes drawer (S4 §5.1) — which campaign's history is open.
+  const [historyCampaignId, setHistoryCampaignId] = React.useState<string | null>(
+    null
+  );
+  // ── Edit-after-approval (S4 Phase 2, §5.1/§11.8) ────────────────────────────
+  // Baseline = the last sent version. Edits to an approved campaign are diffed
+  // against it; КД «send» re-baselines (clears the draft). Seeded from the seed
+  // lines/periods; per-campaign live version lists override the seed once a
+  // correction is sent. Marketing re-approval is tracked per campaign.
+  const [baseline, setBaseline] = React.useState<Map<string, PromoLine>>(() =>
+    new Map(PROMO_LINES.map((l) => [l.id, { ...l }]))
+  );
+  const [baselinePeriods, setBaselinePeriods] = React.useState<
+    Map<string, { startDate: Date; endDate: Date }>
+  >(() => new Map(CAMPAIGNS.map((c) => [c.id, { startDate: c.startDate, endDate: c.endDate }])));
+  const [liveVersions, setLiveVersions] = React.useState<
+    Map<string, CampaignVersion[]>
+  >(() => new Map());
+  const [marketingReapproved, setMarketingReapproved] = React.useState<Set<string>>(
+    new Set()
+  );
+  const [periodEditId, setPeriodEditId] = React.useState<string | null>(null);
   const [pendingDup, setPendingDup] = React.useState<{
     campaignId: string;
     kmId: string;
@@ -223,6 +253,47 @@ export function FullCalendarPage() {
       return out;
     },
     [lines]
+  );
+
+  // ── Edit-after-approval diff (§5.1) ──────────────────────────────────────────
+  // For an approved campaign, diff its live lines/period against the baseline.
+  // Returns null when the campaign isn't approved or has no pending changes.
+  const changeSetFor = React.useCallback(
+    (campaignId: string): CampaignChangeSet | null => {
+      const c = campaignsById.get(campaignId);
+      if (!c || !isApprovedCampaign(c)) return null;
+      const baseLines = [...baseline.values()].filter(
+        (l) => l.campaignId === campaignId
+      );
+      const basePeriod =
+        baselinePeriods.get(campaignId) ?? {
+          startDate: c.startDate,
+          endDate: c.endDate,
+        };
+      const cs = diffCampaignChanges(c, linesFor(campaignId), baseLines, basePeriod);
+      return cs.changes.length === 0 ? null : cs;
+    },
+    [campaignsById, baseline, baselinePeriods, linesFor]
+  );
+
+  // Re-approval routing (§11.8): a value/period change needs Маркетинг re-approval
+  // before КД can send; additions-only skip straight to «ready».
+  type ReapprovalState = "none" | "awaiting-marketing" | "ready";
+  const reapprovalStateFor = React.useCallback(
+    (campaignId: string): ReapprovalState => {
+      const cs = changeSetFor(campaignId);
+      if (!cs) return "none";
+      if (cs.hasValueChange && !marketingReapproved.has(campaignId))
+        return "awaiting-marketing";
+      return "ready";
+    },
+    [changeSetFor, marketingReapproved]
+  );
+
+  const versionsFor = React.useCallback(
+    (campaignId: string): CampaignVersion[] =>
+      liveVersions.get(campaignId) ?? getCampaignVersions(campaignId),
+    [liveVersions]
   );
 
   const filtered = React.useMemo(() => {
@@ -268,6 +339,31 @@ export function FullCalendarPage() {
     () => filtered.filter((c) => !c.cancelled),
     [filtered]
   );
+
+  // Changed cells across all approved campaigns — drives the grid's amber highlight.
+  const changedCells = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const c of filtered) {
+      const cs = changeSetFor(c.id);
+      cs?.changedCells.forEach((k) => set.add(k));
+    }
+    return set;
+  }, [filtered, changeSetFor]);
+
+  // Per-campaign change-after-approval badge info (count + re-approval state).
+  const changeBadges = React.useMemo(() => {
+    const m = new Map<string, { count: number; awaitingMarketing: boolean }>();
+    for (const c of filtered) {
+      const cs = changeSetFor(c.id);
+      if (cs) {
+        m.set(c.id, {
+          count: cs.changes.length,
+          awaitingMarketing: reapprovalStateFor(c.id) === "awaiting-marketing",
+        });
+      }
+    }
+    return m;
+  }, [filtered, changeSetFor, reapprovalStateFor]);
 
   const onEdit = React.useCallback(
     (id: string, patch: Partial<PromoLine>) =>
@@ -443,6 +539,88 @@ export function FullCalendarPage() {
     setTimeout(() => setEditLineId(lineId), 0);
   }, []);
 
+  // Version history & changes (§5.1) — opened from the campaign band, all roles.
+  const onHistoryRequest = React.useCallback((campaignId: string) => {
+    setTimeout(() => setHistoryCampaignId(campaignId), 0);
+  }, []);
+
+  // ── Period change of an approved campaign (§11.5) ────────────────────────────
+  const onPeriodEditRequest = React.useCallback((campaignId: string) => {
+    setTimeout(() => setPeriodEditId(campaignId), 0);
+  }, []);
+
+  const onPeriodApply = React.useCallback(
+    (campaignId: string, startDate: Date, endDate: Date) => {
+      setVisibleCampaigns((prev) =>
+        prev.map((c) =>
+          c.id === campaignId
+            ? { ...c, startDate, endDate, periodChanged: true }
+            : c
+        )
+      );
+      setPeriodEditId(null);
+      toast.success(
+        "Период изменён. Изменение требует повторного согласования маркетинга перед отправкой."
+      );
+    },
+    []
+  );
+
+  // ── Re-approval + incremental send (§5.1 / §11.8) ────────────────────────────
+  const onMarketingReapprove = React.useCallback((campaignId: string) => {
+    setMarketingReapproved((prev) => new Set(prev).add(campaignId));
+    toast.success(
+      "Изменения согласованы маркетингом. Доступна отправка коммерческим директором."
+    );
+  }, []);
+
+  const onSendToDepartments = React.useCallback(
+    (campaignId: string) => {
+      const cs = changeSetFor(campaignId);
+      if (!cs) return;
+      const prevVersions = versionsFor(campaignId);
+      const nextNo = (prevVersions[0]?.version ?? 0) + 1;
+      const version = buildSentVersion(
+        campaignId,
+        cs,
+        nextNo,
+        new Date(),
+        currentRole
+      );
+      setLiveVersions((prev) =>
+        new Map(prev).set(campaignId, [version, ...prevVersions])
+      );
+      // Re-baseline: the current lines/period become the new last-sent version,
+      // so the draft diff clears and the period ✏️/bold resets.
+      setBaseline((prev) => {
+        const next = new Map(prev);
+        for (const l of linesFor(campaignId)) next.set(l.id, { ...l });
+        return next;
+      });
+      const c = campaignsById.get(campaignId);
+      if (c) {
+        setBaselinePeriods((prev) =>
+          new Map(prev).set(campaignId, {
+            startDate: c.startDate,
+            endDate: c.endDate,
+          })
+        );
+      }
+      setVisibleCampaigns((prev) =>
+        prev.map((x) => (x.id === campaignId ? { ...x, periodChanged: false } : x))
+      );
+      setMarketingReapproved((prev) => {
+        const next = new Set(prev);
+        next.delete(campaignId);
+        return next;
+      });
+      toast.success(
+        `Версия ${nextNo} сформирована и отправлена смежным отделам (инкрементально). Отделы уведомлены.`
+      );
+    },
+    [changeSetFor, versionsFor, linesFor, campaignsById, currentRole]
+  );
+
   const onCreateUnplanned = React.useCallback(
     (input: Omit<UnplannedCampaignInput, "kmId">) => {
       // No per-person КМ identity in the mock — attach the new campaign to a default КМ.
@@ -494,6 +672,29 @@ export function FullCalendarPage() {
   const editLineCampaign = editLine
     ? campaignsById.get(editLine.campaignId)
     : undefined;
+
+  // History drawer data — live versions + the current-report snapshot + the
+  // pending edit-after-approval draft (§5.1) and its re-approval state.
+  const historyCampaign = historyCampaignId
+    ? campaignsById.get(historyCampaignId) ?? null
+    : null;
+  const historyVersions = React.useMemo(
+    () => (historyCampaignId ? versionsFor(historyCampaignId) : undefined),
+    [historyCampaignId, versionsFor]
+  );
+  const historyReport = React.useMemo(
+    () =>
+      historyCampaignId
+        ? buildCampaignReport(linesFor(historyCampaignId))
+        : undefined,
+    [historyCampaignId, linesFor]
+  );
+  const historyChangeSet = historyCampaignId
+    ? changeSetFor(historyCampaignId)
+    : null;
+  const historyReapproval = historyCampaignId
+    ? reapprovalStateFor(historyCampaignId)
+    : "none";
 
   if (!access.canView) {
     return <AccessDenied note={access.note} />;
@@ -648,6 +849,14 @@ export function FullCalendarPage() {
             onGiftPick={onGiftPick}
             onLineTap={onLineTap}
             onEditCampaign={onEditCampaignRequest}
+            onHistory={onHistoryRequest}
+            onEditPeriod={
+              currentRole === "Коммерческий директор"
+                ? onPeriodEditRequest
+                : undefined
+            }
+            changedCells={changedCells}
+            changeBadges={changeBadges}
             selectedIds={selectedIds}
             onToggleSelect={onToggleSelect}
             onToggleGroup={onToggleGroup}
@@ -707,6 +916,48 @@ export function FullCalendarPage() {
         access={access}
         onEdit={onEdit}
         onGiftPick={onGiftPick}
+      />
+
+      {/* Version history & changes (§5.1) — 3 views + diff; «Создать корректировку»
+          for editor roles (rollback is not supported, §5.2.1). */}
+      <VersionHistoryDrawer
+        open={historyCampaignId !== null}
+        onOpenChange={(open) => !open && setHistoryCampaignId(null)}
+        campaignLabel={
+          historyCampaign
+            ? `${historyCampaign.id} · ${historyCampaign.name}`
+            : undefined
+        }
+        versions={historyVersions}
+        currentReport={historyReport}
+        pendingChanges={historyChangeSet?.changes}
+        reapprovalState={historyReapproval}
+        onMarketingReapprove={
+          access.marketingFlagOnly && historyCampaignId
+            ? () => onMarketingReapprove(historyCampaignId)
+            : undefined
+        }
+        onSendToDepartments={
+          currentRole === "Коммерческий директор" && historyCampaignId
+            ? () => onSendToDepartments(historyCampaignId)
+            : undefined
+        }
+        onCreateCorrection={
+          access.canEditOwnLines && !historyChangeSet
+            ? () => {
+                toast.info(
+                  "Чтобы внести корректировку, отредактируйте ячейки строки прямо в календаре — изменения отслеживаются автоматически."
+                );
+              }
+            : undefined
+        }
+      />
+
+      {/* Period change of an approved campaign (§11.5) — КД only. */}
+      <PeriodEditDialog
+        campaign={periodEditId ? campaignsById.get(periodEditId) ?? null : null}
+        onOpenChange={(open) => !open && setPeriodEditId(null)}
+        onApply={onPeriodApply}
       />
 
       {/* Duplicate-confirmation dialog (§8.2.1) — adding is NOT blocked. */}
@@ -803,6 +1054,97 @@ export function FullCalendarPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Local <input type="date"> value (yyyy-mm-dd) ⇄ Date, local-tz safe (§11.5). */
+function toInputDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function fromInputDate(s: string): Date | null {
+  if (!s) return null;
+  const d = new Date(`${s}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Minimal date-range editor for an approved campaign's period (§11.5). */
+function PeriodEditDialog({
+  campaign,
+  onOpenChange,
+  onApply,
+}: {
+  campaign: PromoCampaign | null;
+  onOpenChange: (open: boolean) => void;
+  onApply: (campaignId: string, startDate: Date, endDate: Date) => void;
+}) {
+  const [start, setStart] = React.useState("");
+  const [end, setEnd] = React.useState("");
+
+  React.useEffect(() => {
+    if (campaign) {
+      setStart(toInputDate(campaign.startDate));
+      setEnd(toInputDate(campaign.endDate));
+    }
+  }, [campaign]);
+
+  const s = fromInputDate(start);
+  const e = fromInputDate(end);
+  const valid = !!s && !!e && s.getTime() <= e.getTime();
+  const changed =
+    !!campaign &&
+    !!s &&
+    !!e &&
+    (s.getTime() !== campaign.startDate.getTime() ||
+      e.getTime() !== campaign.endDate.getTime());
+
+  return (
+    <Dialog open={campaign !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>Изменить период акции</DialogTitle>
+          <DialogDescription>
+            Изменение периода уже согласованной акции отслеживается как
+            корректировка и требует повторного согласования маркетинга перед
+            отправкой смежным отделам.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-muted-foreground">Начало</span>
+            <input
+              type="date"
+              value={start}
+              onChange={(ev) => setStart(ev.target.value)}
+              className="h-9 rounded-md border px-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-muted-foreground">Окончание</span>
+            <input
+              type="date"
+              value={end}
+              min={start || undefined}
+              onChange={(ev) => setEnd(ev.target.value)}
+              className="h-9 rounded-md border px-2 text-sm"
+            />
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            Отмена
+          </Button>
+          <Button
+            disabled={!valid || !changed}
+            onClick={() => campaign && s && e && onApply(campaign.id, s, e)}
+          >
+            Применить
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
