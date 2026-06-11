@@ -1211,10 +1211,18 @@ export interface LineFeedback {
   by: PromoRole;
 }
 
-/** KM-level status a set lands in once the given reviewer approves it (spec §4.5.2). */
-export function approvedKmStatusFor(actor: PromoRole): KmStatus {
-  return actor === "Старший КМ"
-    ? "Согласовано старшим КМ (ожидает КД)"
+/**
+ * KM-level status a set lands in once the given reviewer approves it (spec §4.5.2).
+ * For a «Не участвует» request, КД approval finalises the КМ as released
+ * («Не участвует») rather than «Принято коммерческим директором».
+ */
+export function approvedKmStatusFor(
+  actor: PromoRole,
+  kind: ReviewKind = "data"
+): KmStatus {
+  if (actor === "Старший КМ") return "Согласовано старшим КМ (ожидает КД)";
+  return kind === "non-participation"
+    ? "Не участвует"
     : "Принято коммерческим директором";
 }
 
@@ -1256,8 +1264,12 @@ const REVIEW_SUBMIT_OFFSET: Record<string, { days: number; escalatedToKD?: boole
   "PR-2026-001~km-3": { days: 1, escalatedToKD: false },
   // UN-2026-014 km-5: unplanned, straight to КД, in time.
   "UN-2026-014~km-5": { days: 1 },
-  // PR-2026-006 km-6: at Старший КМ, in time.
-  "PR-2026-006~km-6": { days: 1 },
+  // PR-2026-006 km-6: «Не участвует» request raised by КМ, awaiting Старший КМ.
+  "PR-2026-006~km-6": {
+    days: 1,
+    kind: "non-participation",
+    reason: "Поставщик не подтвердил объём — категория не участвует в этой акции.",
+  },
   // PR-2026-007 km-5: at Старший КМ, breached (campaign also fill-overdue).
   "PR-2026-007~km-5": { days: 3 },
 };
@@ -1295,11 +1307,109 @@ export function buildReviewItems(ref: Date = new Date()): ReviewItem[] {
   return items;
 }
 
-/** Items awaiting the given reviewer role. КД also sees items auto-escalated to it. */
-export function reviewQueueFor(role: PromoRole, items: ReviewItem[]): ReviewItem[] {
-  return items.filter((it) => {
-    const reviewer = reviewerForKmStatus(it.kmStatus);
-    if (it.escalatedToKD && role === "Коммерческий директор") return true;
-    return reviewer === role;
-  });
+/**
+ * Auto-escalation (spec §4.5.2): an item still sitting at the Старший КМ once its
+ * 2-working-day SLA has lapsed is auto-forwarded to КД. Derived live from the SLA
+ * (no timers / persistence) — OR true if the seed already marked it escalated.
+ */
+export function isAutoEscalated(item: ReviewItem, ref: Date = new Date()): boolean {
+  if (item.escalatedToKD) return true;
+  if (item.kmStatus !== "На согласовании у старшего КМ") return false;
+  return reviewSla(new Date(item.submittedAt), ref).overdue > 0;
+}
+
+/**
+ * The reviewer who must act on an item RIGHT NOW, accounting for live
+ * auto-escalation (a breached Старший-КМ item is acted on by the КД).
+ */
+export function effectiveReviewer(
+  item: ReviewItem,
+  ref: Date = new Date()
+): PromoRole | undefined {
+  if (isAutoEscalated(item, ref)) return "Коммерческий директор";
+  return reviewerForKmStatus(item.kmStatus);
+}
+
+/** Items awaiting the given reviewer role. КД also picks up auto-escalated items. */
+export function reviewQueueFor(
+  role: PromoRole,
+  items: ReviewItem[],
+  ref: Date = new Date()
+): ReviewItem[] {
+  return items.filter((it) => effectiveReviewer(it, ref) === role);
+}
+
+/** A КМ-level status counts as a FINAL decision (campaign may advance past it). */
+export function isFinalKmDecision(status: KmStatus): boolean {
+  return status === "Принято коммерческим директором" || status === "Не участвует";
+}
+
+export interface CampaignDecisionSummary {
+  total: number;
+  /** КМ with a final decision («Принято КД» or «Не участвует»). */
+  finalised: number;
+  /** КМ still awaiting a final decision. */
+  pending: number;
+  /** All participating КМ have a final decision → the campaign may advance. */
+  canAdvance: boolean;
+}
+
+/**
+ * Advance gate (spec §4.5.1): a campaign can't move to the next level until EVERY
+ * participating КМ has a final decision (incl. «Не участвует», itself an approval
+ * object). Reads live item statuses where present, else the seed kmStatuses.
+ */
+export function campaignDecisionSummary(
+  campaignId: string,
+  items: ReviewItem[]
+): CampaignDecisionSummary {
+  const c = getCampaignById(campaignId);
+  const kmIds = c?.participatingKmIds ?? [];
+  let finalised = 0;
+  for (const kmId of kmIds) {
+    const item = items.find((it) => it.id === reviewItemId(campaignId, kmId));
+    const status = item?.kmStatus ?? c?.kmStatuses[kmId];
+    if (status && isFinalKmDecision(status)) finalised += 1;
+  }
+  const total = kmIds.length;
+  return {
+    total,
+    finalised,
+    pending: total - finalised,
+    canAdvance: total > 0 && finalised === total,
+  };
+}
+
+/** One КМ participation row for the «Мои участия» panel (КМ self-service view). */
+export interface KmParticipation {
+  campaignId: string;
+  kmId: string;
+  kmStatus: KmStatus;
+}
+
+/**
+ * All non-cancelled campaigns the given КМ participates in, with the КМ-level
+ * status (live item status wins over the seed). Drives the КМ «Мои участия» list
+ * where they can raise «Не участвует». No per-person identity in the mock — the
+ * КМ role sees every participation.
+ */
+export function participationsForKm(
+  kmId: string,
+  items: ReviewItem[]
+): KmParticipation[] {
+  const rows: KmParticipation[] = [];
+  for (const c of CAMPAIGNS) {
+    if (c.cancelled) continue;
+    if (!c.participatingKmIds.includes(kmId)) continue;
+    const seed = c.kmStatuses[kmId];
+    if (!seed) continue;
+    const item = items.find((it) => it.id === reviewItemId(c.id, kmId));
+    rows.push({ campaignId: c.id, kmId, kmStatus: item?.kmStatus ?? seed });
+  }
+  return rows;
+}
+
+/** Whether a КМ may still raise «Не участвует» for a participation (not yet final). */
+export function canRequestNonParticipation(status: KmStatus): boolean {
+  return status !== "Не участвует" && status !== "Принято коммерческим директором";
 }

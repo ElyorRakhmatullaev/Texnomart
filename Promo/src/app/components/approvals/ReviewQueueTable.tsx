@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Clock } from "lucide-react";
+import { ChevronRight, Clock, UserMinus, Zap } from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -18,9 +18,30 @@ import { RuDate } from "../../../components/RuDate";
 import {
   getCampaignById,
   getCategoryManager,
+  isAutoEscalated,
   reviewSla,
   type ReviewItem,
 } from "../../../lib/promo-mock-data";
+
+/** Small inline tags shown next to an item — non-participation kind + auto-escalation. */
+function ItemTags({ item }: { item: ReviewItem }) {
+  return (
+    <>
+      {item.kind === "non-participation" && (
+        <span className="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-700">
+          <UserMinus className="size-3" />
+          Не участвует
+        </span>
+      )}
+      {isAutoEscalated(item) && (
+        <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
+          <Zap className="size-3" />
+          Авто-передано
+        </span>
+      )}
+    </>
+  );
+}
 
 /** SLA timer cell — working days left, or an overdue tag once breached. */
 function SlaTimer({ submittedAt }: { submittedAt: string }) {
@@ -105,7 +126,10 @@ export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
                       <RuDate value={new Date(it.submittedAt)} withTime />
                     </TableCell>
                     <TableCell>
-                      <PromoStatusBadge status={it.kmStatus} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <PromoStatusBadge status={it.kmStatus} />
+                        <ItemTags item={it} />
+                      </div>
                     </TableCell>
                     <TableCell>
                       <SlaTimer submittedAt={it.submittedAt} />
@@ -134,6 +158,9 @@ export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
               subtitle={`${it.campaignId} · ${c?.type ?? ""}`}
               status={<PromoStatusBadge status={it.kmStatus} />}
             >
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <ItemTags item={it} />
+              </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
                 <span>КМ: {km?.name ?? it.kmId}</span>
                 <span className="inline-flex items-center gap-1">

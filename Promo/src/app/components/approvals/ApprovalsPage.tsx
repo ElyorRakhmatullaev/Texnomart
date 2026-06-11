@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import { useRole } from "../../role-context";
 import { useApprovals } from "./ApprovalsProvider";
 import { ReviewQueueTable } from "./ReviewQueueTable";
+import { MyParticipationsPanel } from "./MyParticipationsPanel";
 import {
   CATEGORY_MANAGERS,
   PROMO_TYPES,
@@ -49,6 +50,7 @@ export function ApprovalsPage() {
   const [onlyOverdue, setOnlyOverdue] = React.useState(false);
 
   const isReviewer = REVIEWER_ROLES.includes(currentRole);
+  const isKm = currentRole === "Категорийный менеджер (КМ)";
 
   // Администратор has full technical access → sees every item; others see their queue.
   const queue = React.useMemo<ReviewItem[]>(
@@ -77,7 +79,9 @@ export function ApprovalsPage() {
           <span className="flex items-center gap-2">
             {isReviewer
               ? `На согласовании: ${filtered.length.toLocaleString("ru-RU")}`
-              : "Очередь проверки доступна старшему КМ и коммерческому директору"}
+              : isKm
+                ? "Ваши участия и заявки о неучастии"
+                : "Очередь проверки доступна старшему КМ и коммерческому директору"}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Info className="size-3.5 text-muted-foreground" />
@@ -123,6 +127,8 @@ export function ApprovalsPage() {
             onOpen={(id) => navigate(`/approvals/${encodeURIComponent(id)}`)}
           />
         </>
+      ) : isKm ? (
+        <MyParticipationsPanel />
       ) : (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-gray-200 bg-white py-16 text-center">
           <ShieldCheck className="size-12 text-muted-foreground" />

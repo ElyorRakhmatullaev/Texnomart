@@ -3,46 +3,51 @@
 import * as React from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
-import { Clock, FileX2 } from "lucide-react";
+import { AlertTriangle, Clock, FileX2, History, Zap } from "lucide-react";
 import { DetailPageHero } from "@texnomart/shared/components/detail-page-hero";
 import { InfoRow } from "@texnomart/shared/components/info-row";
 import { Badge } from "@texnomart/ui/badge";
+import { Button } from "@texnomart/ui/button";
 import { Card, CardContent, CardHeader } from "@texnomart/ui/card";
 import { PromoStatusBadge } from "../../../components/PromoStatusBadge";
 import { OverdueTag } from "../../../components/OverdueTag";
 import { RuDate } from "../../../components/RuDate";
 import { ReasonDialog } from "../../../components/ReasonDialog";
+import { VersionHistoryDrawer } from "../../../components/VersionHistoryDrawer";
 import { useRole } from "../../role-context";
 import { useApprovals } from "./ApprovalsProvider";
 import { SubmittedLinesPanel } from "./SubmittedLinesPanel";
-import { ReviewActionsPanel } from "./ReviewActionsPanel";
+import { ReviewActionsPanel, MobileReviewActionBar } from "./ReviewActionsPanel";
 import {
+  campaignDecisionSummary,
+  effectiveReviewer,
   getCampaignById,
   getCategoryManager,
   getPromoLines,
+  isAutoEscalated,
   reviewSla,
-  reviewerForKmStatus,
 } from "../../../lib/promo-mock-data";
 
-/** The reject flow being confirmed in the ReasonDialog. */
-interface RejectTarget {
-  lineIds: string[];
-  general: boolean;
-}
+/** The reason flow currently confirmed in the ReasonDialog. */
+type ReasonFlow =
+  | { kind: "reject-lines"; lineIds: string[] }
+  | { kind: "reject-set" }
+  | { kind: "reject-nonpart" }
+  | { kind: "kd-set-nonpart" };
 
 export function ApprovalDetailPage() {
   const { id } = useParams();
   const { currentRole } = useRole();
-  const { getItem, approve, reject } = useApprovals();
+  const { items, getItem, approve, reject, setNonParticipationByKd } =
+    useApprovals();
 
   const itemId = id ? decodeURIComponent(id) : "";
   const item = itemId ? getItem(itemId) : undefined;
   const campaign = item ? getCampaignById(item.campaignId) : undefined;
 
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
-  const [rejectTarget, setRejectTarget] = React.useState<RejectTarget | null>(
-    null
-  );
+  const [flow, setFlow] = React.useState<ReasonFlow | null>(null);
+  const [historyOpen, setHistoryOpen] = React.useState(false);
 
   // Reset the selection whenever we move to a different item.
   React.useEffect(() => {
@@ -76,12 +81,15 @@ export function ApprovalDetailPage() {
   const lines = getPromoLines(item.campaignId).filter(
     (l) => l.kmId === item.kmId
   );
+  const isNonPart = item.kind === "non-participation";
 
-  // КД acts on items auto-escalated to it; otherwise the status determines the reviewer.
-  const actingReviewer = item.escalatedToKD
-    ? "Коммерческий директор"
-    : reviewerForKmStatus(item.kmStatus);
+  // Live auto-escalation (a breached Старший-КМ item is now acted on by the КД).
+  const autoEscalated = isAutoEscalated(item);
+  const actingReviewer = effectiveReviewer(item);
   const canAct = actingReviewer === currentRole;
+  const isKd = currentRole === "Коммерческий директор";
+
+  const decision = campaignDecisionSummary(item.campaignId, items);
 
   function toggle(lineId: string) {
     setSelected((prev) => {
@@ -97,41 +105,84 @@ export function ApprovalDetailPage() {
 
   function handleApproveAll() {
     approve(item!.id, currentRole);
-    toast.success(
-      currentRole === "Старший КМ"
-        ? "Набор согласован и передан коммерческому директору."
-        : "Набор принят коммерческим директором."
-    );
+    if (isNonPart) {
+      toast.success(
+        currentRole === "Старший КМ"
+          ? "Неучастие согласовано и передано коммерческому директору."
+          : "Неучастие подтверждено — КМ освобождён от участия."
+      );
+    } else {
+      toast.success(
+        currentRole === "Старший КМ"
+          ? "Набор согласован и передан коммерческому директору."
+          : "Набор принят коммерческим директором."
+      );
+    }
     setSelected(new Set());
   }
 
   // Defer opening the controlled dialog past the click that opened it (Radix
-  // DismissableLayer otherwise dismisses it — see S2 Phase 3 lesson).
-  function openReject(target: RejectTarget) {
-    setTimeout(() => setRejectTarget(target), 0);
+  // DismissableLayer otherwise dismisses it — see tasks/lessons.md S2 Phase 3).
+  function openFlow(next: ReasonFlow) {
+    setTimeout(() => setFlow(next), 0);
   }
 
-  function confirmReject(reason: string) {
-    if (!rejectTarget) return;
-    reject(item!.id, {
-      lineIds: rejectTarget.lineIds,
-      comment: reason,
-      actor: currentRole,
-    });
-    const n = rejectTarget.lineIds.length;
-    toast.success(
-      n > 0
-        ? `Отклонено строк: ${n}. Набор возвращён КМ на корректировку.`
-        : "Набор возвращён КМ на корректировку."
-    );
+  function confirmReason(reason: string) {
+    if (!flow) return;
+    if (flow.kind === "kd-set-nonpart") {
+      setNonParticipationByKd(item!.campaignId, item!.kmId, reason);
+      toast.success("«Не участвует» установлено коммерческим директором.");
+    } else if (flow.kind === "reject-nonpart") {
+      reject(item!.id, { lineIds: [], comment: reason, actor: currentRole });
+      toast.success("Заявка отклонена — КМ должен заполнить данные.");
+    } else {
+      const lineIds = flow.kind === "reject-lines" ? flow.lineIds : [];
+      reject(item!.id, { lineIds, comment: reason, actor: currentRole });
+      toast.success(
+        lineIds.length > 0
+          ? `Отклонено строк: ${lineIds.length}. Набор возвращён КМ на корректировку.`
+          : "Набор возвращён КМ на корректировку."
+      );
+    }
     setSelected(new Set());
-    setRejectTarget(null);
+    setFlow(null);
   }
 
-  const rejectIsSet = rejectTarget?.general ?? false;
+  const reasonCopy: Record<
+    ReasonFlow["kind"],
+    { title: string; description: string; required: boolean; confirm: string }
+  > = {
+    "reject-lines": {
+      title: "Отклонить строки",
+      description: `Будет отклонено строк: ${flow?.kind === "reject-lines" ? flow.lineIds.length : 0}. Весь набор КМ вернётся на корректировку.`,
+      required: true,
+      confirm: "Отклонить",
+    },
+    "reject-set": {
+      title: "Отклонить весь набор",
+      description: "Весь набор данных КМ будет возвращён на корректировку.",
+      required: true,
+      confirm: "Отклонить",
+    },
+    "reject-nonpart": {
+      title: "Отклонить «Не участвует»",
+      description:
+        "Заявка на неучастие будет отклонена — КМ должен будет заполнить номенклатуру. Комментарий по желанию.",
+      required: false,
+      confirm: "Отклонить заявку",
+    },
+    "kd-set-nonpart": {
+      title: "Установить «Не участвует»",
+      description:
+        "КМ будет освобождён от участия в акции (финальное решение КД). Комментарий рекомендуется.",
+      required: false,
+      confirm: "Установить",
+    },
+  };
+  const copy = flow ? reasonCopy[flow.kind] : null;
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className={canAct ? "space-y-4 pb-24 lg:pb-6" : "space-y-4 pb-6"}>
       <DetailPageHero
         backHref="/approvals"
         backLabel="Согласование"
@@ -147,6 +198,17 @@ export function ApprovalDetailPage() {
             <Badge variant="outline">
               {campaign.planned ? "Плановая" : "Внеплановая"}
             </Badge>
+            {isNonPart && (
+              <Badge className="border-0 bg-gray-100 text-gray-700">
+                Заявка «Не участвует»
+              </Badge>
+            )}
+            {autoEscalated && (
+              <Badge className="border-0 bg-amber-100 text-amber-800">
+                <Zap className="mr-1 size-3" />
+                Авто-передано КД
+              </Badge>
+            )}
           </>
         }
       >
@@ -190,31 +252,70 @@ export function ApprovalDetailPage() {
         </div>
       </DetailPageHero>
 
+      {/* Non-blocking просрочка note (spec §4.5.2): record, never hard-stop. */}
+      {sla.overdue > 0 && (
+        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-600" />
+          <p className="text-sm text-red-700">
+            Просрочка проверки: +{sla.overdue} раб. дн. сверх срока. Это{" "}
+            <span className="font-medium">не блокирует</span> завершение —
+            зафиксировано в истории и может быть согласовано позже.
+          </p>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <Card>
-          <CardHeader className="pb-2">
-            <h2 className="text-sm font-semibold text-gray-900">
-              Отправленные строки КМ
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Снимок отправленной версии (только чтение){" "}
-              {canAct
-                ? "— выберите строки для отклонения или согласуйте весь набор."
-                : "."}
-            </p>
+          <CardHeader className="flex-row items-start justify-between gap-2 pb-2">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">
+                {isNonPart ? "Заявка на неучастие" : "Отправленные строки КМ"}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {isNonPart
+                  ? "КМ запросил освобождение от участия в акции."
+                  : `Снимок отправленной версии (только чтение)${
+                      canAct
+                        ? " — выберите строки для отклонения или согласуйте весь набор."
+                        : "."
+                    }`}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => setTimeout(() => setHistoryOpen(true), 0)}
+            >
+              <History className="size-4" />
+              История
+            </Button>
           </CardHeader>
           <CardContent>
-            <SubmittedLinesPanel
-              lines={lines}
-              feedback={item.lineFeedback}
-              selectable={canAct}
-              selectedIds={selected}
-              onToggle={toggle}
-              onToggleAll={toggleAll}
-              onRejectLine={(lineId) =>
-                openReject({ lineIds: [lineId], general: false })
-              }
-            />
+            {isNonPart ? (
+              <div className="rounded-lg border bg-gray-50 p-4">
+                <p className="text-xs font-medium text-gray-600">
+                  {item.nonParticipationByKd
+                    ? "Причина (установлено КД)"
+                    : "Причина неучастия (КМ)"}
+                </p>
+                <p className="mt-1 text-sm text-gray-800">
+                  {item.nonParticipationReason ?? "Причина не указана."}
+                </p>
+              </div>
+            ) : (
+              <SubmittedLinesPanel
+                lines={lines}
+                feedback={item.lineFeedback}
+                selectable={canAct}
+                selectedIds={selected}
+                onToggle={toggle}
+                onToggleAll={toggleAll}
+                onRejectLine={(lineId) =>
+                  openFlow({ kind: "reject-lines", lineIds: [lineId] })
+                }
+              />
+            )}
           </CardContent>
         </Card>
 
@@ -223,33 +324,58 @@ export function ApprovalDetailPage() {
             item={item}
             canAct={canAct}
             actingReviewer={actingReviewer}
+            autoEscalated={autoEscalated}
+            isKd={isKd}
+            decision={decision}
             lineCount={lines.length}
             selectedCount={selected.size}
             onApproveAll={handleApproveAll}
             onRejectSelected={() =>
-              openReject({ lineIds: [...selected], general: false })
+              openFlow({ kind: "reject-lines", lineIds: [...selected] })
             }
-            onRejectSet={() => openReject({ lineIds: [], general: true })}
+            onRejectSet={() => openFlow({ kind: "reject-set" })}
+            onApproveNonParticipation={handleApproveAll}
+            onRejectNonParticipation={() => openFlow({ kind: "reject-nonpart" })}
+            onKdSetNonParticipation={() => openFlow({ kind: "kd-set-nonpart" })}
           />
         </div>
       </div>
 
+      {canAct && (
+        <MobileReviewActionBar
+          item={item}
+          selectedCount={selected.size}
+          onApproveAll={handleApproveAll}
+          onRejectSelected={() =>
+            openFlow({ kind: "reject-lines", lineIds: [...selected] })
+          }
+          onRejectSet={() => openFlow({ kind: "reject-set" })}
+          onApproveNonParticipation={handleApproveAll}
+          onRejectNonParticipation={() => openFlow({ kind: "reject-nonpart" })}
+        />
+      )}
+
       <ReasonDialog
-        open={rejectTarget !== null}
+        open={flow !== null}
         onOpenChange={(o) => {
-          if (!o) setRejectTarget(null);
+          if (!o) setFlow(null);
         }}
-        title={rejectIsSet ? "Отклонить весь набор" : "Отклонить строки"}
-        description={
-          rejectIsSet
-            ? "Весь набор данных КМ будет возвращён на корректировку."
-            : `Будет отклонено строк: ${rejectTarget?.lineIds.length ?? 0}. Весь набор КМ вернётся на корректировку.`
+        title={copy?.title ?? ""}
+        description={copy?.description}
+        reasonRequired={copy?.required ?? true}
+        reasonLabel={
+          flow?.kind === "kd-set-nonpart" ? "Причина (рекомендуется)" : "Причина"
         }
-        reasonRequired
-        reasonLabel="Причина отклонения"
-        confirmLabel="Отклонить"
-        destructive
-        onConfirm={confirmReject}
+        confirmLabel={copy?.confirm ?? "Подтвердить"}
+        destructive={flow?.kind !== "kd-set-nonpart"}
+        onConfirm={confirmReason}
+      />
+
+      <VersionHistoryDrawer
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        reviewComments={item.comments}
+        overdueDays={sla.overdue}
       />
     </div>
   );
