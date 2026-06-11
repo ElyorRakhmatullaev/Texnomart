@@ -8,6 +8,7 @@ import { FullCalendarPage } from "./components/full-calendar/FullCalendarPage";
 import { ApprovalsProvider } from "./components/approvals/ApprovalsProvider";
 import { ApprovalsPage } from "./components/approvals/ApprovalsPage";
 import { ApprovalDetailPage } from "./components/approvals/ApprovalDetailPage";
+import { ReportsPage } from "./components/reports/ReportsPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { Login2FAPage } from "./components/auth/Login2FAPage";
 import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
@@ -42,15 +43,6 @@ function ApprovalsLayout() {
     <ApprovalsProvider>
       <Outlet />
     </ApprovalsProvider>
-  );
-}
-
-function ReportsPage() {
-  return (
-    <ModulePlaceholder
-      title="Отчёты смежным отделам"
-      description="Версионируемые отчёты только для чтения: маркетинг, закуп, аналитика. Ознакомление ≠ согласование."
-    />
   );
 }
 
