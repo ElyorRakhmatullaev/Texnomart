@@ -2182,3 +2182,240 @@ const REPORT_CHANGE_SETS: Record<string, ReportChangeSet> = {
 export function getReportChangeSet(campaignId: string): ReportChangeSet {
   return REPORT_CHANGE_SETS[campaignId] ?? { changedCells: [], addedLineIds: [] };
 }
+
+// ── S6 — Центр уведомлений (notifications) — spec §11.3 ──────────────────────
+
+/**
+ * Notification categories (spec §11.3): a small fixed taxonomy. The icon is
+ * resolved in the component layer (no JSX here); label + soft tint live here so
+ * the bell, the list, and any filter stay consistent.
+ */
+export type NotificationType =
+  | "data-changed" // новые/изменённые данные (новая версия отчёта)
+  | "campaign-cancelled" // «Акция отменена»
+  | "line-removed" // «Удалена позиция»
+  | "marketing-reapproval" // «Требуется повторное согласование маркетинга»
+  | "km-assignment" // назначение КМ
+  | "ad-approval"; // утверждение «В рекламу»
+
+export const NOTIFICATION_TYPE_META: Record<
+  NotificationType,
+  { label: string; bg: string; text: string }
+> = {
+  "data-changed": { label: "Новые/изменённые данные", bg: "bg-blue-50", text: "text-blue-700" },
+  "campaign-cancelled": { label: "Акция отменена", bg: "bg-red-50", text: "text-red-700" },
+  "line-removed": { label: "Удалена позиция", bg: "bg-orange-50", text: "text-orange-700" },
+  "marketing-reapproval": { label: "Повторное согласование маркетинга", bg: "bg-pink-50", text: "text-pink-700" },
+  "km-assignment": { label: "Назначение КМ", bg: "bg-violet-50", text: "text-violet-700" },
+  "ad-approval": { label: "Утверждение «В рекламу»", bg: "bg-emerald-50", text: "text-emerald-700" },
+};
+
+export interface PromoNotification {
+  id: string;
+  type: NotificationType;
+  /** Related campaign — drives the quick link + context line. */
+  campaignId?: string;
+  campaignName?: string;
+  /** Report version (for «новые/изменённые данные» report notifications). */
+  reportVersion?: number;
+  /** Ответственный пользователь — who triggered the event. */
+  actor: { name: string; role: PromoRole };
+  /** Краткое описание изменений. */
+  description: string;
+  sentAt: Date;
+  read: boolean;
+  /** In-app quick link (campaign/report). */
+  href: string;
+  /**
+   * Roles allowed to see this notification (§11.3.1 — availability depends on
+   * the user's role/rights). Undefined → visible to everyone. Администратор
+   * always sees all (handled in `notificationsForRole`).
+   */
+  visibleTo?: PromoRole[];
+}
+
+const MARKETING_AUDIENCE: PromoRole[] = [
+  "Сотрудник маркетинга",
+  "Директор маркетинга",
+  "Коммерческий директор",
+  "Администратор",
+];
+
+const ADJ_DEPARTMENTS_AUDIENCE: PromoRole[] = [
+  "Сотрудник маркетинга",
+  "Директор маркетинга",
+  "Сотрудник закупа",
+  "Сотрудник аналитики",
+  "Коммерческий директор",
+  "Операционный директор",
+  "Администратор",
+];
+
+/**
+ * Seed ~8 notifications across all types and read/unread states, with live
+ * relative timestamps (so the date grouping «Сегодня»/«Вчера»/дата stays fresh).
+ * `new Date()` is fine in app/mock code — the no-`Date.now()` rule is only for
+ * Workflow scripts.
+ */
+export function buildNotifications(ref: Date = new Date()): PromoNotification[] {
+  const minutesAgo = (m: number) => new Date(ref.getTime() - m * 60_000);
+  const hoursAgo = (h: number) => minutesAgo(h * 60);
+  const daysAgo = (d: number) => hoursAgo(d * 24);
+
+  return [
+    {
+      id: "ntf-01",
+      type: "data-changed",
+      campaignId: "PR-2026-001",
+      campaignName: "Чёрная пятница 2026",
+      reportVersion: 3,
+      actor: { name: "Каримов Шерзод", role: "Категорийный менеджер (КМ)" },
+      description: "Отправлена новая версия отчёта смежным отделам: изменены цены и остатки по 4 позициям.",
+      sentAt: minutesAgo(5),
+      read: false,
+      href: "/reports",
+      visibleTo: ADJ_DEPARTMENTS_AUDIENCE,
+    },
+    {
+      id: "ntf-02",
+      type: "km-assignment",
+      campaignId: "PR-2026-002",
+      campaignName: "Рассрочка на технику к Новому году",
+      actor: { name: "Сардор Мавлянов", role: "Коммерческий директор" },
+      description: "Вы назначены категорийным менеджером по направлению «Холодильники и крупная БТ».",
+      sentAt: minutesAgo(40),
+      read: false,
+      href: "/full-calendar",
+    },
+    {
+      id: "ntf-03",
+      type: "marketing-reapproval",
+      campaignId: "PR-2026-003",
+      campaignName: "1+1 на мелкую бытовую технику",
+      actor: { name: "Рашидова Дилноза", role: "Категорийный менеджер (КМ)" },
+      description: "После корректировки цены требуется повторное согласование выбора «В рекламу» маркетингом.",
+      sentAt: hoursAgo(1),
+      read: false,
+      href: "/full-calendar",
+      visibleTo: MARKETING_AUDIENCE,
+    },
+    {
+      id: "ntf-04",
+      type: "line-removed",
+      campaignId: "UN-2026-015",
+      campaignName: "Срочная скидка на холодильники (внеплановая)",
+      actor: { name: "Сардор Мавлянов", role: "Коммерческий директор" },
+      description: "Из акции исключена позиция «Холодильник Artel HD-345» по запросу КМ.",
+      sentAt: hoursAgo(3),
+      read: false,
+      href: "/full-calendar",
+      visibleTo: ADJ_DEPARTMENTS_AUDIENCE,
+    },
+    {
+      id: "ntf-05",
+      type: "campaign-cancelled",
+      campaignId: "PR-2026-004",
+      campaignName: "Распродажа ТВ и аудио",
+      actor: { name: "Сардор Мавлянов", role: "Коммерческий директор" },
+      description: "Акция отменена. Смежные подразделения уведомлены.",
+      sentAt: hoursAgo(6),
+      read: true,
+      href: "/full-calendar",
+      visibleTo: ADJ_DEPARTMENTS_AUDIENCE,
+    },
+    {
+      id: "ntf-06",
+      type: "data-changed",
+      campaignId: "UN-2026-015",
+      campaignName: "Срочная скидка на холодильники (внеплановая)",
+      reportVersion: 2,
+      actor: { name: "Юсупова Нигора", role: "Категорийный менеджер (КМ)" },
+      description: "Инкрементальная корректировка отчёта: добавлена 1 позиция, изменена компенсация поставщика.",
+      sentAt: daysAgo(1),
+      read: true,
+      href: "/reports",
+      visibleTo: ADJ_DEPARTMENTS_AUDIENCE,
+    },
+    {
+      id: "ntf-07",
+      type: "ad-approval",
+      campaignId: "PR-2026-003",
+      campaignName: "1+1 на мелкую бытовую технику",
+      actor: { name: "Алишер Хабибуллаев", role: "Сотрудник маркетинга" },
+      description: "Маркетинг согласовал выбор позиций «В рекламу» (3 позиции).",
+      sentAt: daysAgo(1),
+      read: true,
+      href: "/reports",
+      visibleTo: MARKETING_AUDIENCE,
+    },
+    {
+      id: "ntf-08",
+      type: "km-assignment",
+      campaignId: "PR-2026-005",
+      campaignName: "Cashback на смартфоны",
+      actor: { name: "Сардор Мавлянов", role: "Коммерческий директор" },
+      description: "Назначен КМ Каримов Шерзод по направлению «Смартфоны и гаджеты».",
+      sentAt: daysAgo(2),
+      read: true,
+      href: "/full-calendar",
+    },
+  ];
+}
+
+/**
+ * Filter notifications by what the active role may see (§11.3.1). Администратор
+ * sees everything; an item with no `visibleTo` is visible to all.
+ */
+export function notificationsForRole(
+  role: PromoRole,
+  list: PromoNotification[]
+): PromoNotification[] {
+  if (role === "Администратор") return list;
+  return list.filter((n) => !n.visibleTo || n.visibleTo.includes(role));
+}
+
+export interface NotificationDateGroup {
+  /** «Сегодня» / «Вчера» / DD.MM.YYYY. */
+  key: string;
+  items: PromoNotification[];
+}
+
+/** Group notifications by calendar day, newest first, with friendly day labels. */
+export function groupNotificationsByDate(
+  list: PromoNotification[],
+  ref: Date = new Date()
+): NotificationDateGroup[] {
+  const dayKey = (d: Date) =>
+    `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const ddmmyyyy = (d: Date) =>
+    `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+  const today = dayKey(ref);
+  const yesterday = dayKey(addCalendarDays(ref, -1));
+
+  const sorted = [...list].sort(
+    (a, b) => b.sentAt.getTime() - a.sentAt.getTime()
+  );
+
+  const groups: NotificationDateGroup[] = [];
+  const byKey = new Map<string, NotificationDateGroup>();
+
+  for (const n of sorted) {
+    const k = dayKey(n.sentAt);
+    const label =
+      k === today
+        ? "Сегодня"
+        : k === yesterday
+          ? "Вчера"
+          : ddmmyyyy(n.sentAt);
+    let group = byKey.get(k);
+    if (!group) {
+      group = { key: label, items: [] };
+      byKey.set(k, group);
+      groups.push(group);
+    }
+    group.items.push(n);
+  }
+
+  return groups;
+}
