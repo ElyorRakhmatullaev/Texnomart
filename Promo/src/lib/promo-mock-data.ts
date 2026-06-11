@@ -2419,3 +2419,186 @@ export function groupNotificationsByDate(
 
   return groups;
 }
+
+// ── S7 — Настройки типов промо (promo-type required-field rules, spec §9) ───────
+//
+// A rule maps one or more promo types to a set of full-calendar fields that
+// become REQUIRED for those types. A rule only takes effect after Коммерческий
+// директор confirmation (status → «Утверждено»); any later edit drops it back to
+// «Черновик» and needs re-confirmation (§9.5). No hard delete — only «Архив».
+
+export type PromoTypeRuleStatus = "draft" | "pending" | "approved" | "archived";
+
+export const PROMO_TYPE_RULE_STATUS_LABEL: Record<PromoTypeRuleStatus, string> = {
+  draft: "Черновик",
+  pending: "На подтверждении",
+  approved: "Утверждено",
+  archived: "Архив",
+};
+
+/** Soft-tint (bg + text) per rule status, paired with the status text. */
+export const PROMO_TYPE_RULE_STATUS_TINT: Record<
+  PromoTypeRuleStatus,
+  { bg: string; text: string }
+> = {
+  draft: { bg: "bg-gray-100", text: "text-gray-600" },
+  pending: { bg: "bg-amber-50", text: "text-amber-700" },
+  approved: { bg: "bg-emerald-50", text: "text-emerald-700" },
+  archived: { bg: "bg-gray-100", text: "text-gray-500" },
+};
+
+export interface RuleHistoryEntry {
+  at: Date;
+  by: PromoRole;
+  /** Short RU action label, e.g. «Создано», «Отправлено на подтверждение». */
+  action: string;
+  note?: string;
+}
+
+export interface PromoTypeRule {
+  id: string;
+  name: string;
+  /** PromoTypeRef.id values this rule applies to. */
+  promoTypeIds: string[];
+  /** Field ids (from ruleFields.ts / gridFields) that become required. */
+  requiredFieldIds: string[];
+  status: PromoTypeRuleStatus;
+  history: RuleHistoryEntry[];
+  confirmedBy?: PromoRole;
+  confirmedAt?: Date;
+}
+
+const ruleDate = (daysAgo: number) => addCalendarDays(new Date(), -daysAgo);
+
+export const PROMO_TYPE_RULES: PromoTypeRule[] = [
+  {
+    id: "rule-installment-12",
+    name: "Рассрочка 0-0-12",
+    promoTypeIds: ["installment-0-0-12"],
+    requiredFieldIds: [
+      "nomenclature",
+      "stock",
+      "newPrice",
+      "discountPct",
+      "salesForecast",
+      "t12disc",
+    ],
+    status: "approved",
+    confirmedBy: "Коммерческий директор",
+    confirmedAt: ruleDate(20),
+    history: [
+      { at: ruleDate(28), by: "Коммерческий директор", action: "Создано" },
+      {
+        at: ruleDate(22),
+        by: "Коммерческий директор",
+        action: "Отправлено на подтверждение",
+      },
+      {
+        at: ruleDate(20),
+        by: "Коммерческий директор",
+        action: "Утверждено",
+        note: "Правило вступило в силу.",
+      },
+    ],
+  },
+  {
+    id: "rule-gift",
+    name: "Товар в подарок",
+    promoTypeIds: ["one-plus-one", "gift"],
+    requiredFieldIds: [
+      "nomenclature",
+      "stock",
+      "salesForecast",
+      "giftNomenclature",
+      "giftStock",
+      "supplierCompensation",
+    ],
+    status: "draft",
+    history: [
+      { at: ruleDate(5), by: "Администратор", action: "Создано" },
+      {
+        at: ruleDate(2),
+        by: "Администратор",
+        action: "Изменён перечень полей",
+        note: "Добавлено поле «Компенсация поставщика».",
+      },
+    ],
+  },
+  {
+    id: "rule-clearance-legacy",
+    name: "Распродажа (старое правило)",
+    promoTypeIds: ["clearance"],
+    requiredFieldIds: ["nomenclature", "newPrice", "discountPct"],
+    status: "archived",
+    confirmedBy: "Коммерческий директор",
+    confirmedAt: ruleDate(120),
+    history: [
+      { at: ruleDate(140), by: "Коммерческий директор", action: "Создано" },
+      { at: ruleDate(120), by: "Коммерческий директор", action: "Утверждено" },
+      {
+        at: ruleDate(30),
+        by: "Коммерческий директор",
+        action: "Архивировано",
+        note: "Заменено правилом для распродаж нового сезона.",
+      },
+    ],
+  },
+];
+
+export interface PromoTypeSettingsAccess {
+  /** Whether the role may open the settings screen. */
+  canView: boolean;
+  /** Edit rule fields / create / copy / send for confirmation / archive. */
+  canEdit: boolean;
+  /** Confirm a rule so it takes effect — Коммерческий директор only (§9). */
+  canConfirm: boolean;
+  /** Short RU description for the access banner. */
+  note: string;
+}
+
+export function getPromoTypeSettingsAccess(
+  role: PromoRole
+): PromoTypeSettingsAccess {
+  switch (role) {
+    case "Коммерческий директор":
+      return {
+        canView: true,
+        canEdit: true,
+        canConfirm: true,
+        note: "Создание, изменение и утверждение правил обязательных полей.",
+      };
+    case "Администратор":
+      return {
+        canView: true,
+        canEdit: true,
+        canConfirm: false,
+        note: "Создание и изменение правил; утверждение — за коммерческим директором.",
+      };
+    default:
+      return {
+        canView: true,
+        canEdit: false,
+        canConfirm: false,
+        note: "Только просмотр правил обязательных полей.",
+      };
+  }
+}
+
+/** Promo-type display names for the given rule (for the effect-preview note). */
+export function promoTypeNamesFor(ids: string[]): string[] {
+  return ids
+    .map((id) => PROMO_TYPES.find((t) => t.id === id)?.name)
+    .filter((n): n is string => Boolean(n));
+}
+
+/** Next id for a freshly created/copied rule (deterministic, no randomness). */
+export function nextRuleId(existing: PromoTypeRule[]): string {
+  let n = existing.length + 1;
+  let id = `rule-new-${n}`;
+  const ids = new Set(existing.map((r) => r.id));
+  while (ids.has(id)) {
+    n += 1;
+    id = `rule-new-${n}`;
+  }
+  return id;
+}

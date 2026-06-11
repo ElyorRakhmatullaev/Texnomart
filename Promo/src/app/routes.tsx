@@ -11,6 +11,8 @@ import { ApprovalDetailPage } from "./components/approvals/ApprovalDetailPage";
 import { ReportsPage } from "./components/reports/ReportsPage";
 import { NotificationsProvider } from "./components/notifications/NotificationsProvider";
 import { NotificationsPage } from "./components/notifications/NotificationsPage";
+import { PromoTypesProvider } from "./components/promo-types/PromoTypesProvider";
+import { PromoTypesPage } from "./components/promo-types/PromoTypesPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { Login2FAPage } from "./components/auth/Login2FAPage";
 import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
@@ -64,18 +66,12 @@ function AuditPage() {
   );
 }
 
-function PromoTypesPage() {
+/** Mounts the shared S7 rule store above the list + selected-rule routes. */
+function PromoTypesLayout() {
   return (
-    <ModulePlaceholder
-      title="Настройки типов промо"
-      description="Гибкая настройка обязательных полей для типов промо. Доступно коммерческому директору и администратору."
-    />
-  );
-}
-
-function DetailPlaceholder({ title }: { title: string }) {
-  return (
-    <ModulePlaceholder title={title} showFilterBar={false} />
+    <PromoTypesProvider>
+      <Outlet />
+    </PromoTypesProvider>
   );
 }
 
@@ -112,10 +108,13 @@ export const router = createBrowserRouter([
       { path: "reports", Component: ReportsPage },
       { path: "notifications", Component: NotificationsPage },
       { path: "audit", Component: AuditPage },
-      { path: "promo-types", Component: PromoTypesPage },
       {
-        path: "promo-types/:ruleId",
-        element: <DetailPlaceholder title="Правило типа промо" />,
+        path: "promo-types",
+        Component: PromoTypesLayout,
+        children: [
+          { index: true, Component: PromoTypesPage },
+          { path: ":ruleId", Component: PromoTypesPage },
+        ],
       },
     ],
   },
