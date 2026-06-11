@@ -627,8 +627,10 @@ const LINE_SEED: LineSeed[] = [
   // PR-2026-003 «1+1 на мелкую бытовую технику» (1+1, gift type) — km-4.
   // Already «Согласовано и отправлено смежным отделам», so edits here are tracked
   // as edit-after-approval corrections (§5.1) — the values match Phase-1 версии.
-  { id: "L-0015", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10017", off: 0.16, forecast: 40, regular: 14, gift: "1C-10018" },
-  { id: "L-0016", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10016", off: 0.14, forecast: 25, gift: "1C-10018", advKm: true },
+  // Enriched (УТП / компенсация / advMkt) so the S5 department reports (M/P/A
+  // field subsets) render populated cells rather than «—».
+  { id: "L-0015", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10017", off: 0.16, forecast: 40, regular: 14, gift: "1C-10018", utp: "Гарантия 3 года", advKm: true, advMkt: true, supplierCompensation: 400000, compensationLimit: 50 },
+  { id: "L-0016", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10016", off: 0.14, forecast: 25, gift: "1C-10018", advKm: true, supplierCompensation: 250000, compensationLimit: 30 },
 
   // PR-2026-005 «Cashback на смартфоны» (Переотправлено на корректировку) — km-3
   { id: "L-0008", campaignId: "PR-2026-005", kmId: "km-3", nomenclatureId: "1C-10013", off: 0.16, forecast: 300, rejected: true, rejectComment: "Уточните остаток — расходится с данными 1С." },
@@ -655,8 +657,10 @@ const LINE_SEED: LineSeed[] = [
   // UN-2026-015 «Срочная скидка на холодильники» is APPROVED («…отправлено смежным
   // отделам»): one normal line + one already-requested removal (removalPending) so
   // the КД «Подтвердить исключение» path is demoable on load.
-  { id: "L-0019", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10008", off: 0.11, forecast: 22 },
-  { id: "L-0020", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10009", off: 0.09, forecast: 30, removalPending: true, removalReason: "Снят с продаж поставщиком — исключить из акции." },
+  { id: "L-0019", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10008", off: 0.11, forecast: 22, utp: "Бесплатная доставка и установка", advKm: true, advMkt: true, supplierCompensation: 300000, compensationLimit: 40 },
+  { id: "L-0020", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10009", off: 0.09, forecast: 30, removalPending: true, removalReason: "Снят с продаж поставщиком — исключить из акции.", supplierCompensation: 200000, compensationLimit: 25 },
+  // Added in the latest report version (S5 «добавленные данные» demo — see REPORT_CHANGE_SETS).
+  { id: "L-0021", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10007", off: 0.13, forecast: 18, utp: "Подарочная упаковка", supplierCompensation: 350000, compensationLimit: 35 },
 ];
 
 function roundTo(value: number, step: number): number {
@@ -1731,6 +1735,47 @@ const CAMPAIGN_VERSIONS: Record<string, CampaignVersion[]> = {
       changes: [],
     },
   ],
+  // UN-2026-015 «Срочная скидка на холодильники»: first sent ON TIME (before the
+  // 17-кал.-дн. report deadline), then a later incremental correction — drives the
+  // S5 «изменённые/добавленные данные» highlight + ознакомление demo (REPORT_CHANGE_SETS).
+  "UN-2026-015": [
+    {
+      id: "UN-2026-015-v2",
+      campaignId: "UN-2026-015",
+      version: 2,
+      date: new Date(2026, 5, 12, 10, 30),
+      author: "Юсупова Нигора",
+      role: "Категорийный менеджер (КМ)",
+      changeType: "Корректировка",
+      summary: "Изменена новая цена по 1 позиции и добавлена 1 позиция; отправлено смежным отделам.",
+      changes: [
+        {
+          scope: "LG GC-B247 Side-by-Side",
+          field: "Новая цена",
+          from: "12 690 000 сум",
+          to: "12 450 000 сум",
+          kind: "changed",
+        },
+        {
+          scope: "Samsung RB37 No Frost",
+          field: "Позиция",
+          to: "добавлена в акцию",
+          kind: "added",
+        },
+      ],
+    },
+    {
+      id: "UN-2026-015-v1",
+      campaignId: "UN-2026-015",
+      version: 1,
+      date: new Date(2026, 5, 5, 9, 15),
+      author: "Юсупова Нигора",
+      role: "Категорийный менеджер (КМ)",
+      changeType: "Первичная отправка",
+      summary: "Первичная отправка данных смежным отделам.",
+      changes: [],
+    },
+  ],
 };
 
 /** Versions for a campaign, newest-first. Unknown campaigns get a single seed. */
@@ -1986,4 +2031,154 @@ export function buildLineRemovalVersion(
       },
     ],
   };
+}
+
+// ── S5 — Отчёты для смежных подразделений (§7) ─────────────────────────────────
+// Read-only, versioned reports auto-generated when a campaign reaches «Согласовано
+// и отправлено смежным отделам». Three department views (Маркетинг / Закуп /
+// Аналитика), each with its own Appendix-C field subset. Ознакомление ≠
+// согласование (§11.7): acknowledging clears the change highlight but never moves
+// the campaign status.
+
+export type ReportDepartment = "marketing" | "purchasing" | "analytics";
+
+export const DEPARTMENT_LABELS: Record<ReportDepartment, string> = {
+  marketing: "Отчёт для маркетинга",
+  purchasing: "Отчёт для закупа",
+  analytics: "Отчёт для аналитики",
+};
+
+export const DEPARTMENT_SHORT: Record<ReportDepartment, string> = {
+  marketing: "Маркетинг",
+  purchasing: "Закуп",
+  analytics: "Аналитика",
+};
+
+export interface ReportAccess {
+  /** Department tabs this role may open (Appendix D «Отчёты»). */
+  departments: ReportDepartment[];
+  /** Only «Сотрудник маркетинга» may toggle «В рекламу (выбрано маркетингом)» (§7.2). */
+  canEditMarketingFlag: boolean;
+  /** Short RU description for the access banner / empty state. */
+  note: string;
+}
+
+const ALL_DEPARTMENTS: ReportDepartment[] = [
+  "marketing",
+  "purchasing",
+  "analytics",
+];
+
+/** Department-report access per role (Appendix D «Отчёты» column). */
+export function getReportAccess(role: PromoRole): ReportAccess {
+  switch (role) {
+    case "Коммерческий директор":
+    case "Операционный директор":
+    case "Категорийный менеджер (КМ)":
+    case "Старший КМ":
+    case "Администратор":
+      return {
+        departments: ALL_DEPARTMENTS,
+        canEditMarketingFlag: false,
+        note: "Просмотр всех отчётов смежных подразделений.",
+      };
+    case "Директор маркетинга":
+      return {
+        departments: ["marketing"],
+        canEditMarketingFlag: false,
+        note: "Просмотр отчёта для маркетинга.",
+      };
+    case "Сотрудник маркетинга":
+      return {
+        departments: ["marketing"],
+        canEditMarketingFlag: true,
+        note: "Просмотр отчёта для маркетинга; изменение поля «В рекламу (выбрано маркетингом)».",
+      };
+    case "Сотрудник закупа":
+      return {
+        departments: ["purchasing"],
+        canEditMarketingFlag: false,
+        note: "Просмотр отчёта для закупа.",
+      };
+    case "Сотрудник аналитики":
+      return {
+        departments: ["analytics"],
+        canEditMarketingFlag: false,
+        note: "Просмотр отчёта для аналитики.",
+      };
+    default:
+      return {
+        departments: [],
+        canEditMarketingFlag: false,
+        note: "Нет доступа к отчётам.",
+      };
+  }
+}
+
+/**
+ * «Срок отправки отчёта смежным отделам» = 17 calendar days before the campaign
+ * start (§4.7). A report sent later than this is overdue (non-blocking signal).
+ */
+export function getReportDeadline(campaign: PromoCampaign): Date {
+  const d = new Date(campaign.startDate);
+  d.setDate(d.getDate() - 17);
+  return d;
+}
+
+/**
+ * Campaigns that have been sent to departments (a report exists): approved status,
+ * not cancelled, and with at least one line. Newest report first (latest send).
+ */
+export function getSentCampaigns(): PromoCampaign[] {
+  const withLines = new Set(PROMO_LINES.map((l) => l.campaignId));
+  return CAMPAIGNS.filter(
+    (c) => isApprovedCampaign(c) && withLines.has(c.id)
+  ).sort(
+    (a, b) =>
+      getReportSentAt(b).getTime() - getReportSentAt(a).getTime()
+  );
+}
+
+/** When the report was first sent — the «Первичная отправка» version date (§7). */
+export function getReportSentAt(campaign: PromoCampaign): Date {
+  const versions = getCampaignVersions(campaign.id);
+  const first = versions.find((v) => v.changeType === "Первичная отправка");
+  return first?.date ?? versions[versions.length - 1]?.date ?? campaign.startDate;
+}
+
+/** Latest report version number (newest version in the chain). */
+export function getReportVersionNo(campaign: PromoCampaign): number {
+  return getCampaignVersions(campaign.id)[0]?.version ?? 1;
+}
+
+/**
+ * The changed/added cells of a campaign's LATEST report version, vs the previous
+ * one (§7.1). Highlighted in the report until the recipient acknowledges (§11.4).
+ * Seed-stale (the audit trail is mocked) — keyed `${lineId}:${fieldId}`.
+ */
+export interface ReportChangeSet {
+  /** `${lineId}:${fieldId}` keys of changed cells → amber highlight. */
+  changedCells: string[];
+  /** Lines added in the latest version → emerald «добавлено» highlight. */
+  addedLineIds: string[];
+}
+
+const REPORT_CHANGE_SETS: Record<string, ReportChangeSet> = {
+  // UN-2026-015 received a later incremental correction (see its version chain):
+  // one price/discount change on L-0019 + one added position (L-0021). The
+  // компенсация/лимит cells are flagged too so the diff is visible in the закуп/
+  // аналитика tabs as well as маркетинг.
+  "UN-2026-015": {
+    changedCells: [
+      "L-0019:newPrice",
+      "L-0019:discountPct",
+      "L-0019:supplierCompensation",
+      "L-0019:compensationLimit",
+    ],
+    addedLineIds: ["L-0021"],
+  },
+};
+
+export function getReportChangeSet(campaignId: string): ReportChangeSet {
+  return REPORT_CHANGE_SETS[campaignId] ?? { changedCells: [], addedLineIds: [] };
 }
