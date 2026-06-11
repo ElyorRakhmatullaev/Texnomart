@@ -39,22 +39,17 @@ const TexnomartLogoIcon = (
   </svg>
 );
 
-export const promoNotifications = [
-  { id: 1, title: "Новая версия отчёта по акции «Чёрная пятница»", time: "5 мин назад", read: false },
-  { id: 2, title: "Назначение КМ: Бытовая техника", time: "40 мин назад", read: false },
-  { id: 3, title: "Требуется повторное согласование маркетинга", time: "1 час назад", read: false },
-  { id: 4, title: "Акция «Распродажа ТВ» отменена", time: "2 часа назад", read: true },
-  { id: 5, title: "Утверждение «В рекламу» по акции «1+1»", time: "вчера", read: true },
-];
-
-const unreadNotifications = promoNotifications.filter((n) => !n.read).length;
-
 /**
  * Builds the Promo AppShell config for the given active role.
  * Badges (Согласование, Уведомления) and role-gated nav items depend on the
- * active role, so this is a factory rather than a static object.
+ * active role, so this is a factory rather than a static object. The unread
+ * notification count is passed in live from the NotificationsProvider (S6) so
+ * the «Уведомления» badge updates when items are acknowledged.
  */
-export function createPromoShellConfig(currentRole: PromoRole): AppShellConfig {
+export function createPromoShellConfig(
+  currentRole: PromoRole,
+  unreadNotifications = 0
+): AppShellConfig {
   const approvalsCount = countApprovalsAwaiting(currentRole);
 
   return {

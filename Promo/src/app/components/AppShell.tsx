@@ -13,8 +13,21 @@ import {
   CommandList,
 } from "@texnomart/ui/command";
 import { AppShell as SharedAppShell } from "@texnomart/shared/components/app-shell";
-import { createPromoShellConfig, promoNotifications } from "../shell-config";
+import { createPromoShellConfig } from "../shell-config";
 import { useRole } from "../role-context";
+import { useNotifications } from "./notifications/NotificationsProvider";
+import { notificationsForRole } from "../../lib/promo-mock-data";
+
+/** «5 мин назад» / «2 ч назад» / «3 дн назад» — compact relative time for the bell. */
+function relativeTime(date: Date): string {
+  const mins = Math.round((Date.now() - date.getTime()) / 60000);
+  if (mins < 1) return "только что";
+  if (mins < 60) return `${mins} мин назад`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} ч назад`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? "вчера" : `${days} дн назад`;
+}
 
 function PromoCommandSearch() {
   const [commandOpen, setCommandOpen] = React.useState(false);
@@ -97,10 +110,29 @@ function PromoCommandSearch() {
 export function AppShell() {
   const { roles, currentRole, setCurrentRole } = useRole();
   const { pathname } = useLocation();
+  const { notifications } = useNotifications();
+
+  // Bell shows only what the active role may see (§11.3.1); the nav badge + bell
+  // count both come from this live, role-filtered set so acknowledging updates them.
+  const visibleNotifications = React.useMemo(
+    () => notificationsForRole(currentRole, notifications),
+    [currentRole, notifications]
+  );
+  const bellItems = React.useMemo(
+    () =>
+      visibleNotifications.map((n) => ({
+        id: n.id,
+        title: n.campaignName ? `${n.campaignName}: ${n.description}` : n.description,
+        time: relativeTime(n.sentAt),
+        read: n.read,
+      })),
+    [visibleNotifications]
+  );
+  const unreadCount = visibleNotifications.filter((n) => !n.read).length;
 
   const config = React.useMemo(
-    () => createPromoShellConfig(currentRole),
-    [currentRole]
+    () => createPromoShellConfig(currentRole, unreadCount),
+    [currentRole, unreadCount]
   );
 
   // The full promo-calendar is a dense, wide data grid — let it use the full main
@@ -110,7 +142,8 @@ export function AppShell() {
   return (
     <SharedAppShell
       config={config}
-      notifications={promoNotifications}
+      notifications={bellItems}
+      notificationsHref="/notifications"
       headerActions={<PromoCommandSearch />}
       maxWidth={maxWidth}
       roleSwitcher={{

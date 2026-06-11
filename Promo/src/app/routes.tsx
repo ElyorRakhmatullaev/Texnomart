@@ -9,6 +9,8 @@ import { ApprovalsProvider } from "./components/approvals/ApprovalsProvider";
 import { ApprovalsPage } from "./components/approvals/ApprovalsPage";
 import { ApprovalDetailPage } from "./components/approvals/ApprovalDetailPage";
 import { ReportsPage } from "./components/reports/ReportsPage";
+import { NotificationsProvider } from "./components/notifications/NotificationsProvider";
+import { NotificationsPage } from "./components/notifications/NotificationsPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { Login2FAPage } from "./components/auth/Login2FAPage";
 import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
@@ -22,7 +24,14 @@ function ProtectedLayout() {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  return <AppShell />;
+  // NotificationsProvider sits ABOVE the AppShell so the top-bar bell, the
+  // sidebar «Уведомления» badge, and the /notifications page share one live
+  // read/unread store (S6, spec §11.3).
+  return (
+    <NotificationsProvider>
+      <AppShell />
+    </NotificationsProvider>
+  );
 }
 
 function GuestLayout() {
@@ -43,16 +52,6 @@ function ApprovalsLayout() {
     <ApprovalsProvider>
       <Outlet />
     </ApprovalsProvider>
-  );
-}
-
-function NotificationsPage() {
-  return (
-    <ModulePlaceholder
-      title="Уведомления"
-      description="Центр уведомлений: новые/изменённые данные, отмена акций, повторное согласование маркетинга."
-      showFilterBar={false}
-    />
   );
 }
 
