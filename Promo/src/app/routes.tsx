@@ -1,7 +1,6 @@
 import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 import { useAuth } from "./components/auth/AuthContext";
 import { AppShell } from "./components/AppShell";
-import { ModulePlaceholder } from "./components/ModulePlaceholder";
 import { ShortCalendarPage } from "./components/short-calendar/ShortCalendarPage";
 import { ShortCalendarDetailPage } from "./components/short-calendar/ShortCalendarDetailPage";
 import { FullCalendarPage } from "./components/full-calendar/FullCalendarPage";
@@ -13,6 +12,7 @@ import { NotificationsProvider } from "./components/notifications/NotificationsP
 import { NotificationsPage } from "./components/notifications/NotificationsPage";
 import { PromoTypesProvider } from "./components/promo-types/PromoTypesProvider";
 import { PromoTypesPage } from "./components/promo-types/PromoTypesPage";
+import { AuditPage } from "./components/audit/AuditPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { Login2FAPage } from "./components/auth/Login2FAPage";
 import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
@@ -54,15 +54,6 @@ function ApprovalsLayout() {
     <ApprovalsProvider>
       <Outlet />
     </ApprovalsProvider>
-  );
-}
-
-function AuditPage() {
-  return (
-    <ModulePlaceholder
-      title="Аудит-лог"
-      description="Журнал действий и свод контрольных событий по акциям с отметками просрочки."
-    />
   );
 }
 

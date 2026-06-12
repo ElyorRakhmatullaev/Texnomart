@@ -2602,3 +2602,538 @@ export function nextRuleId(existing: PromoTypeRule[]): string {
   }
   return id;
 }
+
+// ── S8 — Аудит-лог и свод контрольных событий (spec §11.9) ─────────────────────
+// Read-only. Two views:
+//   1) Аудит-лог — a chronological action log (who / role / when / action / object /
+//      статус до→после / комментарий).
+//   2) Свод контрольных событий — a per-campaign milestone timeline with просрочка
+//      breaches attributed to the responsible participant.
+// Both are RECONSTRUCTED from the existing seeds (campaign statuses, the version
+// chains, review comments, cancellation/non-participation seeds, report sends) and
+// are seed-stale — in-session actions on other screens are NOT appended here (the
+// audit trail is mocked, same honesty as the S4/S5 version history).
+
+/** The action taxonomy the log filters by (spec §11.9). */
+export type AuditActionType =
+  | "создание"
+  | "изменение"
+  | "отправка на согласование"
+  | "согласование"
+  | "отклонение"
+  | "отмена"
+  | "Не участвует"
+  | "отправка отчёта";
+
+/** What an action acted on. */
+export type AuditObjectType = "акция" | "строка" | "отчёт" | "план";
+
+/** Soft tint per action type (paired with the label, never colour alone). */
+export const AUDIT_ACTION_META: Record<
+  AuditActionType,
+  { bg: string; text: string }
+> = {
+  "создание": { bg: "bg-blue-50", text: "text-blue-700" },
+  "изменение": { bg: "bg-amber-50", text: "text-amber-700" },
+  "отправка на согласование": { bg: "bg-violet-50", text: "text-violet-700" },
+  "согласование": { bg: "bg-emerald-50", text: "text-emerald-700" },
+  "отклонение": { bg: "bg-red-50", text: "text-red-700" },
+  "отмена": { bg: "bg-red-100", text: "text-red-800" },
+  "Не участвует": { bg: "bg-gray-100", text: "text-gray-600" },
+  "отправка отчёта": { bg: "bg-teal-50", text: "text-teal-700" },
+};
+
+export const AUDIT_OBJECT_LABEL: Record<AuditObjectType, string> = {
+  "акция": "Акция",
+  "строка": "Строка",
+  "отчёт": "Отчёт",
+  "план": "План",
+};
+
+/** One immutable entry in the action log. */
+export interface AuditEvent {
+  /** Monospace id, e.g. AUD-0007. */
+  id: string;
+  /** ФИО (or a role label when no person is attributed). */
+  user: string;
+  role: PromoRole;
+  at: Date;
+  action: AuditActionType;
+  objectType: AuditObjectType;
+  /** The object's human label — campaign name, line nomenclature, report name. */
+  objectLabel: string;
+  /** № промо / campaign the entry belongs to (for the «акция» chip + grouping). */
+  campaignId?: string;
+  /** Status transition, when the action changed a status (Appendix-A strings). */
+  statusFrom?: string;
+  statusTo?: string;
+  comment?: string;
+}
+
+// A curated, seed-consistent action log. Dates align with the version chains and
+// campaign statuses used by the other screens; users/roles match CATEGORY_MANAGERS
+// and the role taxonomy. Ordered oldest-first here; `buildAuditLog` returns it
+// newest-first.
+const AUDIT_EVENTS_SEED: Omit<AuditEvent, "id">[] = [
+  // ── PR-2026-003 «1+1 на мелкую бытовую технику» — full cycle incl. a LATE report send ──
+  {
+    user: "Директор маркетинга",
+    role: "Директор маркетинга",
+    at: new Date(2026, 7, 28, 10, 5),
+    action: "создание",
+    objectType: "план",
+    objectLabel: "Чёрная пятница 2026 / план Q4",
+    campaignId: "PR-2026-001",
+    comment: "Создан план промо-акций на IV квартал.",
+  },
+  {
+    user: "Коммерческий директор",
+    role: "Коммерческий директор",
+    at: new Date(2026, 7, 31, 16, 20),
+    action: "согласование",
+    objectType: "план",
+    objectLabel: "План Q4 — распределение по категориям",
+    campaignId: "PR-2026-001",
+    statusFrom: "На согл. с КД",
+    statusTo: "На согл. с ОД",
+  },
+  {
+    user: "Операционный директор",
+    role: "Операционный директор",
+    at: new Date(2026, 8, 1, 9, 40),
+    action: "согласование",
+    objectType: "план",
+    objectLabel: "План Q4",
+    campaignId: "PR-2026-001",
+    statusFrom: "На согл. с ОД",
+    statusTo: "Утверждён",
+  },
+  {
+    user: "Каримов Шохрух",
+    role: "Категорийный менеджер (КМ)",
+    at: new Date(2026, 8, 22, 17, 48),
+    action: "отправка на согласование",
+    objectType: "акция",
+    objectLabel: "1+1 на мелкую бытовую технику",
+    campaignId: "PR-2026-003",
+    statusFrom: "Не заполнено / Ожидание корректировки от КМ",
+    statusTo: "На согласовании у старшего КМ",
+  },
+  {
+    user: "Исмаилов Жасур",
+    role: "Старший КМ",
+    at: new Date(2026, 8, 23, 11, 15),
+    action: "согласование",
+    objectType: "акция",
+    objectLabel: "1+1 на мелкую бытовую технику",
+    campaignId: "PR-2026-003",
+    statusFrom: "На согласовании у старшего КМ",
+    statusTo: "Согласовано старшим КМ (ожидает КД)",
+  },
+  {
+    user: "Коммерческий директор",
+    role: "Коммерческий директор",
+    at: new Date(2026, 8, 23, 18, 30),
+    action: "согласование",
+    objectType: "акция",
+    objectLabel: "1+1 на мелкую бытовую технику",
+    campaignId: "PR-2026-003",
+    statusFrom: "На согласовании у коммерческого директора",
+    statusTo: "Принято коммерческим директором",
+  },
+  {
+    user: "Коммерческий директор",
+    role: "Коммерческий директор",
+    at: new Date(2026, 8, 22, 18, 0),
+    action: "отправка отчёта",
+    objectType: "отчёт",
+    objectLabel: "Отчёт смежным отделам — 1+1 на мелкую бытовую технику",
+    campaignId: "PR-2026-003",
+    comment: "Отправлено с просрочкой 8 кал. дн. (дедлайн 14.09).",
+  },
+
+  // ── PR-2026-001 «Чёрная пятница 2026» — versions + a КМ correction ──
+  {
+    user: "Алиев Бекзод",
+    role: "Категорийный менеджер (КМ)",
+    at: new Date(2026, 10, 20, 17, 48),
+    action: "отправка на согласование",
+    objectType: "акция",
+    objectLabel: "Чёрная пятница 2026",
+    campaignId: "PR-2026-001",
+    statusFrom: "Не заполнено / Ожидание корректировки от КМ",
+    statusTo: "На согласовании у старшего КМ",
+  },
+  {
+    user: "Исмаилов Жасур",
+    role: "Старший КМ",
+    at: new Date(2026, 10, 22, 9, 15),
+    action: "изменение",
+    objectType: "строка",
+    objectLabel: "Кондиционер Artel 12000 BTU",
+    campaignId: "PR-2026-001",
+    comment: "Добавлена 1 позиция номенклатуры в акцию.",
+  },
+  {
+    user: "Алиев Бекзод",
+    role: "Категорийный менеджер (КМ)",
+    at: new Date(2026, 10, 24, 14, 32),
+    action: "изменение",
+    objectType: "строка",
+    objectLabel: "Samsung QLED 55\" QE55Q60D",
+    campaignId: "PR-2026-001",
+    comment: "Новая цена 7 990 000 → 7 640 000 сум; скидка 11% → 15%.",
+  },
+  {
+    user: "Коммерческий директор",
+    role: "Коммерческий директор",
+    at: new Date(2026, 10, 25, 10, 0),
+    action: "согласование",
+    objectType: "акция",
+    objectLabel: "Чёрная пятница 2026 — КМ Алиев Бекзод",
+    campaignId: "PR-2026-001",
+    statusFrom: "На согласовании у коммерческого директора",
+    statusTo: "Принято коммерческим директором",
+  },
+  {
+    user: "Исмаилов Жасур",
+    role: "Старший КМ",
+    at: new Date(2026, 10, 24, 12, 10),
+    action: "Не участвует",
+    objectType: "акция",
+    objectLabel: "Чёрная пятница 2026 — климатическая техника",
+    campaignId: "PR-2026-001",
+    statusFrom: "На согласовании у старшего КМ",
+    statusTo: "Не участвует",
+    comment: "Нет товарного остатка под акцию.",
+  },
+
+  // ── PR-2026-005 «Cashback на смартфоны» — отклонение с доработкой ──
+  {
+    user: "Каримов Шерзод",
+    role: "Категорийный менеджер (КМ)",
+    at: new Date(2026, 6, 18, 15, 25),
+    action: "отправка на согласование",
+    objectType: "акция",
+    objectLabel: "Cashback на смартфоны",
+    campaignId: "PR-2026-005",
+    statusFrom: "Не заполнено / Ожидание корректировки от КМ",
+    statusTo: "На согласовании у старшего КМ",
+  },
+  {
+    user: "Исмаилов Жасур",
+    role: "Старший КМ",
+    at: new Date(2026, 6, 19, 9, 50),
+    action: "отклонение",
+    objectType: "строка",
+    objectLabel: "iPhone 15 128GB",
+    campaignId: "PR-2026-005",
+    statusFrom: "На согласовании у старшего КМ",
+    statusTo: "Не заполнено / Ожидание корректировки от КМ",
+    comment: "Не заполнен прогноз продаж по 2 позициям — вернуть на доработку.",
+  },
+
+  // ── PR-2026-004 «Распродажа ТВ и аудио» — отмена ──
+  {
+    user: "Коммерческий директор",
+    role: "Коммерческий директор",
+    at: new Date(2026, 7, 18, 13, 5),
+    action: "отмена",
+    objectType: "акция",
+    objectLabel: "Распродажа ТВ и аудио",
+    campaignId: "PR-2026-004",
+    statusFrom: "На согласовании у коммерческого директора",
+    statusTo: "Отменена",
+    comment: "Поставщик не подтвердил объём — акция отменена.",
+  },
+
+  // ── UN-2026-015 «Срочная скидка на холодильники» — внеплановая, отчёт + корректировка ──
+  {
+    user: "Юсупова Нигора",
+    role: "Категорийный менеджер (КМ)",
+    at: new Date(2026, 5, 3, 11, 30),
+    action: "создание",
+    objectType: "акция",
+    objectLabel: "Срочная скидка на холодильники (внеплановая)",
+    campaignId: "UN-2026-015",
+    comment: "Создана внеплановая акция (№ присвоен системой).",
+  },
+  {
+    user: "Юсупова Нигора",
+    role: "Категорийный менеджер (КМ)",
+    at: new Date(2026, 5, 5, 9, 15),
+    action: "отправка отчёта",
+    objectType: "отчёт",
+    objectLabel: "Отчёт смежным отделам — Срочная скидка на холодильники",
+    campaignId: "UN-2026-015",
+    comment: "Первичная отправка в срок (дедлайн 08.06).",
+  },
+  {
+    user: "Сотрудник маркетинга",
+    role: "Сотрудник маркетинга",
+    at: new Date(2026, 5, 11, 16, 40),
+    action: "согласование",
+    objectType: "отчёт",
+    objectLabel: "Срочная скидка — повторное согласование изменений",
+    campaignId: "UN-2026-015",
+    comment: "Согласованы изменения после согласования (§11.8).",
+  },
+  {
+    user: "Юсупова Нигора",
+    role: "Категорийный менеджер (КМ)",
+    at: new Date(2026, 5, 12, 10, 30),
+    action: "отправка отчёта",
+    objectType: "отчёт",
+    objectLabel: "Отчёт смежным отделам — Срочная скидка (в. 2)",
+    campaignId: "UN-2026-015",
+    comment: "Инкрементальная отправка: изменена цена по 1 позиции, добавлена 1 позиция.",
+  },
+
+  // ── UN-2026-014 «Подарок к ноутбукам» — внеплановая, на согл. КД ──
+  {
+    user: "Тошматов Фаррух",
+    role: "Категорийный менеджер (КМ)",
+    at: new Date(2026, 6, 10, 14, 0),
+    action: "создание",
+    objectType: "акция",
+    objectLabel: "Подарок к ноутбукам (внеплановая)",
+    campaignId: "UN-2026-014",
+    comment: "Создана внеплановая акция «Товар в подарок».",
+  },
+  {
+    user: "Тошматов Фаррух",
+    role: "Категорийный менеджер (КМ)",
+    at: new Date(2026, 6, 12, 17, 30),
+    action: "отправка на согласование",
+    objectType: "акция",
+    objectLabel: "Подарок к ноутбукам (внеплановая)",
+    campaignId: "UN-2026-014",
+    statusFrom: "На согласовании у старшего КМ",
+    statusTo: "На согласовании у коммерческого директора",
+  },
+];
+
+/** The action log, newest-first, with stable monospace ids (spec §11.9). */
+export function buildAuditLog(): AuditEvent[] {
+  const ordered = [...AUDIT_EVENTS_SEED].sort(
+    (a, b) => b.at.getTime() - a.at.getTime()
+  );
+  // Ids are assigned oldest-first so AUD-0001 is the earliest event.
+  const total = ordered.length;
+  return ordered.map((e, i) => ({
+    ...e,
+    id: `AUD-${String(total - i).padStart(4, "0")}`,
+  }));
+}
+
+// ── Свод контрольных событий (control-events timeline) ─────────────────────────
+
+export type ControlMilestoneState = "completed" | "current" | "pending";
+
+/** One node in a campaign's control-events timeline. */
+export interface ControlMilestone {
+  key: string;
+  label: string;
+  date?: Date;
+  state: ControlMilestoneState;
+  /** >0 → red breach node. */
+  overdueDays?: number;
+  /** Participant the breach is attributed to. */
+  responsible?: string;
+  note?: string;
+}
+
+const KM_FILL_SLA_CALENDAR_DAYS = 21; // «заполнение КМ»: start − 21 кал. дн. (mock)
+
+/**
+ * Build a campaign's milestone timeline (spec §11.9): план → отправка данных КМ →
+ * согл./откл. старшим КМ → согл./откл. КД → «Не участвует» → отправка отчёта. The
+ * report-send node is marked overdue against the 17-кал.-дн. report deadline.
+ */
+export function buildControlTimeline(
+  campaignId: string,
+  ref: Date = new Date()
+): ControlMilestone[] {
+  const campaign = getCampaignById(campaignId);
+  if (!campaign) return [];
+
+  // Use ONLY a genuinely seeded version chain for the «отправка данных» date — the
+  // generic single-version fallback is dated 2026-09-01 for every unseeded campaign
+  // and would otherwise produce nonsensical breaches against each campaign's own dates.
+  const seededVersions = CAMPAIGN_VERSIONS[campaignId];
+  const firstSend = seededVersions?.find(
+    (v) => v.changeType === "Первичная отправка"
+  );
+  const kmName =
+    getCategoryManager(campaign.participatingKmIds[0] ?? "")?.name ??
+    "Категорийный менеджер";
+  const statuses = Object.values(campaign.kmStatuses);
+  const anyAccepted = statuses.includes("Принято коммерческим директором");
+  const anyAtKd =
+    campaign.status === "На согласовании у коммерческого директора" ||
+    statuses.includes("На согласовании у коммерческого директора") ||
+    statuses.includes("Согласовано старшим КМ (ожидает КД)");
+  const anySeniorDone = anyAtKd || anyAccepted;
+  const rejected =
+    campaign.status === "Переотправлено на корректировку КМ" ||
+    statuses.includes("Не заполнено / Ожидание корректировки от КМ");
+  const anyNonPart = statuses.includes("Не участвует");
+  const sent = isApprovedCampaign(campaign);
+  // Data was submitted if a version was sent OR any status moved past «не заполнено»
+  // OR it was bounced back («Переотправлено») — independent of a seeded version date.
+  const dataSent =
+    !!firstSend ||
+    sent ||
+    anySeniorDone ||
+    anyNonPart ||
+    campaign.status === "Переотправлено на корректировку КМ" ||
+    statuses.includes("На согласовании у старшего КМ");
+
+  const milestones: ControlMilestone[] = [];
+
+  // 1) Создание / утверждение плана (planned campaigns only)
+  if (campaign.planned) {
+    milestones.push({
+      key: "plan",
+      label: "Утверждение плана",
+      date: firstSend ? addCalendarDays(firstSend.date, -7) : undefined,
+      state: campaign.planStatus === "Утверждён" ? "completed" : "current",
+    });
+  } else {
+    milestones.push({
+      key: "plan",
+      label: "Создание внеплановой акции",
+      date: firstSend ? addCalendarDays(firstSend.date, -2) : undefined,
+      state: "completed",
+    });
+  }
+
+  // 2) Отправка данных КМ — breach vs the «заполнение КМ» deadline.
+  const fillDeadline = addCalendarDays(
+    campaign.startDate,
+    -KM_FILL_SLA_CALENDAR_DAYS
+  );
+  const dataSentOverdue =
+    firstSend && firstSend.date > fillDeadline
+      ? getOverdueDays(fillDeadline, firstSend.date)
+      : 0;
+  milestones.push({
+    key: "data-km",
+    label: "Отправка данных КМ",
+    date: firstSend?.date,
+    state: dataSent ? "completed" : "current",
+    overdueDays: dataSentOverdue,
+    responsible: dataSentOverdue > 0 ? kmName : undefined,
+    note: dataSentOverdue > 0 ? "Данные поданы после дедлайна заполнения." : undefined,
+  });
+
+  // 3) Согласование / отклонение старшим КМ
+  milestones.push({
+    key: "senior",
+    label: rejected && !anySeniorDone ? "Отклонение старшим КМ" : "Согласование старшим КМ",
+    state: anySeniorDone ? "completed" : rejected ? "completed" : dataSent ? "current" : "pending",
+    note: rejected && !anySeniorDone ? "Возврат КМ на доработку." : undefined,
+  });
+
+  // 4) Согласование / отклонение КД
+  milestones.push({
+    key: "kd",
+    label: anyAccepted || sent ? "Согласование КД" : "Согласование КД",
+    state: anyAccepted || sent ? "completed" : anyAtKd ? "current" : "pending",
+  });
+
+  // 5) Установка «Не участвует» (only when present)
+  if (anyNonPart) {
+    milestones.push({
+      key: "non-part",
+      label: "Установка «Не участвует»",
+      state: "completed",
+      note: "По части КМ участие исключено.",
+    });
+  }
+
+  // 6) Отправка отчёта смежным отделам — breach vs the 17-кал.-дн. report deadline.
+  const reportDeadline = getReportDeadline(campaign);
+  const reportSentAt = sent ? getReportSentAt(campaign) : undefined;
+  const reportOverdue =
+    reportSentAt && reportSentAt > reportDeadline
+      ? getOverdueDays(reportDeadline, reportSentAt)
+      : 0;
+  milestones.push({
+    key: "report",
+    label: "Отправка отчёта смежным отделам",
+    date: reportSentAt,
+    state: sent ? "completed" : "pending",
+    overdueDays: reportOverdue,
+    responsible: reportOverdue > 0 ? kmName : undefined,
+    note: reportOverdue > 0 ? "Отчёт отправлен после дедлайна (старт − 17 кал. дн.)." : undefined,
+  });
+
+  // Cancellation supersedes — append a terminal node.
+  if (campaign.cancelled) {
+    milestones.push({
+      key: "cancel",
+      label: "Отмена акции",
+      state: "completed",
+      note: campaign.cancelReason,
+    });
+  }
+
+  return milestones;
+}
+
+export interface AuditSummary {
+  /** Campaigns that have a control timeline (planned + unplanned with versions). */
+  campaignCount: number;
+  /** Count of breached (overdue) milestones across all campaigns. */
+  overdueEvents: number;
+  /** Average approval time in WORKING days (отправка данных КМ → согласование КД). */
+  avgApprovalWorkingDays: number | null;
+}
+
+/** Campaigns that appear in the control-events view, newest start first. */
+export function getAuditCampaigns(): PromoCampaign[] {
+  return [...CAMPAIGNS].sort(
+    (a, b) => b.startDate.getTime() - a.startDate.getTime()
+  );
+}
+
+/** Summary strip for the control-events view (spec §11.9). */
+export function auditSummary(ref: Date = new Date()): AuditSummary {
+  const campaigns = getAuditCampaigns();
+  let overdueEvents = 0;
+  const approvalSpans: number[] = [];
+
+  for (const c of campaigns) {
+    const milestones = buildControlTimeline(c.id, ref);
+    overdueEvents += milestones.filter((m) => (m.overdueDays ?? 0) > 0).length;
+
+    // Approval span: «отправка данных КМ» → «согласование КД» (when both reached).
+    const dataKm = milestones.find((m) => m.key === "data-km");
+    const kd = milestones.find((m) => m.key === "kd");
+    if (
+      dataKm?.date &&
+      kd?.state === "completed"
+    ) {
+      // КД approval date isn't stored per-campaign; approximate it from the
+      // latest version date (the most recent activity), bounded to ≥ the КМ send.
+      const versions = getCampaignVersions(c.id);
+      const kdDate = versions[0]?.date ?? dataKm.date;
+      const span = workingDaysBetween(dataKm.date, kdDate);
+      if (span > 0) approvalSpans.push(span);
+    }
+  }
+
+  const avg =
+    approvalSpans.length > 0
+      ? Math.round(
+          (approvalSpans.reduce((s, n) => s + n, 0) / approvalSpans.length) * 10
+        ) / 10
+      : null;
+
+  return {
+    campaignCount: campaigns.length,
+    overdueEvents,
+    avgApprovalWorkingDays: avg,
+  };
+}
