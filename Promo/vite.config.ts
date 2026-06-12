@@ -17,6 +17,9 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig({
+  // Set by the GitHub Pages deploy workflow (e.g. '/Texnomart/promo/').
+  // Stays '/' for local dev and plain builds.
+  base: process.env.BASE_PATH ?? '/',
   plugins: [
     figmaAssetResolver(),
     react(),

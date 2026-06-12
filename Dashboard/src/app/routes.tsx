@@ -57,6 +57,11 @@ function GuestLayout() {
   return <Outlet />;
 }
 
+// Under GitHub Pages the app is served from a subpath (BASE_URL =
+// '/Texnomart/dashboard/'); strip the trailing slash for the router basename.
+// Stays '/' for local dev and plain builds.
+const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
+
 export const router = createBrowserRouter([
   {
     path: "/login",
@@ -93,4 +98,4 @@ export const router = createBrowserRouter([
       { path: "profile", Component: ProfilePage },
     ],
   },
-]);
+], { basename });

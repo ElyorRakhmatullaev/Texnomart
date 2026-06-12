@@ -1,0 +1,109 @@
+# Build the Dashboard + Promo SPAs and publish them to GitHub Pages.
+#
+# Both apps share one Pages site under subpaths:
+#   https://elyorrakhmatullaev.github.io/Texnomart/dashboard/
+#   https://elyorrakhmatullaev.github.io/Texnomart/promo/
+# The bare root (/Texnomart/) has no landing page by design.
+#
+# ONE-TIME SETUP (cannot be automated): in the repo go to
+#   Settings -> Pages -> Build and deployment -> Source = "GitHub Actions".
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # allow manual runs from the Actions tab
+
+# Allow the deploy job to publish to Pages via OIDC.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time; don't cancel an in-progress publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10 # reads the repo's lockfileVersion 9.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Dashboard
+        run: pnpm build:dashboard
+        env:
+          BASE_PATH: /Texnomart/dashboard/
+
+      - name: Build Promo
+        run: pnpm build:promo
+        env:
+          BASE_PATH: /Texnomart/promo/
+
+      - name: Assemble site
+        run: |
+          set -e
+          rm -rf _site
+          mkdir -p _site/dashboard _site/promo
+          cp -r Dashboard/dist/. _site/dashboard/
+          cp -r Promo/dist/. _site/promo/
+          # Root 404 fallback: GitHub Pages serves this for any unmatched path.
+          # It detects which app the deep link belongs to, stashes the in-app
+          # path in sessionStorage, and redirects to that app's root, where the
+          # index.html restore snippet rebuilds the URL for React Router.
+          cat > _site/404.html <<'HTML'
+          <!DOCTYPE html>
+          <html lang="ru">
+            <head>
+              <meta charset="utf-8" />
+              <title>Texnomart</title>
+              <script>
+                (function () {
+                  var segs = location.pathname.split("/").filter(Boolean);
+                  // Project Pages: segs[0] = repo, segs[1] = app slug.
+                  var repo = segs[0];
+                  var app = segs[1];
+                  if (app === "dashboard" || app === "promo") {
+                    var base = "/" + repo + "/" + app + "/";
+                    var rest = segs.slice(2).join("/");
+                    sessionStorage.setItem("spaRedirect", rest + location.search + location.hash);
+                    location.replace(base);
+                  }
+                })();
+              </script>
+            </head>
+            <body></body>
+          </html>
+          HTML
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
