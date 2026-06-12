@@ -15,8 +15,8 @@ import { Alert, AlertDescription } from "@texnomart/ui/alert";
 export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
+  const [email, setEmail] = React.useState("admin@texnomart.uz");
+  const [password, setPassword] = React.useState("Texnomart2026");
   const [rememberMe, setRememberMe] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const [loading, setLoading] = React.useState(false);

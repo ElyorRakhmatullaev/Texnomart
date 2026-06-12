@@ -15,8 +15,9 @@ import {
 export function Login2FAPage() {
   const navigate = useNavigate();
   const { needsTwoFactor, verify2FA } = useAuth();
-  const [value, setValue] = React.useState("");
+  const [value, setValue] = React.useState("123456");
   const [loading, setLoading] = React.useState(false);
+  const didMountRef = React.useRef(false);
 
   React.useEffect(() => {
     if (!needsTwoFactor) navigate("/login", { replace: true });
@@ -38,8 +39,13 @@ export function Login2FAPage() {
     setLoading(false);
   };
 
-  // Auto-submit when 6 digits entered
+  // Auto-submit when 6 digits entered — skip the initial render so the
+  // prefilled default code stays visible instead of logging in instantly.
   React.useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
     if (value.length === 6 && !loading) {
       handleSubmit(new Event("submit") as any);
     }
