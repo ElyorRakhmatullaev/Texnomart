@@ -532,3 +532,13 @@ Documented mistakes, gotchas, and learnings from project work. Never remove old 
 
 ### The Root npm Scripts Re-Invoke Bare `pnpm` — Build via the Filter in CI Too
 - Same gotcha as local (see Promo bootstrap lesson): `build:dashboard` = `pnpm --filter dashboard build`, so calling it through a wrapper where `pnpm` isn't directly on PATH fails. In the workflow, `pnpm/action-setup@v4` puts a real `pnpm` shim on PATH so `pnpm build:dashboard` works there — but when reproducing the CI build **locally** to verify, use `corepack pnpm --filter <app> build` (the per-project `build` calls `vite` directly, no nested pnpm). Pin `pnpm/action-setup` `version:` explicitly (there's no `packageManager` field in `package.json`); `version: 10` reads the repo's `lockfileVersion 9.0` and `--frozen-lockfile` passes.
+
+---
+
+## 2026-06-12 — Monorepo: prefilled demo login credentials
+
+### Prefilling a Controlled OTP Triggers the "6 digits → auto-submit" Effect on Mount — Guard the Initial Render
+- The 2FA page auto-submits via `useEffect(() => { if (value.length === 6) handleSubmit() }, [value])`. Seeding the OTP state with a full 6-digit default (`useState("123456")`) makes that effect fire **on the first render**, so the page logs in and navigates away instantly — the prefilled code is never visible and the 2FA screen flashes. Fix: a `didMountRef` that the effect checks and sets on its first run, returning early — auto-submit then only fires on *subsequent* value changes (a real retype), and the seeded code stays on screen for a manual «Подтвердить». General rule: any effect keyed on a value that now has a non-empty default will run once on mount against that default — if that's not wanted, gate the first render with a mount ref.
+
+### Prefilled Demo Creds Don't Bypass a Random-Success Mock — They're Independent
+- The login inputs are prefilled for demo convenience (`admin@texnomart.uz` / `Texnomart2026`), but the mock `handleSubmit` still gates on `Math.random() > 0.7` (30% success) and never reads the email/password — so prefilling the fields does NOT make login deterministic; «Войти» can still need several clicks. If a one-click reliable demo login is wanted, that's a separate change to the success condition (e.g. succeed when the default creds are present), not a side effect of prefilling. Kept the random gate as-is (only the input defaults were requested).

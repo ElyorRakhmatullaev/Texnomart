@@ -1,12 +1,14 @@
 # AI Context — Texnomart Monorepo
 
-> Last updated: 2026-06-12 (GitHub Pages deploy workflow added — both apps publish under subpaths)
+> Last updated: 2026-06-12 (prefilled demo login credentials in both apps; GitHub Pages deploy workflow)
 
 All UI is mock data — no backend or API integration exists yet. Architecture, structure, and conventions are in `CLAUDE.md` (root + per-project).
 
 ## Deployment
 
 Both apps deploy to **GitHub Pages** via `.github/workflows/deploy.yml` (on push to `main` + manual run) under subpaths — Dashboard at `…/Texnomart/dashboard/`, Promo at `…/Texnomart/promo/` (no root landing page). Vite `base` (from `BASE_PATH` env), React-Router `basename` (from `import.meta.env.BASE_URL`), and a root `404.html` + `index.html` restore snippet handle the subpath + SPA deep-link routing. One-time manual step: repo Settings → Pages → Source = "GitHub Actions". See root `CLAUDE.md` § Deployment.
+
+**Demo login** (both apps): the login inputs are prefilled — `admin@texnomart.uz` / `Texnomart2026` + 2FA `123456`. The mock login still has a 30%-random-success gate, so «Войти» may take a couple of clicks (any email/password works — it's not validated).
 
 ## Project Status
 

@@ -97,7 +97,7 @@ Promo/
 
 | Route | Component | Status |
 |---|---|---|
-| `/login` `/login/2fa` `/login/forgot-password` `/login/reset-password/:token` | auth pages | Done (shared mock auth) |
+| `/login` `/login/2fa` `/login/forgot-password` `/login/reset-password/:token` | auth pages | Done (shared mock auth) — demo inputs prefilled: `admin@texnomart.uz` / `Texnomart2026` + 2FA `123456` (any value works; 30%-random-success gate) |
 | `/` | → redirects to `/short-calendar` | Done |
 | `/short-calendar` | ShortCalendarPage | **Done (S1)** — table + «План акций» mode |
 | `/short-calendar/:promoId` | ShortCalendarDetailPage | **Done (S1)** — Pattern D full page |

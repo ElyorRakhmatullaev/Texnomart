@@ -106,6 +106,8 @@ All 14 prompt pack pages are complete.
 
 `/login` → (mock, 30% success) → `/login/2fa` → (OTP auto-submit) → `/` (Dashboard)
 
+> **Demo login**: the inputs are prefilled — `admin@texnomart.uz` / `Texnomart2026` + 2FA `123456` (any value works; not validated). The 2FA auto-submit is guarded to skip the initial render so the prefilled code stays visible.
+
 - `AuthContext`: re-exports from `@texnomart/shared/auth/auth-context` (mock auth state in sessionStorage)
 - `ProtectedLayout`: redirects unauthenticated → `/login`
 - `GuestLayout`: redirects authenticated → `/`
