@@ -67,6 +67,16 @@ import type {
 } from "../types";
 import { useAuth } from "../auth/auth-context";
 
+/**
+ * A nav item is active when the current path equals its href OR is a child of it
+ * (e.g. `/short-calendar/:id` keeps «Краткий промо-календарь» active). The root
+ * `/` item matches exactly so it isn't active on every page.
+ */
+function isNavItemActive(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 interface AppSidebarProps {
   config: AppShellConfig;
   activeRole: string;
@@ -101,7 +111,7 @@ function AppSidebarNav({ config, activeRole }: AppSidebarProps) {
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton
                         asChild
-                        isActive={location.pathname === item.href}
+                        isActive={isNavItemActive(location.pathname, item.href)}
                         tooltip={isCollapsed ? item.label : undefined}
                       >
                         <Link
