@@ -109,6 +109,7 @@ export function ApprovalsPage() {
               setOnlyOverdue(false);
             }}
             resultCount={filtered.length}
+            className="bg-transparent px-0"
           >
             <div className="flex items-center gap-2">
               <Switch

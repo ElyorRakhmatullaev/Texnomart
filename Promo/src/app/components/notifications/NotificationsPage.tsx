@@ -126,6 +126,7 @@ export function NotificationsPage() {
         }
         onClear={() => setTypeFilter({ type: "all" })}
         resultCount={filtered.length}
+        className="bg-transparent px-0"
       />
 
       {filtered.length === 0 ? (

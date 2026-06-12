@@ -173,6 +173,7 @@ export function ShortCalendarPage() {
               setValues({ type: ALL, status: ALL, km: ALL, month: ALL })
             }
             resultCount={filtered.length}
+            className="bg-transparent px-0"
           >
             <div className="flex items-center gap-2">
               <Switch
