@@ -4,6 +4,9 @@ Reverse chronological. One-line summaries — implementation details are in the 
 
 ---
 
+## 2026-06-12 — Dashboard: match login logo to Promo
+Swapped the Broker Dashboard login logo to the same single-path Texnomart star/asterisk mark used on the Promo login page (`Dashboard/src/app/components/auth/AuthLayout.tsx`, both the desktop brand panel and the mobile header) — it previously used an older two-path "swoosh" SVG, so the two apps' login screens now share identical branding (differing only by the intended icon + title: `CreditCard` «Кредитный брокер» vs `CalendarRange` «Промо-календарь»). Verified `build:dashboard` passes. (Separately confirmed the prefilled login values are live in both deployed bundles — an empty-inputs report traced to a stale browser cache, not the code.)
+
 ## 2026-06-12 — Monorepo: prefilled demo login credentials (Dashboard + Promo)
 Prefilled the mock login inputs in both apps so the deployed demos are easier to sign into. `LoginPage.tsx` (Dashboard + Promo) now seeds the email/password state with `admin@texnomart.uz` / `Texnomart2026`; `Login2FAPage.tsx` (both) seeds the OTP value with `123456`. The 2FA page's auto-submit effect (fires when 6 digits are present) gained a `didMountRef` guard that **skips the initial render** — so the prefilled code stays visible on the 2FA screen instead of logging in instantly, while still auto-submitting if the code is retyped. Note left in place (unchanged): login still has the mock 30%-random-success gate (`Math.random() > 0.7`), so «Войти» may need a couple of clicks even with the credentials filled in. Verified both `build:dashboard` + `build:promo` pass.
 
