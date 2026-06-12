@@ -98,6 +98,24 @@ pnpm dev                        # Start all dev servers in parallel
 
 > **Note**: pnpm v11 requires build script approvals. `pnpm-workspace.yaml` has `allowBuilds` set to `true` for `@tailwindcss/oxide` and `esbuild`. If `pnpm install` fails with `ERR_PNPM_IGNORED_BUILDS`, check that file.
 
+## Deployment (GitHub Pages)
+
+Both apps deploy to GitHub Pages via `.github/workflows/deploy.yml` (push to `main` + manual `workflow_dispatch`), under subpaths on one site (no root landing page):
+
+| App | URL |
+|---|---|
+| **Broker Dashboard** | `https://elyorrakhmatullaev.github.io/Texnomart/dashboard/` |
+| **Texnomart Promo** | `https://elyorrakhmatullaev.github.io/Texnomart/promo/` |
+
+The workflow builds each app with a `BASE_PATH` env (`/Texnomart/dashboard/`, `/Texnomart/promo/`), assembles `_site/{dashboard,promo}` + a shared root `404.html`, and publishes via `actions/deploy-pages`.
+
+Three things make the React-Router SPAs work under a Pages subpath:
+- **Vite `base`** — each `vite.config.ts` reads `base: process.env.BASE_PATH ?? '/'` (local dev/build stay `/`).
+- **Router `basename`** — each `routes.tsx` passes `createBrowserRouter(routes, { basename })` with `basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/"`.
+- **SPA deep-link fallback** — the root `404.html` (GitHub Pages serves it for any unmatched path) detects the app segment, stashes the in-app path in `sessionStorage`, and redirects to the app root; a snippet in each `index.html` restores the URL via `history.replaceState` before React boots.
+
+> **One-time manual setup**: in the repo, **Settings → Pages → Build and deployment → Source = "GitHub Actions"**. Without it the deploy job fails.
+
 ## Shared Patterns Package (`@texnomart/shared`)
 
 Reusable pattern components in `packages/shared/src/`. Import from `@texnomart/shared/`:

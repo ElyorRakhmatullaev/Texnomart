@@ -1,8 +1,12 @@
 # AI Context — Texnomart Monorepo
 
-> Last updated: 2026-06-12 (Promo S8 — Аудит-лог — S8 complete; prompt pack S1–S8 fully built)
+> Last updated: 2026-06-12 (GitHub Pages deploy workflow added — both apps publish under subpaths)
 
 All UI is mock data — no backend or API integration exists yet. Architecture, structure, and conventions are in `CLAUDE.md` (root + per-project).
+
+## Deployment
+
+Both apps deploy to **GitHub Pages** via `.github/workflows/deploy.yml` (on push to `main` + manual run) under subpaths — Dashboard at `…/Texnomart/dashboard/`, Promo at `…/Texnomart/promo/` (no root landing page). Vite `base` (from `BASE_PATH` env), React-Router `basename` (from `import.meta.env.BASE_URL`), and a root `404.html` + `index.html` restore snippet handle the subpath + SPA deep-link routing. One-time manual step: repo Settings → Pages → Source = "GitHub Actions". See root `CLAUDE.md` § Deployment.
 
 ## Project Status
 
