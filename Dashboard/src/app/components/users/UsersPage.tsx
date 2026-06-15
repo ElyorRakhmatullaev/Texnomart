@@ -5,7 +5,6 @@ import { useNavigate } from "react-router";
 import {
   RefreshCw,
   Download,
-  Plus,
   Search,
   MoreHorizontal,
   Eye,
@@ -25,8 +24,6 @@ import { Badge } from "@texnomart/ui/badge";
 import { Avatar, AvatarFallback } from "@texnomart/ui/avatar";
 import { Card } from "@texnomart/ui/card";
 import { Checkbox } from "@texnomart/ui/checkbox";
-import { Switch } from "@texnomart/ui/switch";
-import { Label } from "@texnomart/ui/label";
 import {
   Table,
   TableBody,
@@ -49,20 +46,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@texnomart/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@texnomart/ui/dialog";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@texnomart/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -92,7 +75,6 @@ export function UsersPage() {
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [pageSize, setPageSize] = React.useState<number>(20);
   const [currentPage, setCurrentPage] = React.useState(1);
-  const [inviteOpen, setInviteOpen] = React.useState(false);
   const [syncExpanded, setSyncExpanded] = React.useState(false);
 
   const filteredUsers = React.useMemo(() => {
@@ -202,10 +184,6 @@ export function UsersPage() {
               <DropdownMenuItem>CSV</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" onClick={() => setInviteOpen(true)} className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90 shrink-0">
-            <Plus className="h-4 w-4 mr-2" />
-            Пригласить пользователя
-          </Button>
         </div>
       </div>
 
@@ -479,147 +457,6 @@ export function UsersPage() {
           </Button>
         </div>
       )}
-
-      {/* Invite Modal */}
-      <InviteUserDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </div>
-  );
-}
-
-function InviteUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const [inviteTab, setInviteTab] = React.useState("email");
-  const [role, setRole] = React.useState<string>("");
-  const [branch, setBranch] = React.useState<string>("");
-  const [sendInstructions, setSendInstructions] = React.useState(true);
-
-  const showBranch = role === "operator" || role === "agent";
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Пригласить пользователя</DialogTitle>
-          <DialogDescription>
-            Добавьте нового пользователя в систему
-          </DialogDescription>
-        </DialogHeader>
-
-        <Tabs value={inviteTab} onValueChange={setInviteTab}>
-          <TabsList className="w-full">
-            <TabsTrigger value="email" className="flex-1">Пригласить по email</TabsTrigger>
-            <TabsTrigger value="password" className="flex-1">Создать с паролем</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="email" className="mt-4 space-y-4">
-            <div className="space-y-2">
-              <Label>ФИО</Label>
-              <Input placeholder="Фамилия Имя Отчество" />
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input type="email" placeholder="user@texnomart.uz" />
-            </div>
-            <div className="space-y-2">
-              <Label>Телефон</Label>
-              <Input placeholder="+998 XX XXX-XX-XX" />
-            </div>
-            <div className="space-y-2">
-              <Label>Роль</Label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите роль" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="operator">Оператор</SelectItem>
-                  <SelectItem value="agent">Агент</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {showBranch && (
-              <div className="space-y-2">
-                <Label>Филиал</Label>
-                <Select value={branch} onValueChange={setBranch}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Выберите филиал" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BRANCHES_LIST.map((b) => (
-                      <SelectItem key={b} value={b}>{b}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="send-instructions"
-                checked={sendInstructions}
-                onCheckedChange={(v) => setSendInstructions(!!v)}
-              />
-              <Label htmlFor="send-instructions" className="text-sm">
-                Отправить инструкцию по входу
-              </Label>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="password" className="mt-4 space-y-4">
-            <div className="space-y-2">
-              <Label>ФИО</Label>
-              <Input placeholder="Фамилия Имя Отчество" />
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input type="email" placeholder="user@texnomart.uz" />
-            </div>
-            <div className="space-y-2">
-              <Label>Телефон</Label>
-              <Input placeholder="+998 XX XXX-XX-XX" />
-            </div>
-            <div className="space-y-2">
-              <Label>Временный пароль</Label>
-              <Input type="text" placeholder="Минимум 8 символов" />
-            </div>
-            <div className="space-y-2">
-              <Label>Роль</Label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите роль" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="operator">Оператор</SelectItem>
-                  <SelectItem value="agent">Агент</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {showBranch && (
-              <div className="space-y-2">
-                <Label>Филиал</Label>
-                <Select value={branch} onValueChange={setBranch}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Выберите филиал" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BRANCHES_LIST.map((b) => (
-                      <SelectItem key={b} value={b}>{b}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-
-        <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Отмена
-          </Button>
-          <Button className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90">
-            {inviteTab === "email" ? "Пригласить" : "Создать"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

@@ -5,7 +5,6 @@ import { useNavigate } from "react-router";
 import {
   RefreshCw,
   Download,
-  Plus,
   Search,
   MoreHorizontal,
   Eye,
@@ -161,11 +160,6 @@ export function ClientsPage() {
           <Button variant="outline" size="sm" className="shrink-0">
             <Download className="h-4 w-4 mr-1.5" />
             <span className="hidden sm:inline">Экспорт</span>
-          </Button>
-          <Button size="sm" className="bg-[#FFD60A] text-black hover:bg-[#f0ca00] shrink-0">
-            <Plus className="h-4 w-4 mr-1.5" />
-            <span className="hidden sm:inline">Добавить клиента</span>
-            <span className="sm:hidden">Добавить</span>
           </Button>
         </div>
       </div>

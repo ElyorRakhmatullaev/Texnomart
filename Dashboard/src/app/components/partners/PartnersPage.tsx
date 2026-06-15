@@ -4,8 +4,6 @@ import * as React from "react";
 import { useNavigate } from "react-router";
 import {
   RefreshCw,
-  Download,
-  Plus,
   Search,
   MoreHorizontal,
   Eye,
@@ -15,7 +13,6 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@texnomart/ui/button";
-import { Input } from "@texnomart/ui/input";
 import { Badge } from "@texnomart/ui/badge";
 import { Card } from "@texnomart/ui/card";
 import { Switch } from "@texnomart/ui/switch";
@@ -131,23 +128,6 @@ export function PartnersPage() {
           </div>
           <Button variant="ghost" size="icon" className="shrink-0">
             <RefreshCw className="h-4 w-4" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <Download className="h-4 w-4" />
-                <span className="hidden sm:inline">Экспорт</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>Экспорт в Excel</DropdownMenuItem>
-              <DropdownMenuItem>Экспорт в CSV</DropdownMenuItem>
-              <DropdownMenuItem>Экспорт в PDF</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button className="bg-[#FFD60A] text-black hover:bg-[#FFD60A]/90 gap-2">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Добавить партнёра</span>
           </Button>
         </div>
       </div>
