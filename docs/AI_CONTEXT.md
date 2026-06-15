@@ -1,6 +1,6 @@
 # AI Context — Texnomart Monorepo
 
-> Last updated: 2026-06-12 (prefilled demo login credentials in both apps; GitHub Pages deploy workflow)
+> Last updated: 2026-06-15 (Broker Dashboard client feedback: removed 2FA, RU + O'zbek-Latin only, Applications table-only + real filters/sort/search/pagination, removed add-client / add-partner + partner-export / invite-user)
 
 All UI is mock data — no backend or API integration exists yet. Architecture, structure, and conventions are in `CLAUDE.md` (root + per-project).
 
@@ -8,7 +8,7 @@ All UI is mock data — no backend or API integration exists yet. Architecture, 
 
 Both apps deploy to **GitHub Pages** via `.github/workflows/deploy.yml` (on push to `main` + manual run) under subpaths — Dashboard at `…/Texnomart/dashboard/`, Promo at `…/Texnomart/promo/` (no root landing page). Vite `base` (from `BASE_PATH` env), React-Router `basename` (from `import.meta.env.BASE_URL`), and a root `404.html` + `index.html` restore snippet handle the subpath + SPA deep-link routing. One-time manual step: repo Settings → Pages → Source = "GitHub Actions". See root `CLAUDE.md` § Deployment.
 
-**Demo login** (both apps): the login inputs are prefilled — `admin@texnomart.uz` / `Texnomart2026` + 2FA `123456`. The mock login still has a 30%-random-success gate, so «Войти» may take a couple of clicks (any email/password works — it's not validated).
+**Demo login**: inputs are prefilled — `admin@texnomart.uz` / `Texnomart2026` (any value works; not validated). **Broker Dashboard** — email/password only, **no 2FA**, login always succeeds (one click → dashboard). **Promo** — still `/login` → 2FA `123456` → `/`, and still has the 30%-random-success gate (so «Войти» may take a couple of clicks).
 
 ## Project Status
 
@@ -21,15 +21,15 @@ Both apps deploy to **GitHub Pages** via `.github/workflows/deploy.yml` (on push
 
 - [ ] Geography map uses SVG placeholders — needs Yandex Maps API
 - [ ] Dark mode untested (CSS variables defined)
-- [ ] No pagination on Applications table
-- [ ] Filter chips are visual only (no real filtering)
-- [ ] `ApplicationDetailDrawer.tsx` is legacy — remove
-- [ ] No i18n system — language selector non-functional
+- [x] Applications table: pagination (10/20/50/100), real filters (Статус/Партнёр/Филиал Selects), sortable columns (Создано/Сумма/Статус), and search — done 2026-06-15 (Kanban view removed; table-only per feedback)
+- [x] Applications filters are now real (other list pages — clients/users/partners — already had real filters)
+- [ ] `ApplicationDetailDrawer.tsx` is legacy — remove (note: `KanbanView.tsx` removed 2026-06-15)
+- [ ] No runtime i18n system — language selector is display-only. Dashboard now offers RU + O'zbek (Лат.) only (Cyrillic removed per feedback, header + Settings i18n table + Profile selector); Promo keeps all three
 - [ ] MUI Material in dependencies but unused — remove
 - [ ] `globals.css` is empty
 - [ ] No tests
 - [ ] No API layer
-- [ ] ApplicationsPage list needs mobile Pattern K
+- [ ] ApplicationsPage list still needs mobile Pattern K (card list below md) — the 2026-06-15 rework kept one horizontally-scrolling table, per the "display only as a table" feedback
 - [ ] Detail pages other than Applications still use sticky action bars (can float mid-screen on short tabs); Applications uses the flex-column fixed-footer layout — consider converting the rest for consistency
 - [ ] **Promo**: prompt pack S1–S8 fully built (S1 short calendar + S2 full-calendar + S3 approvals + S4 change-management + S5 department reports + S6 notifications + S7 promo-type settings + S8 audit log). No module-screen placeholders remain
 - [ ] **Promo S8**: complete. `/audit` Аудит-лог (read-only, all roles, spec §11.9), two tabs. Tab 1 «Аудит-лог»: dense filterable action log (~21 reconstructed events; mono ids, tabular date+time, 8 action types as tinted chips, 4 object types акция/строка/отчёт/план, статус до→после `PromoStatusBadge` pair, comment) — пользователь/роль/тип действия/объект/диапазон-дат filters; sticky-header `Card` table → Mode-B cards + deferred «Фильтры» Sheet below md. Tab 2 «Свод контрольных событий»: per-campaign milestone timeline (план → отправка данных КМ → согл./откл. старшим КМ → согл./откл. КД → «Не участвует» → отправка отчёта; +отмена terminal) horizontal md+/vertical mobile, red overdue nodes (`OverdueTag` + responsible КМ) on the КМ-fill (start−21 кал.дн.) and report (start−17 кал.дн.) breaches, desktop notes legend, summary strip (count·overdue·avg раб.дн.). Mock limits: the log + timeline are **reconstructed from the existing seeds** (campaign statuses, version chains, review comments, cancellation/non-participation/report seeds) and are **seed-stale** — in-session actions on other screens are NOT appended; no per-person identity (role labels / first-participating-КМ name); the КМ-fill SLA (21 кал.дн.) is a mock value; the «отправка данных» date + its breach use the seeded version chain only (unseeded campaigns show the node without a date); avg approval time approximates КД-approval via the latest version date. **S8 complete — the prompt pack S1–S8 is done.**

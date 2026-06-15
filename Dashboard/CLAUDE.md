@@ -39,12 +39,12 @@ Dashboard/
         AlertsWidget.tsx              # Alerts/notifications panel
         GeographyMap.tsx              # SVG placeholder map (TODO: Yandex Maps)
         KeyboardShortcutsDialog.tsx   # Keyboard shortcuts help
-        auth/                         # Login, 2FA, ForgotPassword, ResetPassword, AuthContext
-        applications/                 # List (table + kanban), detail (7 tabs)
+        auth/                         # Login, ForgotPassword, ResetPassword, AuthContext (no 2FA)
+        applications/                 # List (table only — filters/sort/search/pagination), detail (7 tabs)
         clients/                      # List (table + mobile cards), detail (5 tabs)
         partners/                     # List (cards + table), detail (6 tabs)
         branches/                     # List (table + map), detail (5 tabs incl. priorities editor)
-        users/                        # List (table + mobile cards, sync panel, invite), detail (5 tabs)
+        users/                        # List (table + mobile cards, sync panel), detail (5 tabs)
         analytics/                    # Dense data page (KPIs, charts, grouping, cohort, reports)
         telegram/                     # Bot settings, templates, broadcasts, subscribers, analytics, FAQ
         notifications/                # History list, settings drawer
@@ -78,10 +78,9 @@ Dashboard/
 |---|---|---|
 | `/` | Dashboard | Done |
 | `/dashboard/:metricId` | KpiDetailPage | Done — 8 metrics with drill-down |
-| `/applications` | ApplicationsPage | Done — table + kanban, bulk actions |
+| `/applications` | ApplicationsPage | Done — table only, filters/sort/search/pagination, bulk actions |
 | `/applications/:id` | ApplicationDetailPage | Done — 7 tabs |
-| `/login` | LoginPage | Done — brute-force protection |
-| `/login/2fa` | Login2FAPage | Done — 6-digit OTP |
+| `/login` | LoginPage | Done — email/password only, no 2FA |
 | `/login/forgot-password` | ForgotPasswordPage | Done |
 | `/login/reset-password/:token` | ResetPasswordPage | Done |
 | `/clients` | ClientsPage | Done — table + mobile cards |
@@ -90,7 +89,7 @@ Dashboard/
 | `/partners/:id` | PartnerDetailPage | Done — 6 tabs |
 | `/branches` | BranchesPage | Done — table + map views |
 | `/branches/:id` | BranchDetailPage | Done — 5 tabs |
-| `/users` | UsersPage | Done — table, sync panel, invite |
+| `/users` | UsersPage | Done — table, sync panel (no invite) |
 | `/users/:id` | UserDetailPage | Done — 5 tabs |
 | `/analytics` | AnalyticsPage | Done — KPIs, charts, cohort, reports |
 | `/telegram` | TelegramPage | Done — 6 tabs |
@@ -104,11 +103,12 @@ All 14 prompt pack pages are complete.
 
 ## Auth Flow
 
-`/login` → (mock, 30% success) → `/login/2fa` → (OTP auto-submit) → `/` (Dashboard)
+`/login` → `/` (Dashboard) — **email/password only, no 2FA** (removed per client feedback). The mock login always succeeds.
 
-> **Demo login**: the inputs are prefilled — `admin@texnomart.uz` / `Texnomart2026` + 2FA `123456` (any value works; not validated). The 2FA auto-submit is guarded to skip the initial render so the prefilled code stays visible.
+> **Demo login**: the inputs are prefilled — `admin@texnomart.uz` / `Texnomart2026` (any value works; not validated). Submitting always logs in.
 
-- `AuthContext`: re-exports from `@texnomart/shared/auth/auth-context` (mock auth state in sessionStorage)
+- `AuthContext`: re-exports from `@texnomart/shared/auth/auth-context` (mock auth state in sessionStorage). `LoginPage` calls `verify2FA()` directly to authenticate and navigates to `/` — the shared context still exposes `login()`/`verify2FA()`/`needsTwoFactor`, which **Promo** uses for its own 2FA step (the shared context was not changed).
+- There is no `/login/2fa` route in the Dashboard anymore (`Login2FAPage.tsx` deleted).
 - `ProtectedLayout`: redirects unauthenticated → `/login`
 - `GuestLayout`: redirects authenticated → `/`
 - Logout wired in AppShell header user dropdown

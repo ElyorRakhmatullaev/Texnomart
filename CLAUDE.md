@@ -249,7 +249,7 @@ Status colors are defined as CSS variables in each project's `src/styles/theme.c
 - Currency: **UZS** (Uzbekistani som), formatted with `toLocaleString("ru-RU")`
 - Phone format: `+998 XX XXX-XX-XX`
 - Date locale: `date-fns/locale/ru`
-- Supported languages (selector exists): RU, O'zbek (Кирилл.), O'zbek (Лат.)
+- Supported languages (per-app, selector exists): **Dashboard** — RU, O'zbek (Лат.) only (Cyrillic dropped per client feedback); **Promo** — RU, O'zbek (Кирилл.), O'zbek (Лат.). The AppShell language list is configurable via `AppShellConfig.languages` (defaults to all three when omitted; the selector is display-only — no runtime i18n yet).
 
 ## Conventions
 
@@ -257,7 +257,7 @@ Status colors are defined as CSS variables in each project's `src/styles/theme.c
 - Components use `"use client"` directive (Figma Make convention, safe to keep).
 - **Detail views are always full pages** at `/entity/:id` — never side drawers. Only config/settings panels use drawers.
 - **Mobile responsive**: all pages must work at sm/md/lg/xl breakpoints (Pattern K).
-- Auth flow: `/login` → `/login/2fa` → `/` (Dashboard). Mock auth state in `AuthContext`.
+- Auth flow: **Dashboard** `/login` → `/` (email/password only, **no 2FA**, always succeeds); **Promo** `/login` → `/login/2fa` → `/` (still 2FA). Mock auth state in the shared `AuthContext` (unchanged — exposes both paths).
 - Dark mode: theme toggle exists, CSS variables defined in theme.css.
 
 ## When Adding a New Sub-Project
