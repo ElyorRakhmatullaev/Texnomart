@@ -21,7 +21,6 @@ import { SettingsPage } from "./components/settings/SettingsPage";
 import { ProfilePage } from "./components/profile/ProfilePage";
 import { KpiDetailPage } from "./components/dashboard/KpiDetailPage";
 import { LoginPage } from "./components/auth/LoginPage";
-import { Login2FAPage } from "./components/auth/Login2FAPage";
 import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "./components/auth/ResetPasswordPage";
 
@@ -68,7 +67,6 @@ export const router = createBrowserRouter([
     Component: GuestLayout,
     children: [
       { index: true, Component: LoginPage },
-      { path: "2fa", Component: Login2FAPage },
       { path: "forgot-password", Component: ForgotPasswordPage },
       { path: "reset-password/:token", Component: ResetPasswordPage },
     ],
