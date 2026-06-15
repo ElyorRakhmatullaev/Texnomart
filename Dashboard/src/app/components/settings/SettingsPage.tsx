@@ -347,7 +347,6 @@ function LocalizationSection() {
                   <TableRow>
                     <TableHead className="sticky left-0 bg-white z-10 font-medium">Ключ</TableHead>
                     <TableHead className="font-medium">RU</TableHead>
-                    <TableHead className="font-medium">UZ (Кир)</TableHead>
                     <TableHead className="font-medium">UZ (Лат)</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -358,7 +357,6 @@ function LocalizationSection() {
                         {t.key}
                       </TableCell>
                       <TableCell className="text-sm">{t.ru}</TableCell>
-                      <TableCell className="text-sm">{t.uzCyr}</TableCell>
                       <TableCell className="text-sm">{t.uzLat}</TableCell>
                     </TableRow>
                   ))}

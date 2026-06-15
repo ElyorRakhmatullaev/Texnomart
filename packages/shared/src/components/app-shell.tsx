@@ -222,6 +222,7 @@ function AppHeader({
   const ThemeIcon =
     theme === "light" ? Sun : theme === "dark" ? Moon : Monitor;
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const languages = config.languages ?? ["Русский", "O'zbek (Кир.)", "O'zbek (Lat.)"];
 
   return (
     <header className="sticky top-0 z-40 flex h-14 md:h-16 items-center gap-2 md:gap-4 border-b bg-background px-3 md:px-6">
@@ -251,9 +252,9 @@ function AppHeader({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>Русский</DropdownMenuItem>
-            <DropdownMenuItem>O'zbek (Кир.)</DropdownMenuItem>
-            <DropdownMenuItem>O'zbek (Lat.)</DropdownMenuItem>
+            {languages.map((l) => (
+              <DropdownMenuItem key={l}>{l}</DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
 

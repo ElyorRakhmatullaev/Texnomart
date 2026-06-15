@@ -55,6 +55,7 @@ export interface AppShellConfig {
   };
   searchPlaceholder?: string;
   collapseLabel?: string;
+  languages?: string[]; // display labels for the header language dropdown; defaults to RU + both Uzbek variants
 }
 
 /**

@@ -50,6 +50,7 @@ export const dashboardShellConfig: AppShellConfig = {
     initials: "СМ",
   },
   searchPlaceholder: "Поиск заявок, клиентов, партнёров...",
+  languages: ["Русский", "O'zbek (Lotin)"],
   navGroups: [
     {
       items: [

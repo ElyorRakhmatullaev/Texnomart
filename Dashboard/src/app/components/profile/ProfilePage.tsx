@@ -947,7 +947,6 @@ function InterfaceTab() {
           <div className="space-y-2">
             {[
               { id: "ru", label: "Русский" },
-              { id: "uz-cyr", label: "Ўзбек (Кириллица)" },
               { id: "uz-lat", label: "O'zbek (Lotin)" },
             ].map((lang) => (
               <label

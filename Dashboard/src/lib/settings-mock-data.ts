@@ -196,8 +196,7 @@ export const mockRegional: RegionalSettings = {
 
 export const mockLanguages: LanguageEntry[] = [
   { code: "ru", name: "Русский", enabled: true, isDefault: true },
-  { code: "uz-cyr", name: "Ўзбек (Кириллица)", enabled: true, isDefault: false },
-  { code: "uz-lat", name: "O'zbek (Lotin)", enabled: false, isDefault: false },
+  { code: "uz-lat", name: "O'zbek (Lotin)", enabled: true, isDefault: false },
 ];
 
 export const mockTranslations: TranslationRow[] = [
