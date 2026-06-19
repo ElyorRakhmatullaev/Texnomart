@@ -135,9 +135,13 @@ export function AppShell() {
     [currentRole, unreadCount]
   );
 
-  // The full promo-calendar is a dense, wide data grid — let it use the full main
-  // width (no 1400px cap); other Promo screens keep the centered default.
-  const maxWidth = pathname.startsWith("/full-calendar") ? "100%" : "1400px";
+  // Dense, wide data grids use the full main width (no 1400px cap; §3.4 of the short-
+  // calendar feedback): the full promo-calendar and the short-calendar LIST (its detail
+  // page keeps the centered default). Other Promo screens stay centered.
+  const maxWidth =
+    pathname.startsWith("/full-calendar") || pathname === "/short-calendar"
+      ? "100%"
+      : "1400px";
 
   return (
     <SharedAppShell

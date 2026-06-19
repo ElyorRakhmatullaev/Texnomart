@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import {
   Check,
   ChevronRight,
-  Lock,
   Plus,
   Send,
   ThumbsDown,
@@ -34,6 +33,7 @@ import {
 import { DeadlineChips } from "../../../components/DeadlineChips";
 import { ReasonDialog } from "../../../components/ReasonDialog";
 import { PromoStatusBadge } from "../../../components/PromoStatusBadge";
+import { PlanApprovalTable } from "./PlanApprovalTable";
 import { useRole } from "../../role-context";
 import {
   PLAN_APPROVAL_CHAIN,
@@ -210,8 +210,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
               Создать строку плана
             </Button>
           ) : (
-            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Lock className="size-3.5" />
+            <span className="text-xs text-muted-foreground">
               {isApproved
                 ? "План утверждён — редактирование закрыто"
                 : "Редактирование доступно директору маркетинга до отправки"}
@@ -219,31 +218,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
           )}
         </CardHeader>
         <CardContent className="p-0">
-          <div className="divide-y">
-            {rows.map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center gap-3 px-4 py-3 text-sm"
-              >
-                <span className="w-[104px] shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
-                  {r.id}
-                </span>
-                <span className="w-[130px] shrink-0 truncate text-gray-600">
-                  {r.type}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-medium text-gray-900">
-                  {r.name}
-                </span>
-                <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {r.startDate.toLocaleDateString("ru-RU")} —{" "}
-                  {r.endDate.toLocaleDateString("ru-RU")}
-                </span>
-                {(isApproved || !canEditRows) && (
-                  <Lock className="size-3.5 shrink-0 text-muted-foreground" />
-                )}
-              </div>
-            ))}
-          </div>
+          <PlanApprovalTable rows={rows} />
         </CardContent>
       </Card>
 
