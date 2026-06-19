@@ -128,6 +128,23 @@ export const NOMENCLATURE: NomenclatureItem[] = NOMENCLATURE_SEED.map(
 
 // ── Campaigns ─────────────────────────────────────────────────────────────────
 
+/**
+ * One row of the «Распределение по категориям» block (client feedback §2): a single
+ * category participating in the campaign on a specific day, with the КМ responsible
+ * for it. The category label is its OWN structured field (not derived from the КМ's
+ * home category) so the block can be filtered, exported and analysed independently.
+ * Several entries may share a date — they render as stacked sub-rows without
+ * repeating the day. The block is optional («используется не во всех акциях», §2).
+ */
+export interface CategoryDistributionEntry {
+  /** День участия категории — дата внутри периода акции. */
+  date: Date;
+  /** Категория. */
+  category: string;
+  /** Ответственный КМ по категории. */
+  responsibleKmId: string;
+}
+
 export interface PromoCampaign {
   /** № промо (auto for planned; generated id for unplanned). */
   id: string;
@@ -143,6 +160,12 @@ export interface PromoCampaign {
   /** КМ participating, with their per-KM status. */
   participatingKmIds: string[];
   kmStatuses: Record<string, KmStatus>;
+  /**
+   * «Распределение по категориям» (feedback §2) — which categories participate on
+   * which days and the responsible КМ. Collapsed by default in the short calendar;
+   * present only for some campaigns (the block «используется не во всех акциях»).
+   */
+  categoryDistribution?: CategoryDistributionEntry[];
   planStatus?: PlanStatus;
   /**
    * Unplanned campaigns (§10): тип is editable only until the FIRST send for
@@ -205,6 +228,12 @@ export const CAMPAIGNS: PromoCampaign[] = [
       "km-3": "Согласовано старшим КМ (ожидает КД)",
       "km-6": "Не участвует",
     },
+    categoryDistribution: [
+      { date: new Date(2026, 10, 27), category: "Телевизоры и аудио", responsibleKmId: "km-1" },
+      { date: new Date(2026, 10, 27), category: "Холодильники и крупная БТ", responsibleKmId: "km-2" },
+      { date: new Date(2026, 10, 28), category: "Смартфоны и гаджеты", responsibleKmId: "km-3" },
+      { date: new Date(2026, 10, 30), category: "Климатическая техника", responsibleKmId: "km-6" },
+    ],
     planStatus: "Утверждён",
   },
   {
@@ -222,6 +251,11 @@ export const CAMPAIGNS: PromoCampaign[] = [
       "km-4": "Не заполнено / Ожидание корректировки от КМ",
       "km-5": "На согласовании у старшего КМ",
     },
+    categoryDistribution: [
+      { date: new Date(2026, 11, 15), category: "Холодильники и крупная БТ", responsibleKmId: "km-2" },
+      { date: new Date(2026, 11, 15), category: "Ноутбуки и ПК", responsibleKmId: "km-5" },
+      { date: new Date(2026, 11, 20), category: "Мелкая бытовая техника", responsibleKmId: "km-4" },
+    ],
     planStatus: "Утверждён",
   },
   {
@@ -237,6 +271,9 @@ export const CAMPAIGNS: PromoCampaign[] = [
     kmStatuses: {
       "km-4": "Принято коммерческим директором",
     },
+    categoryDistribution: [
+      { date: new Date(2026, 9, 1), category: "Мелкая бытовая техника", responsibleKmId: "km-4" },
+    ],
     planStatus: "Утверждён",
   },
   {
@@ -300,6 +337,10 @@ export const CAMPAIGNS: PromoCampaign[] = [
       "km-3": "Не заполнено / Ожидание корректировки от КМ",
       "km-5": "На согласовании у старшего КМ",
     },
+    categoryDistribution: [
+      { date: new Date(2026, 5, 22), category: "Смартфоны и гаджеты", responsibleKmId: "km-3" },
+      { date: new Date(2026, 6, 1), category: "Ноутбуки и ПК", responsibleKmId: "km-5" },
+    ],
     planStatus: "Утверждён",
   },
   {
@@ -498,6 +539,43 @@ export function aggregateKmStatuses(campaign: PromoCampaign): KmAggregate {
     }
   }
   return agg;
+}
+
+// ── Readiness «X из Y КМ согласовано» (client feedback §6 / §7) ────────────────
+
+export interface CampaignReadiness {
+  /** Согласовали (= «Принято КД») — числитель. */
+  done: number;
+  /**
+   * Знаменатель: участвующие КМ МИНУС «Не участвует» (§6 — «Не участвует» не
+   * учитывается в общем количестве для расчёта готовности).
+   */
+  total: number;
+  /** Согласовано (= done). */
+  accepted: number;
+  /** На согласовании (старший КМ + КД). */
+  atKd: number;
+  /** Не заполнено / на корректировке. */
+  notFilled: number;
+  /** Не участвует — показывается отдельно, вне знаменателя. */
+  notParticipating: number;
+}
+
+/**
+ * Roll a campaign's per-КМ statuses into the readiness model used by the merged
+ * «Общий статус / готовность акции» column (§6/§7). Reuses {@link aggregateKmStatuses};
+ * the denominator excludes «Не участвует» (e.g. 15 КМ − 2 не участвует → из 13).
+ */
+export function campaignReadiness(campaign: PromoCampaign): CampaignReadiness {
+  const agg = aggregateKmStatuses(campaign);
+  return {
+    done: agg.acceptedKd,
+    total: campaign.participatingKmIds.length - agg.notParticipating,
+    accepted: agg.acceptedKd,
+    atKd: agg.atKd,
+    notFilled: agg.notFilled,
+    notParticipating: agg.notParticipating,
+  };
 }
 
 // ── Full promo calendar: lines (S2 — spec §6, §8) ──────────────────────────────
@@ -1181,6 +1259,113 @@ export function actorForPlanStatus(status: PlanStatus): PromoRole | undefined {
     case "Отклонён":
       return undefined;
   }
+}
+
+// ── Per-campaign plan approval (client feedback §5) ────────────────────────────
+// In «План акций» the approval progress is shown SEPARATELY per campaign across the
+// three directors. Timing rules (§5): the marketing director sends the plan for
+// review 63 КАЛЕНДАРНЫХ days before the promo start and for approval 60 КАЛЕНДАРНЫХ
+// days before; the commercial & operational directors then have 3 РАБОЧИХ days each
+// from receipt. Each stage shows when it was sent / decided, whether it is «В срок»
+// or «Просрочка +N дн.», or «Ожидает этапа» when not yet reached. The seed mirrors
+// the client's example screen.
+
+export const PLAN_MARKETING_REVIEW_LEAD_DAYS = 63; // календарные
+export const PLAN_MARKETING_SUBMIT_LEAD_DAYS = 60; // календарные
+export const PLAN_DIRECTOR_SLA_WORKING_DAYS = 3; // рабочие
+
+export type PlanStageStatus = "onTime" | "overdue" | "waiting";
+
+/** Marketing-director stage: ознакомление (Озн.) + отправка на согласование (Отпр.). */
+export interface PlanStageMarketing {
+  reviewedAt: Date;
+  sentAt: Date;
+  status: Exclude<PlanStageStatus, "waiting">;
+  /** Дней просрочки when status === "overdue". */
+  overdueDays?: number;
+}
+
+/** КД / ОД stage: a single согласование decision, or «Ожидает этапа» (waiting). */
+export interface PlanStageDirector {
+  /** Дата согласования; undefined — этап ещё не достигнут. */
+  decidedAt?: Date;
+  status: PlanStageStatus;
+  overdueDays?: number;
+}
+
+export interface CampaignPlanApproval {
+  campaignId: string;
+  marketing: PlanStageMarketing;
+  kd: PlanStageDirector;
+  od: PlanStageDirector;
+}
+
+export const PLAN_APPROVALS: CampaignPlanApproval[] = [
+  {
+    campaignId: "PR-2026-001",
+    marketing: {
+      reviewedAt: new Date(2026, 7, 24, 11, 10),
+      sentAt: new Date(2026, 7, 27, 9, 30),
+      status: "onTime",
+    },
+    kd: { decidedAt: new Date(2026, 8, 30, 10, 15), status: "onTime" },
+    od: { decidedAt: new Date(2026, 9, 2, 10, 40), status: "onTime" },
+  },
+  {
+    campaignId: "PR-2026-002",
+    marketing: {
+      reviewedAt: new Date(2026, 9, 12, 14, 25),
+      sentAt: new Date(2026, 9, 14, 10, 0),
+      status: "onTime",
+    },
+    kd: { decidedAt: new Date(2026, 9, 17, 11, 5), status: "onTime" },
+    od: { decidedAt: new Date(2026, 9, 23, 9, 20), status: "overdue", overdueDays: 1 },
+  },
+  {
+    campaignId: "PR-2026-003",
+    marketing: {
+      reviewedAt: new Date(2026, 6, 26, 16, 40),
+      sentAt: new Date(2026, 6, 30, 9, 15),
+      status: "onTime",
+    },
+    kd: { decidedAt: new Date(2026, 7, 3, 14, 10), status: "onTime" },
+    od: { decidedAt: new Date(2026, 7, 6, 11, 30), status: "onTime" },
+  },
+  {
+    campaignId: "PR-2026-005",
+    marketing: {
+      reviewedAt: new Date(2026, 4, 29, 10, 5),
+      sentAt: new Date(2026, 5, 1, 9, 20),
+      status: "onTime",
+    },
+    kd: { decidedAt: new Date(2026, 5, 5, 18, 45), status: "overdue", overdueDays: 3 },
+    od: { decidedAt: new Date(2026, 5, 9, 10, 30), status: "onTime" },
+  },
+  {
+    campaignId: "PR-2026-006",
+    marketing: {
+      reviewedAt: new Date(2026, 3, 20, 15, 20),
+      sentAt: new Date(2026, 4, 4, 8, 45),
+      status: "overdue",
+      overdueDays: 1,
+    },
+    kd: { decidedAt: new Date(2026, 4, 7, 10, 0), status: "onTime" },
+    od: { status: "waiting" },
+  },
+  {
+    campaignId: "PR-2026-007",
+    marketing: {
+      reviewedAt: new Date(2026, 5, 1, 12, 10),
+      sentAt: new Date(2026, 5, 2, 9, 40),
+      status: "onTime",
+    },
+    kd: { decidedAt: new Date(2026, 5, 5, 10, 20), status: "onTime" },
+    od: { decidedAt: new Date(2026, 5, 10, 16, 30), status: "overdue", overdueDays: 1 },
+  },
+];
+
+export function getPlanApproval(campaignId: string): CampaignPlanApproval | undefined {
+  return PLAN_APPROVALS.find((p) => p.campaignId === campaignId);
 }
 
 /**
