@@ -8,7 +8,7 @@ Monorepo containing Texnomart web applications with a shared design system, comp
 
 | Project | Path | Description | Status |
 |---|---|---|---|
-| **Broker Dashboard** | `Dashboard/` | BNPL credit broker admin panel (23 routes, React Router) | Active |
+| **Broker Dashboard** | `Dashboard/` | BNPL credit broker admin panel (22 routes, React Router) | Active |
 | **Texnomart Promo** | `Promo/` | Promo-calendar: planning & approval of promo campaigns (role-based, 10 routes) | Active — bootstrap + Master shell + S1 done; **S2 complete (Phases 1–5)**; **S3 complete (Phases 1–3)**; **S4 complete (Phases 1–3)**; **S5 complete**; **S6 complete**; **S7 complete**; **S8 complete** — prompt pack S1–S8 fully built |
 | **Shared UI** | `packages/ui/` | shadcn/ui component library (46 components + 2 utilities) | Active |
 | **Shared Patterns** | `packages/shared/` | Reusable pattern components, auth, hooks, formatters | Active |
