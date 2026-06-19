@@ -542,3 +542,16 @@ Documented mistakes, gotchas, and learnings from project work. Never remove old 
 
 ### Prefilled Demo Creds Don't Bypass a Random-Success Mock — They're Independent
 - The login inputs are prefilled for demo convenience (`admin@texnomart.uz` / `Texnomart2026`), but the mock `handleSubmit` still gates on `Math.random() > 0.7` (30% success) and never reads the email/password — so prefilling the fields does NOT make login deterministic; «Войти» can still need several clicks. If a one-click reliable demo login is wanted, that's a separate change to the success condition (e.g. succeed when the default creds are present), not a side effect of prefilling. Kept the random gate as-is (only the input defaults were requested).
+
+---
+
+## 2026-06-19 — Texnomart Promo: Sticky table header that scrolls with the page
+
+### A Horizontal-Scroll Pane Traps `position:sticky` — Split the Header Out, Don't Fight It
+- A Pattern-F table where the right pane is `overflow-x-auto` cannot host a vertical sticky header that sticks to the **page** scroll: any ancestor with `overflow` ≠ `visible` becomes the sticky containing block, so a header inside the horizontal-scroll pane sticks to *that pane* (which scrolls away with the page), not the page. First attempt over-engineered around it (split header/body bands + an internal `max-h` vertical scroll + a synced *top* scrollbar) — which the client rejected: they wanted vertical scroll on the **page** and only the **bottom** horizontal scrollbar. The clean structure: a separate **header band** (frozen-header + an `overflow-hidden` scroll-header) as a sibling **above** the body, the body's single `overflow-x-auto` pane owning the one bottom scrollbar, and a one-line `onScroll` that mirrors `body.scrollLeft → header.scrollLeft`. The header band gets `position: sticky` and the page (the `<main overflow-auto>`) owns vertical scroll. No top scrollbar, no internal vertical scroll.
+
+### `overflow-clip` Rounds the Corners WITHOUT Trapping the Page-Sticky Header (unlike `overflow-hidden`)
+- To clip a `Card` to its `rounded-xl` corners you normally use `overflow-hidden` — but `overflow:hidden` **is** a scroll container, so it traps the sticky header (sticks to the Card, which doesn't scroll → header scrolls away). `overflow: clip` (Tailwind `overflow-clip`) clips to the border-radius **exactly like hidden** but is **not** a scroll container, so a descendant `sticky` element still resolves against `<main>`. Verified: with `overflow-clip` the corners round (computed `border-radius: 14px`, border intact) AND the header still pins on page scroll. Use `overflow-clip` whenever you need rounded clipping over a sticky/positioned descendant.
+
+### Negative Sticky `top` Cancels the Scroll Container's Padding So a Pinned Header Sits Flush
+- `<main>` has `p-3 md:p-4` (16px). A header with `sticky top-0` pins at the **content-box** top — i.e. 16px below `<main>`'s border-box top — leaving a 16px band where rows scroll visibly *above* the pinned header. Setting `sticky -top-4` (`top: -16px`, matching the container's padding-top) pins it flush at the container's top edge, covering the padding gap. Negative `top` only affects the *stuck* position, never the at-rest flow, so there's no layout shift. Measured: pinned header `top` went 120 → **104** (== `main.getBoundingClientRect().top`).
