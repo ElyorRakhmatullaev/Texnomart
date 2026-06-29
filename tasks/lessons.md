@@ -555,3 +555,25 @@ Documented mistakes, gotchas, and learnings from project work. Never remove old 
 
 ### Negative Sticky `top` Cancels the Scroll Container's Padding So a Pinned Header Sits Flush
 - `<main>` has `p-3 md:p-4` (16px). A header with `sticky top-0` pins at the **content-box** top — i.e. 16px below `<main>`'s border-box top — leaving a 16px band where rows scroll visibly *above* the pinned header. Setting `sticky -top-4` (`top: -16px`, matching the container's padding-top) pins it flush at the container's top edge, covering the padding gap. Negative `top` only affects the *stuck* position, never the at-rest flow, so there's no layout shift. Measured: pinned header `top` went 120 → **104** (== `main.getBoundingClientRect().top`).
+
+---
+
+## 2026-06-29 — Texnomart Promo: Краткий промо-календарь client feedback V2
+
+### Client Feedback Reverses Itself — Re-Add the Synced Top Scrollbar the Prior Round Removed
+- The 2026-06-19 round explicitly removed a synced *top* horizontal scrollbar (client wanted bottom-only + page vertical scroll); the V2 round (§1) asks for the **top sticky scrollbar back**, synced with the bottom. Don't treat a removed feature as permanently settled — feedback flip-flops. Re-added it *inside the existing page-sticky header band* (so it pins with the header, §13) rather than reintroducing an internal vertical scroll: a spacer the width of the frozen pane + a track whose inner width = the body's `scrollWidth`, both **measured via `ResizeObserver`** (re-measured on data/column/expand changes since `scrollWidth` changes aren't size-observed on the pane itself — add the deps).
+
+### Three Synced Horizontal Scrollers: Idempotent `scrollLeft` Writes Beat a Re-Entrancy Flag
+- Keeping a top scrollbar, a header band (`overflow-hidden`), and the body's bottom scrollbar in sync is a feedback-loop risk: scroller A sets B's `scrollLeft` → B fires `scroll` → sets A back. A `syncing` ref + `requestAnimationFrame` release works but can **drop frames during fast scroll** (events within the same frame are swallowed). Cleaner: write the other scrollers' `scrollLeft` **only when the value actually differs** (`if (el.scrollLeft !== x) el.scrollLeft = x`). Setting `scrollLeft` to its current value fires no event, so the cascade self-terminates on the first equal write — no flag, no rAF, no dropped frames. (The `overflow-hidden` header never user-scrolls, so it never originates an event.)
+
+### A Per-Cell Collapsible Block in a Pattern-F Grid Must Feed the SHARED Row-Height Calc
+- §3 wants each «Статус готовности акции» cell independently collapsible/expandable, and expanding makes the cell taller. In a Pattern-F split-pane the two panes only stay row-aligned because both read one `rowHeights[i]`. So track the expanded cells in a `Set<campaignId>` **in the table** (not inside the cell) and fold it into that same height calc: `Math.max(BASE, distributionH, expandedReadiness.has(id) ? 150 : 0)`. Both panes re-render and grow together — verified aligned at the taller height. A cell that owned its own height (local `useState`) would desync the frozen pane.
+
+### To Host a Toggle Button Inside a Clickable Row, the Row Can't Be a `<button>`
+- The scrolling-pane row was a `<button>` (navigates to the detail page on click). The §3 collapse toggle is a real `<button>` that lives *inside* the readiness cell → a button nested in a button (invalid HTML; React/browser misbehaves). Fix: make the row a `<div role="button" tabIndex={0}>` with an `onClick` + an Enter/Space `onKeyDown`, and `e.stopPropagation()` on the inner toggle so it doesn't also navigate. (This is the same restructure §10's clickable per-КМ-status cells will need — do it once.)
+
+### Proportional Segment Widths = `flex-grow: count` Over a Min-Width Floor
+- §3's bar needs widths where 0 → minimum, 1 wider than 0, 3 > 2 > 1, and equal counts equal — driven by the КМ count per status. `style={{ flexGrow: count, flexBasis: 0, minWidth }}` does exactly this: a 0-count segment falls back to `minWidth` (the floor, sized to fit the longest expanded label), and the leftover space is split **proportionally to count**, so every ordering rule holds with one line. The label block under each segment uses the *same* `flexGrow`/`minWidth`, so it sits strictly under its segment and never bleeds into a neighbour.
+
+### Renaming a String-Union Status Needs an Exhaustive Grep — `vite build` Won't Catch Stragglers
+- `vite build` transpiles but does **not** typecheck (no `tsc` in the pipeline), so a stale `case "Принято коммерческим директором"` after renaming that `KmStatus` member compiles fine and silently never matches. When reworking a status taxonomy globally, grep the whole app for every old literal (and partial substrings) rather than trusting the compiler — and remember **audit-log/history `statusFrom`/`statusTo` are typed `string`**, so they won't even surface as type errors; update them for display consistency too. Then re-verify in-browser (the dropdown lists the right statuses, badges render, the readiness counts add up).
