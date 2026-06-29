@@ -87,9 +87,9 @@ Promo/
           ReviewActionsPanel.tsx    #   data vs «Не участвует» actions + КД «Установить Не участвует» + auto-escalation note + «Готовность кампании» advance gate + «Комментарии проверки» log; exports MobileReviewActionBar (fixed bottom, below lg)
         users/                      # Управление пользователями (Администратор) — UsersPage + список + модальные окна создания/сброса/назначения прав
           UsersPage.tsx             #   PageHeader + список пользователей; role-gated (Администратор); открывает модальные окна через dialog-state
-          UserCreateDialog.tsx      #   создание пользователя → временный пароль (показывается один раз); вызывает createUser из users-store
-          UserResetDialog.tsx       #   сброс пароля → новый временный пароль (показывается один раз)
-          UserActionsMenu.tsx       #   меню строки: назначить/отозвать admin, деактивировать/активировать; применяет guard usableAdminCount/canRevokeAdmin/canDeactivate
+          UsersTable.tsx            #   таблица пользователей + встроенное меню строки (RowMenu): назначить/отозвать admin, деактивировать/активировать; применяет guard usableAdminCount/canRevokeAdmin/canDeactivate
+          CreateUserDialog.tsx      #   создание пользователя → временный пароль (показывается один раз); вызывает createUser из users-store
+          TempPasswordDialog.tsx    #   сброс пароля → новый временный пароль (показывается один раз)
         auth/                       # Login, ForgotPassword, ResetPassword, ForcePasswordChange, AuthLayout, AuthContext (re-export), RequireAuth (re-export)
           ForcePasswordChangePage.tsx #  принудительная смена временного пароля; использует NewPasswordForm; перенаправляет в приложение после успешной смены
           NewPasswordForm.tsx       #  переиспользуемая форма «новый пароль + подтверждение»; применяется в ForcePasswordChangePage и (опционально) в ResetPassword
