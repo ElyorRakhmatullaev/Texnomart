@@ -4,7 +4,7 @@ import { cn } from "@texnomart/ui/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import type { KmAggregate } from "../../../lib/promo-mock-data";
 
-/** The four aggregated indicators (spec §4.6), each a soft-tint count chip. */
+/** The aggregated indicators (§3 taxonomy), each a soft-tint count chip. */
 const CHIPS: Array<{
   key: keyof KmAggregate;
   short: string;
@@ -13,23 +13,30 @@ const CHIPS: Array<{
   text: string;
 }> = [
   {
-    key: "atKd",
-    short: "На согл. с КД",
-    full: "На согласовании с коммерческим директором",
-    bg: "bg-amber-50",
-    text: "text-amber-700",
-  },
-  {
     key: "acceptedKd",
-    short: "Принято КД",
-    full: "Принято коммерческим директором",
+    short: "Согласовано КД",
+    full: "Согласовано КД",
     bg: "bg-emerald-50",
     text: "text-emerald-700",
   },
   {
+    key: "atKd",
+    short: "На согл. у КД",
+    full: "На согласовании у коммерческого директора",
+    bg: "bg-orange-50",
+    text: "text-orange-700",
+  },
+  {
+    key: "atSeniorKm",
+    short: "На согл. у ст. КМ",
+    full: "На согласовании у старшего КМ",
+    bg: "bg-amber-50",
+    text: "text-amber-700",
+  },
+  {
     key: "notFilled",
-    short: "Не заполнено",
-    full: "Не заполнено / Ожидание корректировки от КМ",
+    short: "На корр. / Не заполнено",
+    full: "На корректировке / Не заполнено",
     bg: "bg-red-50",
     text: "text-red-700",
   },

@@ -38,16 +38,16 @@ interface ReviewActionsPanelProps {
 /** A short note for why the panel is read-only (terminal status or wrong role). */
 function readonlyNote(item: ReviewItem, actingReviewer?: PromoRole): string {
   switch (item.kmStatus) {
-    case "Принято коммерческим директором":
-      return "Набор принят коммерческим директором.";
+    case "Согласовано КД":
+      return "Набор согласован коммерческим директором.";
     case "Не участвует":
       return item.nonParticipationByKd
         ? "«Не участвует» установлено коммерческим директором — финальное решение."
         : "«Не участвует» согласовано — КМ освобождён от участия.";
-    case "Согласовано старшим КМ (ожидает КД)":
-      return "Согласовано старшим КМ — ожидает коммерческого директора.";
-    case "Не заполнено / Ожидание корректировки от КМ":
+    case "Переотправлено на корректировку КМ":
       return "Набор возвращён КМ на корректировку.";
+    case "Отменена":
+      return "Акция отменена — согласование закрыто.";
     default:
       return actingReviewer
         ? `Сейчас действует: ${actingReviewer}.`
@@ -134,7 +134,7 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
   const isNonPart = item.kind === "non-participation";
   // КД may set «Не участвует» directly for a КМ whose data set isn't yet final.
   const kdCanSetNonPart =
-    isKd && !isNonPart && item.kmStatus !== "Принято коммерческим директором";
+    isKd && !isNonPart && item.kmStatus !== "Согласовано КД";
 
   return (
     <div className="space-y-4">

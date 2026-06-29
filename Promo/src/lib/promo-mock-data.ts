@@ -14,14 +14,23 @@ export type CampaignStatus =
   | "Согласовано и отправлено смежным отделам"
   | "Отменена";
 
-/** KM-level status — per (Promo + КМ). */
+/**
+ * KM-level status — per (Promo + КМ). Client feedback §5:
+ * - «Принято коммерческим директором» → «Согласовано КД».
+ * - «Согласовано старшим КМ (ожидает КД)» removed — senior-КМ approval auto-flips
+ *   straight to «На согласовании у коммерческого директора».
+ * - «Не заполнено / Ожидание корректировки от КМ» split into «Не заполнено» (never
+ *   filled) and «Переотправлено на корректировку КМ» (returned by senior КМ or КД).
+ * - «Отменена» added — auto-set for every КМ when the whole campaign is cancelled.
+ */
 export type KmStatus =
-  | "Не заполнено / Ожидание корректировки от КМ"
+  | "Не заполнено"
   | "На согласовании у старшего КМ"
-  | "Согласовано старшим КМ (ожидает КД)"
   | "На согласовании у коммерческого директора"
-  | "Принято коммерческим директором"
-  | "Не участвует";
+  | "Переотправлено на корректировку КМ"
+  | "Согласовано КД"
+  | "Не участвует"
+  | "Отменена";
 
 /** Plan-level status (plan workflow). */
 export type PlanStatus =
@@ -223,9 +232,9 @@ export const CAMPAIGNS: PromoCampaign[] = [
     status: "На согласовании у коммерческого директора",
     participatingKmIds: ["km-1", "km-2", "km-3", "km-6"],
     kmStatuses: {
-      "km-1": "Принято коммерческим директором",
+      "km-1": "Согласовано КД",
       "km-2": "На согласовании у коммерческого директора",
-      "km-3": "Согласовано старшим КМ (ожидает КД)",
+      "km-3": "На согласовании у коммерческого директора",
       "km-6": "Не участвует",
     },
     categoryDistribution: [
@@ -248,7 +257,7 @@ export const CAMPAIGNS: PromoCampaign[] = [
     participatingKmIds: ["km-2", "km-4", "km-5"],
     kmStatuses: {
       "km-2": "На согласовании у старшего КМ",
-      "km-4": "Не заполнено / Ожидание корректировки от КМ",
+      "km-4": "Не заполнено",
       "km-5": "На согласовании у старшего КМ",
     },
     categoryDistribution: [
@@ -269,7 +278,7 @@ export const CAMPAIGNS: PromoCampaign[] = [
     status: "Согласовано и отправлено смежным отделам",
     participatingKmIds: ["km-4"],
     kmStatuses: {
-      "km-4": "Принято коммерческим директором",
+      "km-4": "Согласовано КД",
     },
     categoryDistribution: [
       { date: new Date(2026, 9, 1), category: "Мелкая бытовая техника", responsibleKmId: "km-4" },
@@ -287,7 +296,8 @@ export const CAMPAIGNS: PromoCampaign[] = [
     status: "Отменена",
     participatingKmIds: ["km-1"],
     kmStatuses: {
-      "km-1": "Не участвует",
+      // §5: a full campaign cancellation sets every КМ to «Отменена».
+      "km-1": "Отменена",
     },
     planStatus: "Утверждён",
   },
@@ -302,7 +312,7 @@ export const CAMPAIGNS: PromoCampaign[] = [
     status: "Переотправлено на корректировку КМ",
     participatingKmIds: ["km-3"],
     kmStatuses: {
-      "km-3": "Не заполнено / Ожидание корректировки от КМ",
+      "km-3": "Переотправлено на корректировку КМ",
     },
     planStatus: "Утверждён",
   },
@@ -334,7 +344,7 @@ export const CAMPAIGNS: PromoCampaign[] = [
     status: "На согласовании у старшего КМ",
     participatingKmIds: ["km-3", "km-5"],
     kmStatuses: {
-      "km-3": "Не заполнено / Ожидание корректировки от КМ",
+      "km-3": "Не заполнено",
       "km-5": "На согласовании у старшего КМ",
     },
     categoryDistribution: [
@@ -369,7 +379,7 @@ export const CAMPAIGNS: PromoCampaign[] = [
     status: "Согласовано и отправлено смежным отделам",
     participatingKmIds: ["km-2"],
     kmStatuses: {
-      "km-2": "Принято коммерческим директором",
+      "km-2": "Согласовано КД",
     },
   },
 ];
@@ -462,7 +472,7 @@ export function createUnplannedCampaign(input: UnplannedCampaignInput): PromoCam
     endDate: input.endDate,
     status: "Черновик",
     participatingKmIds: [input.kmId],
-    kmStatuses: { [input.kmId]: "Не заполнено / Ожидание корректировки от КМ" },
+    kmStatuses: { [input.kmId]: "Не заполнено" },
     firstSendDone: false,
   };
 }
@@ -498,43 +508,55 @@ export function getOverdueDays(deadline: Date, ref: Date = new Date()): number {
 // ── Aggregated indicators (short-calendar row right side — spec §4.6) ──────────
 
 export interface KmAggregate {
-  /** «На согл. с КД» — submitted & in the КД pipeline (senior-KM step rolls in here). */
+  /** «На согл. у ст. КМ» — submitted, awaiting Старший КМ (yellow segment §3). */
+  atSeniorKm: number;
+  /** «На согл. у КД» — awaiting Коммерческий директор (orange segment §3). */
   atKd: number;
-  /** «Принято КД». */
+  /** «Согласовано КД». */
   acceptedKd: number;
-  /** «Не заполнено / Ожидание корректировки от КМ». */
+  /** «На корр. / Не заполнено» — «Не заполнено» + «Переотправлено на корректировку КМ». */
   notFilled: number;
   /** «Не участвует». */
   notParticipating: number;
+  /** «Отменена» — campaign fully cancelled (not shown in the §3 bar). */
+  cancelled: number;
 }
 
 /**
- * Roll a campaign's per-(Promo+КМ) statuses into the four aggregated indicators.
- * The intermediate senior-КМ step is NOT a separate chip — it rolls into «На согл. с КД»
- * (everything submitted and not yet accepted/declined and not «Не участвует»).
+ * Roll a campaign's per-(Promo+КМ) statuses into the aggregated indicators (§3).
+ * Client feedback splits «на согласовании» into two buckets: ст. КМ (yellow) and КД
+ * (orange). «Не заполнено» and «Переотправлено на корректировку КМ» both fold into
+ * the red «На корр. / Не заполнено» bucket.
  */
 export function aggregateKmStatuses(campaign: PromoCampaign): KmAggregate {
   const agg: KmAggregate = {
+    atSeniorKm: 0,
     atKd: 0,
     acceptedKd: 0,
     notFilled: 0,
     notParticipating: 0,
+    cancelled: 0,
   };
   for (const kmId of campaign.participatingKmIds) {
     switch (campaign.kmStatuses[kmId]) {
-      case "Принято коммерческим директором":
+      case "Согласовано КД":
         agg.acceptedKd++;
         break;
-      case "Не заполнено / Ожидание корректировки от КМ":
+      case "Не заполнено":
+      case "Переотправлено на корректировку КМ":
         agg.notFilled++;
         break;
       case "Не участвует":
         agg.notParticipating++;
         break;
       case "На согласовании у старшего КМ":
-      case "Согласовано старшим КМ (ожидает КД)":
+        agg.atSeniorKm++;
+        break;
       case "На согласовании у коммерческого директора":
         agg.atKd++;
+        break;
+      case "Отменена":
+        agg.cancelled++;
         break;
     }
   }
@@ -544,35 +566,39 @@ export function aggregateKmStatuses(campaign: PromoCampaign): KmAggregate {
 // ── Readiness «X из Y КМ согласовано» (client feedback §6 / §7) ────────────────
 
 export interface CampaignReadiness {
-  /** Согласовали (= «Принято КД») — числитель. */
+  /** Согласовали (= «Согласовано КД») — числитель «N из M». */
   done: number;
   /**
-   * Знаменатель: участвующие КМ МИНУС «Не участвует» (§6 — «Не участвует» не
-   * учитывается в общем количестве для расчёта готовности).
+   * Знаменатель: участвующие КМ МИНУС «Не участвует» И МИНУС «Отменена» (§3/§5 —
+   * эти статусы не учитываются в общем количестве для расчёта готовности).
    */
   total: number;
-  /** Согласовано (= done). */
+  /** Зелёный сегмент — «Согласовано КД» (= done). */
   accepted: number;
-  /** На согласовании (старший КМ + КД). */
+  /** Оранжевый сегмент — «На согл. у КД». */
   atKd: number;
-  /** Не заполнено / на корректировке. */
+  /** Жёлтый сегмент — «На согл. у ст. КМ». */
+  atSeniorKm: number;
+  /** Красный сегмент — «На корр. / Не заполнено». */
   notFilled: number;
-  /** Не участвует — показывается отдельно, вне знаменателя. */
+  /** Серый сегмент — «Не участвует» (показывается в плашке, вне знаменателя). */
   notParticipating: number;
 }
 
 /**
- * Roll a campaign's per-КМ statuses into the readiness model used by the merged
- * «Общий статус / готовность акции» column (§6/§7). Reuses {@link aggregateKmStatuses};
- * the denominator excludes «Не участвует» (e.g. 15 КМ − 2 не участвует → из 13).
+ * Roll a campaign's per-КМ statuses into the readiness model used by the «Статус
+ * готовности акции» column (§3). Reuses {@link aggregateKmStatuses}; the denominator
+ * excludes «Не участвует» and «Отменена» (e.g. 15 КМ − 2 не участвует → из 13).
  */
 export function campaignReadiness(campaign: PromoCampaign): CampaignReadiness {
   const agg = aggregateKmStatuses(campaign);
   return {
     done: agg.acceptedKd,
-    total: campaign.participatingKmIds.length - agg.notParticipating,
+    total:
+      campaign.participatingKmIds.length - agg.notParticipating - agg.cancelled,
     accepted: agg.acceptedKd,
     atKd: agg.atKd,
+    atSeniorKm: agg.atSeniorKm,
     notFilled: agg.notFilled,
     notParticipating: agg.notParticipating,
   };
@@ -1484,22 +1510,23 @@ export interface LineFeedback {
 
 /**
  * KM-level status a set lands in once the given reviewer approves it (spec §4.5.2).
- * For a «Не участвует» request, КД approval finalises the КМ as released
- * («Не участвует») rather than «Принято коммерческим директором».
+ * Client feedback §5: Старший КМ approval auto-flips straight to «На согласовании у
+ * коммерческого директора» (no intermediate «Согласовано старшим КМ» resting state).
+ * For a «Не участвует» request, КД approval finalises the КМ as «Не участвует».
  */
 export function approvedKmStatusFor(
   actor: PromoRole,
   kind: ReviewKind = "data"
 ): KmStatus {
-  if (actor === "Старший КМ") return "Согласовано старшим КМ (ожидает КД)";
-  return kind === "non-participation"
-    ? "Не участвует"
-    : "Принято коммерческим директором";
+  if (actor === "Старший КМ") return "На согласовании у коммерческого директора";
+  return kind === "non-participation" ? "Не участвует" : "Согласовано КД";
 }
 
-/** Rejecting ANY line returns the WHOLE КМ set here (spec §4.5.2). */
-export const REJECTED_KM_STATUS: KmStatus =
-  "Не заполнено / Ожидание корректировки от КМ";
+/**
+ * Rejecting ANY line returns the WHOLE КМ set here (spec §4.5.2). §5: «Переотправлено
+ * на корректировку КМ» applies regardless of who returned it (Старший КМ or КД).
+ */
+export const REJECTED_KM_STATUS: KmStatus = "Переотправлено на корректировку КМ";
 
 export function reviewItemId(campaignId: string, kmId: string): string {
   return `${campaignId}~${kmId}`;
@@ -1510,11 +1537,11 @@ export function reviewerForKmStatus(status: KmStatus): PromoRole | undefined {
   switch (status) {
     case "На согласовании у старшего КМ":
       return "Старший КМ";
-    case "Согласовано старшим КМ (ожидает КД)":
     case "На согласовании у коммерческого директора":
       return "Коммерческий директор";
     default:
-      // «Принято КД», «Не заполнено / на корректировке», «Не участвует» — terminal here.
+      // «Согласовано КД», «Не заполнено», «Переотправлено…», «Не участвует»,
+      // «Отменена» — terminal here (not awaiting a reviewer).
       return undefined;
   }
 }
@@ -1612,7 +1639,11 @@ export function reviewQueueFor(
 
 /** A КМ-level status counts as a FINAL decision (campaign may advance past it). */
 export function isFinalKmDecision(status: KmStatus): boolean {
-  return status === "Принято коммерческим директором" || status === "Не участвует";
+  return (
+    status === "Согласовано КД" ||
+    status === "Не участвует" ||
+    status === "Отменена"
+  );
 }
 
 export interface CampaignDecisionSummary {
@@ -1682,7 +1713,11 @@ export function participationsForKm(
 
 /** Whether a КМ may still raise «Не участвует» for a participation (not yet final). */
 export function canRequestNonParticipation(status: KmStatus): boolean {
-  return status !== "Не участвует" && status !== "Принято коммерческим директором";
+  return (
+    status !== "Не участвует" &&
+    status !== "Согласовано КД" &&
+    status !== "Отменена"
+  );
 }
 
 // ── S4 — Версионирование и изменения (§5.1, §7.1) ──────────────────────────────
@@ -2901,7 +2936,7 @@ const AUDIT_EVENTS_SEED: Omit<AuditEvent, "id">[] = [
     objectType: "акция",
     objectLabel: "1+1 на мелкую бытовую технику",
     campaignId: "PR-2026-003",
-    statusFrom: "Не заполнено / Ожидание корректировки от КМ",
+    statusFrom: "Не заполнено",
     statusTo: "На согласовании у старшего КМ",
   },
   {
@@ -2913,7 +2948,7 @@ const AUDIT_EVENTS_SEED: Omit<AuditEvent, "id">[] = [
     objectLabel: "1+1 на мелкую бытовую технику",
     campaignId: "PR-2026-003",
     statusFrom: "На согласовании у старшего КМ",
-    statusTo: "Согласовано старшим КМ (ожидает КД)",
+    statusTo: "На согласовании у коммерческого директора",
   },
   {
     user: "Коммерческий директор",
@@ -2924,7 +2959,7 @@ const AUDIT_EVENTS_SEED: Omit<AuditEvent, "id">[] = [
     objectLabel: "1+1 на мелкую бытовую технику",
     campaignId: "PR-2026-003",
     statusFrom: "На согласовании у коммерческого директора",
-    statusTo: "Принято коммерческим директором",
+    statusTo: "Согласовано КД",
   },
   {
     user: "Коммерческий директор",
@@ -2946,7 +2981,7 @@ const AUDIT_EVENTS_SEED: Omit<AuditEvent, "id">[] = [
     objectType: "акция",
     objectLabel: "Чёрная пятница 2026",
     campaignId: "PR-2026-001",
-    statusFrom: "Не заполнено / Ожидание корректировки от КМ",
+    statusFrom: "Не заполнено",
     statusTo: "На согласовании у старшего КМ",
   },
   {
@@ -2978,7 +3013,7 @@ const AUDIT_EVENTS_SEED: Omit<AuditEvent, "id">[] = [
     objectLabel: "Чёрная пятница 2026 — КМ Алиев Бекзод",
     campaignId: "PR-2026-001",
     statusFrom: "На согласовании у коммерческого директора",
-    statusTo: "Принято коммерческим директором",
+    statusTo: "Согласовано КД",
   },
   {
     user: "Исмаилов Жасур",
@@ -3002,7 +3037,7 @@ const AUDIT_EVENTS_SEED: Omit<AuditEvent, "id">[] = [
     objectType: "акция",
     objectLabel: "Cashback на смартфоны",
     campaignId: "PR-2026-005",
-    statusFrom: "Не заполнено / Ожидание корректировки от КМ",
+    statusFrom: "Не заполнено",
     statusTo: "На согласовании у старшего КМ",
   },
   {
@@ -3014,7 +3049,7 @@ const AUDIT_EVENTS_SEED: Omit<AuditEvent, "id">[] = [
     objectLabel: "iPhone 15 128GB",
     campaignId: "PR-2026-005",
     statusFrom: "На согласовании у старшего КМ",
-    statusTo: "Не заполнено / Ожидание корректировки от КМ",
+    statusTo: "Переотправлено на корректировку КМ",
     comment: "Не заполнен прогноз продаж по 2 позициям — вернуть на доработку.",
   },
 
@@ -3153,15 +3188,15 @@ export function buildControlTimeline(
     getCategoryManager(campaign.participatingKmIds[0] ?? "")?.name ??
     "Категорийный менеджер";
   const statuses = Object.values(campaign.kmStatuses);
-  const anyAccepted = statuses.includes("Принято коммерческим директором");
+  const anyAccepted = statuses.includes("Согласовано КД");
   const anyAtKd =
     campaign.status === "На согласовании у коммерческого директора" ||
-    statuses.includes("На согласовании у коммерческого директора") ||
-    statuses.includes("Согласовано старшим КМ (ожидает КД)");
+    statuses.includes("На согласовании у коммерческого директора");
   const anySeniorDone = anyAtKd || anyAccepted;
   const rejected =
     campaign.status === "Переотправлено на корректировку КМ" ||
-    statuses.includes("Не заполнено / Ожидание корректировки от КМ");
+    statuses.includes("Переотправлено на корректировку КМ") ||
+    statuses.includes("Не заполнено");
   const anyNonPart = statuses.includes("Не участвует");
   const sent = isApprovedCampaign(campaign);
   // Data was submitted if a version was sent OR any status moved past «не заполнено»
