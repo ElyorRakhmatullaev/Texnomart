@@ -15,6 +15,7 @@ import { DeadlineChips } from "../../../components/DeadlineChips";
 import { AggregatedIndicators } from "./AggregatedIndicators";
 import {
   aggregateKmStatuses,
+  formatPromoNo,
   getCampaignById,
   getCategoryManager,
   getFillDeadline,
@@ -59,7 +60,7 @@ export function ShortCalendarDetailPage() {
         title={campaign.name}
         subtitle={
           <span className="tabular-nums">
-            {campaign.id} · {campaign.type}
+            № {formatPromoNo(campaign.id)} · {campaign.type}
           </span>
         }
         badges={

@@ -16,9 +16,11 @@ import {
 } from "@texnomart/ui/select";
 import {
   CATEGORY_MANAGERS,
+  formatPromoNo,
   PROMO_TYPES,
   type PromoCampaign,
 } from "../../../lib/promo-mock-data";
+import { PromoNoFilter } from "./PromoNoFilter";
 
 // Filters split by purpose (client feedback §1): operational (№ промо, тип, КМ,
 // статус КМ по акции) · control (период-диапазон, общий статус акции) · distribution
@@ -28,7 +30,8 @@ export const ALL = "all";
 
 export interface CalendarFilterValues {
   // Операционные
-  promoId: string;
+  /** Selected № промо (campaign ids) — multi-select (§9). */
+  promoIds: string[];
   type: string;
   km: string;
   kmStatus: string;
@@ -42,7 +45,7 @@ export interface CalendarFilterValues {
 }
 
 export const DEFAULT_FILTER_VALUES: CalendarFilterValues = {
-  promoId: "",
+  promoIds: [],
   type: ALL,
   km: ALL,
   kmStatus: ALL,
@@ -61,15 +64,21 @@ export function hasDistributionFilter(v: CalendarFilterValues): boolean {
 }
 
 export function isFilterActive(v: CalendarFilterValues): boolean {
-  return (
-    v.promoId.trim() !== "" ||
-    v.type !== ALL ||
-    v.km !== ALL ||
-    v.kmStatus !== ALL ||
-    v.periodFrom !== "" ||
-    v.periodTo !== "" ||
-    hasDistributionFilter(v)
-  );
+  return countActiveFilters(v) > 0;
+}
+
+/** Number of active filter facets (§7 — shown on the collapsed «Фильтры» toggle). */
+export function countActiveFilters(v: CalendarFilterValues): number {
+  let n = 0;
+  if (v.promoIds.length > 0) n += 1;
+  if (v.type !== ALL) n += 1;
+  if (v.km !== ALL) n += 1;
+  if (v.kmStatus !== ALL) n += 1;
+  if (v.periodFrom !== "" || v.periodTo !== "") n += 1;
+  if (v.distWeekday !== ALL) n += 1;
+  if (v.distCategory !== ALL) n += 1;
+  if (v.distKm !== ALL) n += 1;
+  return n;
 }
 
 // «Статус КМ по акции» (client feedback §5): exactly these 6, in this order.
@@ -190,6 +199,17 @@ export function CalendarFilters({
   const kmOptions = CATEGORY_MANAGERS.map((k) => ({ value: k.id, label: k.name }));
   const kmStatusOptions = KM_STATUSES.map((s) => ({ value: s, label: s }));
 
+  // «№ промо» options (§9) — sorted by the short «26-N» number.
+  const promoNoOptions = React.useMemo(
+    () =>
+      campaigns
+        .map((c) => ({ id: c.id, no: formatPromoNo(c.id), name: c.name }))
+        .sort((a, b) =>
+          a.no.localeCompare(b.no, "ru", { numeric: true })
+        ),
+    [campaigns]
+  );
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start gap-x-5 gap-y-3">
@@ -199,11 +219,10 @@ export function CalendarFilters({
             <span className="text-[11px] font-medium text-muted-foreground">
               № промо
             </span>
-            <Input
-              value={values.promoId}
-              onChange={(e) => onChange("promoId", e.target.value)}
-              placeholder="PR-2026-…"
-              className="h-8 w-[140px] bg-white text-sm"
+            <PromoNoFilter
+              options={promoNoOptions}
+              selected={values.promoIds}
+              onChange={(ids) => onChange("promoIds", ids)}
             />
           </label>
           <FilterSelect

@@ -3,7 +3,14 @@
 import * as React from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { Info, Plus } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Info,
+  Plus,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { Button } from "@texnomart/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@texnomart/ui/tabs";
@@ -19,6 +26,7 @@ import { PlanMode } from "./PlanMode";
 import {
   ALL,
   CalendarFilters,
+  countActiveFilters,
   DEFAULT_FILTER_VALUES,
   hasDistributionFilter,
   type CalendarFilterValues,
@@ -26,9 +34,12 @@ import {
 import {
   CAMPAIGNS,
   aggregateKmStatuses,
+  formatPromoNo,
   getCategoryManager,
   getFillDeadline,
   getOverdueDays,
+  getReportSendStatus,
+  kmStatusDeepLink,
   type KmAggregate,
   type PromoCampaign,
 } from "../../../lib/promo-mock-data";
@@ -69,6 +80,10 @@ export function ShortCalendarPage() {
   const [hideCancelled, setHideCancelled] = React.useState(true);
   // «Распределение по категориям» collapsed by default — «используется не во всех акциях» (§2).
   const [distExpanded, setDistExpanded] = React.useState(false);
+  // The whole filter block is collapsible (§7) — open by default, with the active-facet
+  // count surfaced on the toggle so a collapsed block still signals it's filtering.
+  const [filtersOpen, setFiltersOpen] = React.useState(true);
+  const activeFilterCount = countActiveFilters(filters);
 
   const canCreatePlan = currentRole === "Директор маркетинга";
 
@@ -82,12 +97,12 @@ export function ShortCalendarPage() {
   const filtered = React.useMemo(() => {
     const from = parseDate(filters.periodFrom);
     const to = parseDate(filters.periodTo, true);
-    const q = filters.promoId.trim().toLowerCase();
 
     return PLANNED.filter((c) => {
       if (hideCancelled && c.cancelled) return false;
       // Операционные
-      if (q && !c.id.toLowerCase().includes(q)) return false;
+      if (filters.promoIds.length > 0 && !filters.promoIds.includes(c.id))
+        return false;
       if (filters.type !== ALL && c.type !== filters.type) return false;
       if (filters.km !== ALL && !c.participatingKmIds.includes(filters.km))
         return false;
@@ -197,16 +212,56 @@ export function ShortCalendarPage() {
         </TabsList>
 
         <TabsContent value="calendar" className="space-y-4">
-          <CalendarFilters
-            values={filters}
-            onChange={setFilter}
-            onClear={() => setFilters(DEFAULT_FILTER_VALUES)}
-            hideCancelled={hideCancelled}
-            onHideCancelledChange={setHideCancelled}
-            distExpanded={distExpanded}
-            onDistExpandedChange={setDistExpanded}
-            campaigns={PLANNED}
-          />
+          {/* Collapsible filter block (§7) — the «Фильтры» toggle shows the active
+              facet count so the collapsed state still signals filtering. */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => setFiltersOpen((o) => !o)}
+                aria-expanded={filtersOpen}
+              >
+                <SlidersHorizontal className="size-4" />
+                Фильтры
+                {activeFilterCount > 0 && (
+                  <span className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                )}
+                {filtersOpen ? (
+                  <ChevronUp className="size-4" />
+                ) : (
+                  <ChevronDown className="size-4" />
+                )}
+              </Button>
+              {!filtersOpen && activeFilterCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs text-gray-500"
+                  onClick={() => setFilters(DEFAULT_FILTER_VALUES)}
+                >
+                  <X className="mr-1 size-3" />
+                  Очистить
+                </Button>
+              )}
+            </div>
+
+            {filtersOpen && (
+              <CalendarFilters
+                values={filters}
+                onChange={setFilter}
+                onClear={() => setFilters(DEFAULT_FILTER_VALUES)}
+                hideCancelled={hideCancelled}
+                onHideCancelledChange={setHideCancelled}
+                distExpanded={distExpanded}
+                onDistExpandedChange={setDistExpanded}
+                campaigns={PLANNED}
+              />
+            )}
+          </div>
 
           {/* Desktop: Pattern F frozen-column grid */}
           <div className="hidden md:block">
@@ -215,6 +270,9 @@ export function ShortCalendarPage() {
               onRowClick={(id) => navigate(`/short-calendar/${id}`)}
               expanded={effectiveExpanded}
               kmStatusFilter={filters.kmStatus}
+              onKmStatusClick={(campaignId, kmId, status) =>
+                navigate(kmStatusDeepLink(campaignId, kmId, status))
+              }
             />
           </div>
 
@@ -254,6 +312,7 @@ function MobileCampaignCard({
   const agg = aggregateKmStatuses(c);
   const deadline = getFillDeadline(c);
   const overdue = getOverdueDays(deadline);
+  const report = getReportSendStatus(c);
   const kmNames = c.participatingKmIds
     .map((id) => getCategoryManager(id)?.name)
     .filter(Boolean)
@@ -263,7 +322,7 @@ function MobileCampaignCard({
     <MobileListCard
       onClick={onClick}
       title={c.name}
-      subtitle={`${c.id} · ${c.type}`}
+      subtitle={`№ ${formatPromoNo(c.id)} · ${c.type}`}
       status={<PromoStatusBadge status={c.status} />}
     >
       <div className="mt-2 space-y-2 text-xs text-muted-foreground">
@@ -272,6 +331,20 @@ function MobileCampaignCard({
           <span>· срок КМ:</span>
           <RuDate value={deadline} />
           <OverdueTag days={overdue} />
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span>Отчёт смежным:</span>
+          {report.sent ? (
+            <span className="font-medium text-emerald-700">
+              отправлено <RuDate value={report.sentAt!} /> · в.{report.versionNo}
+            </span>
+          ) : (
+            <>
+              <span>срок</span>
+              <RuDate value={report.deadline} />
+              <OverdueTag days={report.overdueDays} />
+            </>
+          )}
         </div>
         {kmNames && <div>КМ: {kmNames}</div>}
         <div className="font-medium text-gray-700">

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { CheckCircle2 } from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
 import { Card } from "@texnomart/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
@@ -10,10 +11,13 @@ import { PromoStatusBadge } from "../../../components/PromoStatusBadge";
 import { ReadinessCell } from "./ReadinessCell";
 import {
   CATEGORY_MANAGERS,
+  formatPromoNo,
   getFillDeadline,
   getOverdueDays,
+  getReportSendStatus,
   type CategoryDistributionEntry,
   type CategoryManager,
+  type KmStatus,
   type PromoCampaign,
 } from "../../../lib/promo-mock-data";
 
@@ -26,10 +30,12 @@ import {
 // overflow container traps `position:sticky`, so instead of relying on sticky we split
 // the table into a non-scrolling HEADER band over a vertically-scrolling BODY band, and
 // keep three horizontal scrollers in sync (a top scrollbar + the header + the body).
-const HEADER_H = "h-12";
-const BASE_ROW_H = 104; // px — fits the «Статус готовности акции» cell (collapsed: «N из M» + bar + markers)
-const READINESS_EXPANDED_H = 150; // px — a row whose readiness block is expanded (labels under each segment)
-const SUBROW_H = 34; // px per distribution sub-row (expanded)
+// Compact density (client feedback §11): the collapsed «Статус готовности акции» cell
+// (summary + bar + markers ≈ 52px) is the floor, so the base row is tightened from 104.
+const HEADER_H = "h-10";
+const BASE_ROW_H = 80; // px — fits the collapsed «Статус готовности акции» cell
+const READINESS_EXPANDED_H = 148; // px — a row whose readiness block is expanded (labels under each segment)
+const SUBROW_H = 32; // px per distribution sub-row (expanded)
 
 const CELL = "border-r border-gray-100";
 
@@ -85,6 +91,8 @@ interface ShortCalendarTableProps {
    * with this exact status are shown; the rest render «—».
    */
   kmStatusFilter?: string;
+  /** Click on a КМ-status cell → deep-link to /approvals or /full-calendar (§10). */
+  onKmStatusClick?: (campaignId: string, kmId: string, status: KmStatus) => void;
 }
 
 export function ShortCalendarTable({
@@ -92,6 +100,7 @@ export function ShortCalendarTable({
   onRowClick,
   expanded,
   kmStatusFilter,
+  onKmStatusClick,
 }: ShortCalendarTableProps) {
   const kmFilterActive = !!kmStatusFilter && kmStatusFilter !== "all";
   const kmColumns: CategoryManager[] = CATEGORY_MANAGERS;
@@ -194,7 +203,7 @@ export function ShortCalendarTable({
           <div
             ref={frozenHeadRef}
             className={cn(
-              "flex shrink-0 items-center gap-3 border-r px-4 text-[13px] font-semibold text-gray-700",
+              "flex shrink-0 items-center gap-2.5 border-r px-3 text-[13px] font-semibold text-gray-700",
               HEADER_H
             )}
           >
@@ -213,6 +222,7 @@ export function ShortCalendarTable({
             <span className={cn("w-[160px] px-3", CELL)}>
               Крайний срок заполнения КМ
             </span>
+            <span className={cn("w-[140px] px-3", CELL)}>Срок отчёта</span>
             {expanded && (
               <>
                 <span className={cn("w-[150px] px-3", CELL)}>День / дата</span>
@@ -224,6 +234,9 @@ export function ShortCalendarTable({
             )}
             <span className={cn("w-[340px] px-3", CELL)}>
               Статус готовности акции
+            </span>
+            <span className={cn("w-[180px] px-3", CELL)}>
+              Отправка смежным отделам
             </span>
             {kmColumns.map((km) => (
               <Tooltip key={km.id}>
@@ -254,12 +267,12 @@ export function ShortCalendarTable({
               onClick={() => onRowClick(c.id)}
               style={{ height: rowHeights[i] }}
               className={cn(
-                "flex w-full items-center gap-3 border-b px-4 text-left transition-colors hover:bg-gray-50",
+                "flex w-full items-center gap-2.5 border-b px-3 text-left transition-colors hover:bg-gray-50",
                 c.cancelled && "bg-red-50/60 hover:bg-red-50"
               )}
             >
               <span className="w-[104px] text-xs font-medium tabular-nums text-muted-foreground">
-                {c.id}
+                {formatPromoNo(c.id)}
               </span>
               <span className="w-[120px] truncate text-sm text-gray-700">
                 {c.type}
@@ -286,6 +299,7 @@ export function ShortCalendarTable({
             {campaigns.map((c, i) => {
               const deadline = getFillDeadline(c);
               const overdue = getOverdueDays(deadline);
+              const report = getReportSendStatus(c);
               const groups = groupDistribution(c.categoryDistribution ?? []);
               const hasDist = groups.length > 0;
 
@@ -336,6 +350,21 @@ export function ShortCalendarTable({
                       <RuDate value={deadline} />
                     </span>
                     <OverdueTag days={overdue} />
+                  </div>
+
+                  {/* Срок отчёта (§12) — старт − 17 кал. дн. (срок отправки отчёта
+                      смежным отделам); просрочка показывается только пока отчёт не
+                      отправлен. */}
+                  <div
+                    className={cn(
+                      "flex w-[140px] flex-col justify-center gap-1 px-3",
+                      CELL
+                    )}
+                  >
+                    <span className="text-sm tabular-nums text-gray-900">
+                      <RuDate value={report.deadline} />
+                    </span>
+                    {!report.sent && <OverdueTag days={report.overdueDays} />}
                   </div>
 
                   {/* «Распределение по категориям» — collapsible structured block (§2).
@@ -431,6 +460,37 @@ export function ShortCalendarTable({
                     />
                   </div>
 
+                  {/* Отправка смежным отделам (§12) — отправлен ли отчёт + дата/версия. */}
+                  <div
+                    className={cn(
+                      "flex w-[180px] flex-col justify-center gap-1 px-3",
+                      CELL
+                    )}
+                  >
+                    {report.sent ? (
+                      <>
+                        <span className="flex items-center gap-1 text-sm font-medium text-emerald-700">
+                          <CheckCircle2 className="size-3.5 shrink-0" />
+                          Отправлено
+                        </span>
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          <RuDate value={report.sentAt!} /> · в.{report.versionNo}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm text-muted-foreground">
+                          Не отправлено
+                        </span>
+                        {report.overdueDays > 0 && (
+                          <span className="text-[11px] font-medium text-red-600">
+                            отчёт просрочен
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+
                   {/* Статусы по КМ (union; §2 order — last). §5: when the «Статус КМ
                       по акции» filter is active, only cells with that status are shown. */}
                   {kmColumns.map((km) => {
@@ -445,7 +505,24 @@ export function ShortCalendarTable({
                         className={cn("flex w-[150px] items-center px-3", CELL)}
                       >
                         {shown ? (
-                          <PromoStatusBadge status={shown} />
+                          onKmStatusClick ? (
+                            // Clickable status (§10) — opens the relevant screen for
+                            // this (promo, КМ). stopPropagation so the row's detail
+                            // navigation doesn't also fire.
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onKmStatusClick(c.id, km.id, shown);
+                              }}
+                              title="Открыть статус по этой акции и КМ"
+                              className="rounded-full transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
+                            >
+                              <PromoStatusBadge status={shown} />
+                            </button>
+                          ) : (
+                            <PromoStatusBadge status={shown} />
+                          )
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}

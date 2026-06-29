@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
   Ban,
@@ -9,6 +10,7 @@ import {
   Clock,
   Copy,
   Info,
+  Link2,
   Plus,
   RefreshCw,
   Send,
@@ -65,6 +67,7 @@ import {
   detectDuplicate,
   diffCampaignChanges,
   effectiveFillDeadline,
+  formatPromoNo,
   getCampaignVersions,
   getCampaignsWithLines,
   getFullCalendarAccess,
@@ -234,6 +237,10 @@ export function FullCalendarPage() {
     km: ALL,
     priznak: ALL,
   });
+  // Deep link from the short calendar's КМ-status cell (§10) — ?promo= focuses one
+  // campaign; a banner offers to clear it back to the full list.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusPromo = searchParams.get("promo");
 
   // Nomenclature-entry state (§8.2.1): which campaign's add-picker is open, which
   // line's gift-picker is open, and a pending duplicate awaiting confirmation.
@@ -368,6 +375,9 @@ export function FullCalendarPage() {
 
   const filtered = React.useMemo(() => {
     return visibleCampaigns.filter((c) => {
+      // Deep-link focus (§10) — when ?promo= is set, show only that campaign
+      // (overrides «Скрыть отменённое» so a cancelled campaign is still reachable).
+      if (focusPromo) return c.id === focusPromo;
       // «Скрыть отменённое» (§5.3) — ON by default, hides cancelled campaigns.
       if (hideCancelled && c.cancelled) return false;
       if (values.type !== ALL && c.type !== values.type) return false;
@@ -381,7 +391,7 @@ export function FullCalendarPage() {
       }
       return true;
     });
-  }, [values, linesFor, visibleCampaigns, hideCancelled]);
+  }, [values, linesFor, visibleCampaigns, hideCancelled, focusPromo]);
 
   const totalLines = React.useMemo(
     () => filtered.reduce((s, c) => s + displayLinesFor(c.id).length, 0),
@@ -1026,6 +1036,31 @@ export function FullCalendarPage() {
               onChange={setVisibleGroups}
             />
           </FilterBar>
+
+          {focusPromo && (
+            // Deep-link banner (§10) — arrived from the short calendar's КМ-status cell.
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+              <Link2 className="size-4 shrink-0 text-gray-500" />
+              <span className="text-sm text-gray-700">
+                Показана акция по ссылке из календаря готовности:{" "}
+                <span className="font-medium">
+                  № {formatPromoNo(focusPromo)}
+                  {visibleCampaigns.find((c) => c.id === focusPromo)?.name
+                    ? ` · ${visibleCampaigns.find((c) => c.id === focusPromo)?.name}`
+                    : ""}
+                </span>
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto h-8 text-xs text-gray-500"
+                onClick={() => setSearchParams({})}
+              >
+                <X className="mr-1 size-3" />
+                Показать все акции
+              </Button>
+            </div>
+          )}
 
           {/* Bulk-select strip — appears once rows are selected (editor roles only). */}
           {editorMode && selectedIds.size > 0 && (
