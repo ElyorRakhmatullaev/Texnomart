@@ -4,6 +4,25 @@ Reverse chronological. One-line summaries — implementation details are in the 
 
 ---
 
+## 2026-06-29 — Texnomart Promo: раунд фидбэка #3 — под-проект #0+A (auth & accounts)
+Третий раунд фидбэка декомпозирован на 4 под-проекта: **#0+A** (auth & accounts — выполнен), **B** (тёмная тема), **C** (Профиль/Настройки), **D** (матрица прав). Реализован под-проект #0+A — Tasks 1–8.
+
+**Стор пользователей** (`Promo/src/lib/users-store.ts`, localStorage `promo:users`): seed с ≥2 активными Администраторами (`u-1`, `u-2`, `u-3`) + другие роли + один пользователь с `mustChangePassword`; helpers: `authenticate`, `createUser`, `resetPassword`, `setUserRole`, `setUserStatus`, `updatePassword`, `usableAdminCount`, `canRevokeAdmin`, `canDeactivate`, `generateTempPassword`.
+
+**Вход без 2FA**: `/login/2fa` и `Login2FAPage.tsx` удалены; `LoginPage` проверяет email+пароль по стору (5 попыток / 15-мин. блокировка); 30%-random-gate убран. Демо-учётки: `admin@texnomart.uz` / `Admin2026!` (Администратор) и `newuser@texnomart.uz` / `Temp1234!a` (flow принудительной смены).
+
+**Временный пароль + обязательная смена**: пользователи, созданные администратором, получают уникальный временный пароль (показывается один раз); при первом входе `mustChangePassword` → `/change-password` (`ForcePasswordChangePage` + переиспользуемый `NewPasswordForm`) перед входом в приложение.
+
+**Текущий пользователь** (`Promo/src/app/current-user-context.tsx`, sessionStorage `promo:current-user-id`): шапка отображает имя + инициалы вошедшего пользователя вместо хардкода.
+
+**Экран управления учётками** `/users` (`Promo/src/app/components/users/*`, только Администратор): список + создание / сброс пароля / назначение-отзыв прав администратора / деактивация-активация; **guard «≥2 рабочих администратора»** (`usableAdminCount`, `canRevokeAdmin`, `canDeactivate`) — нельзя опустить количество действующих администраторов ниже 2.
+
+**Живой аудит-лог** (`Promo/src/lib/audit-store.ts`, localStorage `promo:audit-live`): каждое действие администратора (пользователь + активная роль + тип действия + объект «пользователь») записывается через `appendAuditEvent`; `/audit` объединяет живые события с S8-сидами (сортировка newest-first). Новые `AuditActionType`: «сброс пароля», «назначение прав», «отзыв прав», «блокировка», «разблокировка».
+
+**Mock-ограничения**: localStorage — на браузер, не общий бэкенд; пароли хранятся строками (прототип, не хэш); временный пароль показывается администратору на экране (email не отправляется); управление учётками гейтировано по активной роли god-mode переключателя ролей (а не по реальной учётке); только действия модуля учёток добавляются в живой аудит — остальные экраны по-прежнему seed-stale.
+
+Verified: `corepack pnpm build:promo` passes.
+
 ## 2026-06-29 — Texnomart Promo: Краткий промо-календарь — header filter button + 15-row mock data
 Two post-V2 follow-up tweaks to the short calendar (`ShortCalendarPage.tsx` + `promo-mock-data.ts`), each verified by `build:promo` + an in-browser check (auth seeded via `sessionStorage.auth=true`). **(1) «Фильтры» toggle relocated into the PageHeader + reorder + widen.** The §7 «Фильтры» toggle moved out of a row above the table into the shared `PageHeader`'s `actions` slot, so it now sits **beside the page title** (calendar tab only — «План акций» has no filters; the filter block itself still renders below the tabs, gated by `filtersOpen`). The button order was set to **«Фильтры → Экспорт»**: because the shared `PageHeader` always renders its built-in «Экспорт» BEFORE the `actions` slot, the built-in export is disabled (`showExport={false}`) and the «Экспорт» `DropdownMenu` (Excel/CSV/PDF → the same `handleExport`) is re-rendered inside `actions` AFTER the filter button so the order is controllable. The filter button was **widened** (`min-w-[140px]` + `justify-between`, icon+label+count badge in a left span, chevron flush right) so it reads like a proper dropdown trigger. The active-facet count badge + the collapsed-state «Очистить» are unchanged. **(2) Short-calendar seed 7→16 planned campaigns (6→15 visible rows).** Added **PR-2026-008…016** (9 planned, non-cancelled campaigns) to `CAMPAIGNS` — varied types (all 7 promo types represented), campaign statuses, КМ participation, and per-КМ `kmStatuses` spanning the full taxonomy (so the «Статус готовности акции» 5-segment bar + the «Статус КМ по акции» filter show real variety), with `categoryDistribution` on most. They have **no `PROMO_LINES`** by design, so they stay out of the full calendar (`getCampaignsWithLines`) and the reports (`getSentCampaigns`), render «—» plan stages in the «План акций» tab, and add only a few extra approvals/audit mock items. The short calendar now shows «Найдено 15 акций» (PR-2026-004 cancelled + hidden by default). Verified in-browser: 15 rows, header order «Фильтры → Экспорт», wider filter button; only the pre-existing benign PageHeader-export `DropdownMenu` ref warning in console. Mock limit: new campaigns are line-less (intentional — short-calendar-only enrichment).
 

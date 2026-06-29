@@ -6,6 +6,7 @@ import {
   Bell,
   ShieldCheck,
   SlidersHorizontal,
+  Users,
 } from "lucide-react";
 import type { AppShellConfig } from "@texnomart/shared/types";
 import type { PromoRole } from "./role-context";
@@ -48,7 +49,8 @@ const TexnomartLogoIcon = (
  */
 export function createPromoShellConfig(
   currentRole: PromoRole,
-  unreadNotifications = 0
+  unreadNotifications = 0,
+  user?: { name: string; initials: string }
 ): AppShellConfig {
   const approvalsCount = countApprovalsAwaiting(currentRole);
 
@@ -56,9 +58,9 @@ export function createPromoShellConfig(
     logo: TexnomartLogoFull,
     logoCollapsed: TexnomartLogoIcon,
     user: {
-      name: "Сардор Мавлянов",
+      name: user?.name ?? "Сардор Мавлянов",
       role: currentRole,
-      initials: "СМ",
+      initials: user?.initials ?? "СМ",
     },
     searchPlaceholder: "Поиск акций, номенклатуры, отчётов...",
     collapseLabel: "Свернуть",
@@ -91,6 +93,12 @@ export function createPromoShellConfig(
         items: [
           { label: "Аудит-лог", icon: ShieldCheck, href: "/audit" },
           {
+            label: "Управление пользователями",
+            icon: Users,
+            href: "/users",
+            roles: ["Администратор"],
+          },
+          {
             label: "Настройки типов промо",
             icon: SlidersHorizontal,
             href: "/promo-types",
@@ -108,6 +116,7 @@ export function createPromoShellConfig(
       { path: "/reports", label: "Отчёты смежным отделам" },
       { path: "/notifications", label: "Уведомления" },
       { path: "/audit", label: "Аудит-лог" },
+      { path: "/users", label: "Управление пользователями" },
       { path: "/promo-types", label: "Настройки типов промо" },
       { path: "/promo-types/:ruleId", label: "Правило", parent: "/promo-types", paramLabel: (id) => `Правило ${id}` },
     ],

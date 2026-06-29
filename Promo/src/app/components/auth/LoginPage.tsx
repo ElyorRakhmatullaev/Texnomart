@@ -6,6 +6,9 @@ import { User, Lock, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { AuthLayout } from "./AuthLayout";
 import { useAuth } from "./AuthContext";
+import { useRole } from "../../role-context";
+import { useCurrentUser } from "../../current-user-context";
+import { authenticate } from "../../../lib/users-store";
 import { Button } from "@texnomart/ui/button";
 import { Input } from "@texnomart/ui/input";
 import { Checkbox } from "@texnomart/ui/checkbox";
@@ -14,24 +17,26 @@ import { Alert, AlertDescription } from "@texnomart/ui/alert";
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  // verify2FA() — единственный вызов из общего контекста, который ставит
+  // isAuthenticated=true; 2FA-шаг в Promo убран, поэтому завершаем вход им.
+  const { verify2FA } = useAuth();
+  const { setCurrentRole } = useRole();
+  const { login: setCurrentUser } = useCurrentUser();
+
   const [email, setEmail] = React.useState("admin@texnomart.uz");
-  const [password, setPassword] = React.useState("Texnomart2026");
+  const [password, setPassword] = React.useState("Admin2026!");
   const [rememberMe, setRememberMe] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const [failedAttempts, setFailedAttempts] = React.useState(0);
   const [blockedUntil, setBlockedUntil] = React.useState<number | null>(null);
   const [countdown, setCountdown] = React.useState("");
 
-  // Countdown timer for blocked state
   React.useEffect(() => {
     if (!blockedUntil) return;
-
     const interval = setInterval(() => {
-      const now = Date.now();
-      const remaining = blockedUntil - now;
-
+      const remaining = blockedUntil - Date.now();
       if (remaining <= 0) {
         setBlockedUntil(null);
         setFailedAttempts(0);
@@ -42,40 +47,44 @@ export function LoginPage() {
         setCountdown(`${minutes}:${seconds.toString().padStart(2, "0")}`);
       }
     }, 1000);
-
     return () => clearInterval(interval);
   }, [blockedUntil]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (blockedUntil) return;
 
     setLoading(true);
+    setError(null);
+    await new Promise((resolve) => setTimeout(resolve, 600));
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const user = authenticate(email, password);
 
-    // Mock: fail login to demonstrate error states
-    const success = Math.random() > 0.7; // 30% success rate for demo
-
-    if (success) {
-      login();
-      toast.success("Успешный вход. Подтвердите 2FA.");
-      navigate("/login/2fa");
-      setLoading(false);
-      return;
-    } else {
+    if (!user) {
       const newAttempts = failedAttempts + 1;
       setFailedAttempts(newAttempts);
-
-      if (newAttempts >= 5) {
-        // Block for 15 minutes
-        setBlockedUntil(Date.now() + 15 * 60 * 1000);
-      }
+      setError("Неверный email или пароль.");
+      if (newAttempts >= 5) setBlockedUntil(Date.now() + 15 * 60 * 1000);
+      setLoading(false);
+      return;
     }
 
+    if (user.status === "blocked") {
+      setError("Учётная запись заблокирована. Обратитесь к администратору.");
+      setLoading(false);
+      return;
+    }
+
+    // Успех: фиксируем личность и активную роль, завершаем вход.
+    setCurrentUser(user);
+    setCurrentRole(user.role);
+    verify2FA();
     setLoading(false);
+
+    // Пользователь с временным паролём попадёт на принудительную смену
+    // (редирект делает ProtectedLayout, Task 5); остальные — в систему.
+    toast.success("Добро пожаловать в систему!");
+    navigate("/");
   };
 
   const isBlocked = blockedUntil !== null;
@@ -89,6 +98,12 @@ export function LoginPage() {
           <p className="text-base text-gray-700">Войдите в свою учётную запись</p>
         </div>
 
+        {error && !isBlocked && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         {showWarning && (
           <Alert variant="warning">
             <AlertDescription>
@@ -100,9 +115,7 @@ export function LoginPage() {
 
         {isBlocked && (
           <Alert variant="destructive">
-            <AlertDescription>
-              Заблокировано. Повторите через {countdown}
-            </AlertDescription>
+            <AlertDescription>Заблокировано. Повторите через {countdown}</AlertDescription>
           </Alert>
         )}
 
@@ -161,10 +174,7 @@ export function LoginPage() {
                 Запомнить меня
               </Label>
             </div>
-            <Link
-              to="/login/forgot-password"
-              className="text-sm text-primary hover:underline"
-            >
+            <Link to="/login/forgot-password" className="text-sm text-primary hover:underline">
               Забыли пароль?
             </Link>
           </div>

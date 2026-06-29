@@ -15,6 +15,8 @@ import {
 import { AppShell as SharedAppShell } from "@texnomart/shared/components/app-shell";
 import { createPromoShellConfig } from "../shell-config";
 import { useRole } from "../role-context";
+import { useCurrentUser } from "../current-user-context";
+import { getInitials } from "@texnomart/shared/utils/formatters";
 import { useNotifications } from "./notifications/NotificationsProvider";
 import { notificationsForRole } from "../../lib/promo-mock-data";
 
@@ -109,6 +111,7 @@ function PromoCommandSearch() {
 
 export function AppShell() {
   const { roles, currentRole, setCurrentRole } = useRole();
+  const { currentUser } = useCurrentUser();
   const { pathname } = useLocation();
   const { notifications } = useNotifications();
 
@@ -131,8 +134,15 @@ export function AppShell() {
   const unreadCount = visibleNotifications.filter((n) => !n.read).length;
 
   const config = React.useMemo(
-    () => createPromoShellConfig(currentRole, unreadCount),
-    [currentRole, unreadCount]
+    () =>
+      createPromoShellConfig(
+        currentRole,
+        unreadCount,
+        currentUser
+          ? { name: currentUser.fullName, initials: getInitials(currentUser.fullName) }
+          : undefined
+      ),
+    [currentRole, unreadCount, currentUser]
   );
 
   // Dense, wide data grids use the full main width (no 1400px cap; §3.4 of the short-
