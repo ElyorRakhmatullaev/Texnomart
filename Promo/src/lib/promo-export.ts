@@ -6,9 +6,11 @@
 
 import {
   campaignReadiness,
+  formatPromoNo,
   getCategoryManager,
   getFillDeadline,
   getPlanApproval,
+  getReportSendStatus,
   type PlanStageStatus,
   type PromoCampaign,
 } from "./promo-mock-data";
@@ -61,7 +63,9 @@ export function buildCalendarCsv(campaigns: PromoCampaign[]): string {
     "Период (начало)",
     "Период (окончание)",
     "Крайний срок заполнения КМ",
+    "Срок отчёта",
     "Общий статус акции",
+    "Отправка смежным отделам",
     "Согласовано КМ",
     "Всего КМ (без «Не участвует»)",
     "Согласовано КД",
@@ -73,6 +77,12 @@ export function buildCalendarCsv(campaigns: PromoCampaign[]): string {
   ];
   const rows = campaigns.map((c) => {
     const r = campaignReadiness(c);
+    const rs = getReportSendStatus(c);
+    const sendLabel = rs.sent
+      ? `Отправлено ${fmtDate(rs.sentAt!)} (в.${rs.versionNo})`
+      : rs.overdueDays > 0
+        ? `Не отправлено (просрочка +${rs.overdueDays} дн.)`
+        : "Не отправлено";
     const dist = (c.categoryDistribution ?? [])
       .map(
         (e) =>
@@ -82,13 +92,15 @@ export function buildCalendarCsv(campaigns: PromoCampaign[]): string {
       )
       .join(" | ");
     return [
-      c.id,
+      formatPromoNo(c.id),
       c.type,
       c.name,
       fmtDate(c.startDate),
       fmtDate(c.endDate),
       fmtDate(getFillDeadline(c)),
+      fmtDate(rs.deadline),
       c.status,
+      sendLabel,
       String(r.done),
       String(r.total),
       String(r.accepted),

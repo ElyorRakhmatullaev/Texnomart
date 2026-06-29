@@ -220,6 +220,44 @@ export interface DeadlineChangeRequest {
   approvedAt?: string;
 }
 
+/**
+ * Short «№ промо» display (client feedback §6b): «26-N» — the 2-digit year suffix +
+ * the sequence number with leading zeros stripped. Used in the SHORT calendar only
+ * (table, detail, export); the full calendar keeps the raw PR-/UN- id.
+ *   PR-2026-001 → «26-1»   PR-2026-007 → «26-7»   UN-2026-015 → «26-15»
+ * Falls back to the raw id if it doesn't match the expected `XX-YYYY-NNN` shape.
+ */
+export function formatPromoNo(id: string): string {
+  const m = /^[A-Za-z]+-(\d{4})-(\d+)$/.exec(id);
+  if (!m) return id;
+  return `${m[1].slice(2)}-${Number(m[2])}`;
+}
+
+// Review-stage КМ statuses — a clickable cell on these opens the approval workspace;
+// everything else (final / data-entry) opens the campaign in the full calendar (§10).
+const KM_STATUS_REVIEW_STAGE: KmStatus[] = [
+  "На согласовании у старшего КМ",
+  "На согласовании у коммерческого директора",
+  "Переотправлено на корректировку КМ",
+];
+
+/**
+ * Deep-link target for a clickable КМ-status cell in the short calendar (§10).
+ * Review-stage statuses → the approval queue pre-filtered to the (promo, КМ);
+ * final / data-entry statuses → the campaign in the full calendar.
+ */
+export function kmStatusDeepLink(
+  campaignId: string,
+  kmId: string,
+  status: KmStatus
+): string {
+  if (KM_STATUS_REVIEW_STAGE.includes(status)) {
+    const params = new URLSearchParams({ promo: campaignId, km: kmId });
+    return `/approvals?${params.toString()}`;
+  }
+  return `/full-calendar?promo=${encodeURIComponent(campaignId)}`;
+}
+
 export const CAMPAIGNS: PromoCampaign[] = [
   {
     id: "PR-2026-001",
@@ -2369,6 +2407,36 @@ export function getReportSentAt(campaign: PromoCampaign): Date {
 /** Latest report version number (newest version in the chain). */
 export function getReportVersionNo(campaign: PromoCampaign): number {
   return getCampaignVersions(campaign.id)[0]?.version ?? 1;
+}
+
+/**
+ * Whether/when a campaign's report was sent to the adjacent departments, plus its
+ * report deadline (§12 — short-calendar «Отправка смежным отделам» + «Срок отчёта»).
+ * «Sent» = the campaign is approved/sent and has at least one line (same rule as
+ * `getSentCampaigns`). When NOT sent, `overdueDays` counts days past the 17-кал.-дн.
+ * report deadline (0 if still within the deadline). Seed-stale (mock report trail).
+ */
+export interface ReportSendStatus {
+  sent: boolean;
+  sentAt?: Date;
+  versionNo?: number;
+  deadline: Date;
+  overdueDays: number;
+}
+export function getReportSendStatus(campaign: PromoCampaign): ReportSendStatus {
+  const deadline = getReportDeadline(campaign);
+  const hasLines = PROMO_LINES.some((l) => l.campaignId === campaign.id);
+  const sent = isApprovedCampaign(campaign) && hasLines;
+  if (sent) {
+    return {
+      sent,
+      sentAt: getReportSentAt(campaign),
+      versionNo: getReportVersionNo(campaign),
+      deadline,
+      overdueDays: 0,
+    };
+  }
+  return { sent, deadline, overdueDays: getOverdueDays(deadline) };
 }
 
 /**
