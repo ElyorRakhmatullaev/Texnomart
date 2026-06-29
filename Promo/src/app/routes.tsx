@@ -16,13 +16,21 @@ import { AuditPage } from "./components/audit/AuditPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "./components/auth/ResetPasswordPage";
+import { ForcePasswordChangePage } from "./components/auth/ForcePasswordChangePage";
+import { useCurrentUser } from "./current-user-context";
 
 function ProtectedLayout() {
   const { isAuthenticated } = useAuth();
+  const { currentUser } = useCurrentUser();
   const location = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Первый вход по временному паролю — никуда, кроме смены пароля.
+  if (currentUser?.mustChangePassword) {
+    return <Navigate to="/change-password" replace />;
   }
 
   // NotificationsProvider sits ABOVE the AppShell so the top-bar bell, the
@@ -42,6 +50,13 @@ function GuestLayout() {
     return <Navigate to="/" replace />;
   }
 
+  return <Outlet />;
+}
+
+/** Authenticated-only, но БЕЗ shell — для полноэкранной принудительной смены пароля. */
+function RequireAuthBare() {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 
@@ -79,6 +94,11 @@ export const router = createBrowserRouter([
       { path: "forgot-password", Component: ForgotPasswordPage },
       { path: "reset-password/:token", Component: ResetPasswordPage },
     ],
+  },
+  {
+    path: "/change-password",
+    Component: RequireAuthBare,
+    children: [{ index: true, Component: ForcePasswordChangePage }],
   },
   {
     path: "/",
