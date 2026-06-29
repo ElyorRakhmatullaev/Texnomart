@@ -27,7 +27,8 @@ import {
 // the table into a non-scrolling HEADER band over a vertically-scrolling BODY band, and
 // keep three horizontal scrollers in sync (a top scrollbar + the header + the body).
 const HEADER_H = "h-12";
-const BASE_ROW_H = 104; // px — fits the merged status/readiness cell (status + «X из Y» + bar + counts)
+const BASE_ROW_H = 104; // px — fits the «Статус готовности акции» cell (collapsed: «N из M» + bar + markers)
+const READINESS_EXPANDED_H = 150; // px — a row whose readiness block is expanded (labels under each segment)
 const SUBROW_H = 34; // px per distribution sub-row (expanded)
 
 const CELL = "border-r border-gray-100";
@@ -79,53 +80,135 @@ interface ShortCalendarTableProps {
   onRowClick: (id: string) => void;
   /** «Распределение по категориям» expanded → the 3 distribution columns are shown (§2). */
   expanded: boolean;
+  /**
+   * Selected «Статус КМ по акции» filter (§5). When set (≠ "all"), only КМ cells
+   * with this exact status are shown; the rest render «—».
+   */
+  kmStatusFilter?: string;
 }
 
 export function ShortCalendarTable({
   campaigns,
   onRowClick,
   expanded,
+  kmStatusFilter,
 }: ShortCalendarTableProps) {
+  const kmFilterActive = !!kmStatusFilter && kmStatusFilter !== "all";
   const kmColumns: CategoryManager[] = CATEGORY_MANAGERS;
 
-  // Compute each row's height ONCE and apply it to both panes (alignment invariant).
+  // Per-cell «Статус готовности акции» expand state (§3) — collapsed by default.
+  const [expandedReadiness, setExpandedReadiness] = React.useState<Set<string>>(
+    () => new Set()
+  );
+  const toggleReadiness = React.useCallback((id: string) => {
+    setExpandedReadiness((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // Compute each row's height ONCE and apply it to both panes (alignment invariant):
+  // the tallest of the base, the expanded distribution block, and an expanded readiness block.
   const rowHeights = campaigns.map((c) => {
     const n = c.categoryDistribution?.length ?? 0;
-    return expanded && n > 0 ? Math.max(BASE_ROW_H, n * SUBROW_H) : BASE_ROW_H;
+    const distH = expanded && n > 0 ? n * SUBROW_H : 0;
+    const readinessH = expandedReadiness.has(c.id) ? READINESS_EXPANDED_H : 0;
+    return Math.max(BASE_ROW_H, distH, readinessH);
   });
 
-  // The header is sticky to the PAGE scroll (§3.2) so vertical scrolling stays on the
-  // main page; its horizontal offset just mirrors the body's single BOTTOM scrollbar
-  // (no separate top scrollbar). One bottom scrollbar drives the whole table.
+  // The header is sticky to the PAGE scroll (§3.2/§13) so vertical scrolling stays on
+  // the main page. Three horizontal scrollers are kept in sync (client feedback §1): a
+  // STICKY TOP scrollbar, the header band, and the body's bottom scrollbar — scrolling
+  // any one moves the others. `syncing` guards against the scroll-event feedback loop.
   const headRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
+  const topScrollRef = React.useRef<HTMLDivElement>(null);
+  const frozenHeadRef = React.useRef<HTMLDivElement>(null);
+
+  // Width of the frozen identity pane (top-scrollbar spacer) and of the scrollable
+  // content (top-scrollbar track) — measured so the top scrollbar lines up exactly with
+  // the bottom one and its thumb has the same proportions.
+  const [frozenW, setFrozenW] = React.useState(0);
+  const [scrollW, setScrollW] = React.useState(0);
+
+  React.useLayoutEffect(() => {
+    function measure() {
+      if (frozenHeadRef.current) setFrozenW(frozenHeadRef.current.offsetWidth);
+      if (bodyRef.current) setScrollW(bodyRef.current.scrollWidth);
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (bodyRef.current) ro.observe(bodyRef.current);
+    if (frozenHeadRef.current) ro.observe(frozenHeadRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [campaigns, expanded, expandedReadiness]);
+
+  // Mirror one scroller's scrollLeft onto the other two. Writes are idempotent (only
+  // when the value actually differs), so the resulting scroll events self-terminate —
+  // no re-entrancy flag needed, and no dropped frames during fast scrolling.
+  const syncScroll = React.useCallback((from: "top" | "body") => {
+    const src = from === "top" ? topScrollRef.current : bodyRef.current;
+    const x = src?.scrollLeft ?? 0;
+    if (headRef.current && headRef.current.scrollLeft !== x)
+      headRef.current.scrollLeft = x;
+    if (
+      from !== "top" &&
+      topScrollRef.current &&
+      topScrollRef.current.scrollLeft !== x
+    )
+      topScrollRef.current.scrollLeft = x;
+    if (from !== "body" && bodyRef.current && bodyRef.current.scrollLeft !== x)
+      bodyRef.current.scrollLeft = x;
+  }, []);
 
   return (
     // `overflow-clip` clips to the rounded corners like `overflow-hidden` BUT is not a
     // scroll container, so it does NOT trap the page-sticky header below.
     <Card className="overflow-clip p-0">
-      {/* ── HEADER band — sticky to the page scroll (§3.2); horizontal offset mirrors
-            the body's bottom scrollbar (no separate top scrollbar, §3.1). `-top-4`
-            cancels <main>'s p-4 (16px) so the pinned header sits flush at the content
-            top with no padding gap above it. ──────────────────────────────────────── */}
-      <div className="sticky -top-4 z-30 flex border-b bg-gray-50">
-        <div
-          className={cn(
-            "flex shrink-0 items-center gap-3 border-r px-4 text-[13px] font-semibold text-gray-700",
-            HEADER_H
-          )}
-        >
-          <span className="w-[104px]">№ промо</span>
-          <span className="w-[120px]">Тип промо</span>
-          <span className="w-[200px]">Название акции</span>
-        </div>
-        <div ref={headRef} className="min-w-0 flex-1 overflow-hidden">
+      {/* ── STICKY TOP band — pinned to the page scroll (§13). `-top-4` cancels
+            <main>'s p-4 (16px) so it sits flush at the content top. It stacks a synced
+            top horizontal scrollbar (§1) over the column-title row. ───────────────── */}
+      <div className="sticky -top-4 z-30 border-b bg-gray-50">
+        {/* Top horizontal scrollbar — synced with the body's bottom scrollbar (§1).
+            A spacer the width of the frozen pane keeps it aligned with the scroll area;
+            the inner track width = the scroll content width so the thumb matches. */}
+        <div className="flex">
+          <div className="shrink-0" style={{ width: frozenW }} />
           <div
+            ref={topScrollRef}
+            onScroll={() => syncScroll("top")}
+            className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+          >
+            <div style={{ width: scrollW, height: 1 }} />
+          </div>
+        </div>
+
+        {/* Column-title row */}
+        <div className="flex">
+          <div
+            ref={frozenHeadRef}
             className={cn(
-              "flex min-w-max items-center text-[13px] font-semibold text-gray-700",
+              "flex shrink-0 items-center gap-3 border-r px-4 text-[13px] font-semibold text-gray-700",
               HEADER_H
             )}
           >
+            <span className="w-[104px]">№ промо</span>
+            <span className="w-[120px]">Тип промо</span>
+            <span className="w-[200px]">Название акции</span>
+          </div>
+          <div ref={headRef} className="min-w-0 flex-1 overflow-hidden">
+            <div
+              className={cn(
+                "flex min-w-max items-center text-[13px] font-semibold text-gray-700",
+                HEADER_H
+              )}
+            >
             <span className={cn("w-[170px] px-3", CELL)}>Период акции</span>
             <span className={cn("w-[160px] px-3", CELL)}>
               Крайний срок заполнения КМ
@@ -139,8 +222,8 @@ export function ShortCalendarTable({
                 </span>
               </>
             )}
-            <span className={cn("w-[300px] px-3", CELL)}>
-              Общий статус / готовность акции
+            <span className={cn("w-[340px] px-3", CELL)}>
+              Статус готовности акции
             </span>
             {kmColumns.map((km) => (
               <Tooltip key={km.id}>
@@ -155,6 +238,7 @@ export function ShortCalendarTable({
                 </TooltipContent>
               </Tooltip>
             ))}
+            </div>
           </div>
         </div>
       </div>
@@ -192,13 +276,10 @@ export function ShortCalendarTable({
           ))}
         </div>
 
-        {/* Scrolling pane */}
+        {/* Scrolling pane — the BOTTOM scrollbar; drives the header + top scrollbar (§1). */}
         <div
           ref={bodyRef}
-          onScroll={(e) => {
-            if (headRef.current)
-              headRef.current.scrollLeft = e.currentTarget.scrollLeft;
-          }}
+          onScroll={() => syncScroll("body")}
           className="min-w-0 flex-1 overflow-x-auto"
         >
           <div className="min-w-max">
@@ -209,13 +290,22 @@ export function ShortCalendarTable({
               const hasDist = groups.length > 0;
 
               return (
-                <button
+                // A `<div role="button">` (not a real <button>) so the readiness
+                // collapse toggle inside the cell isn't a nested button (§3).
+                <div
                   key={c.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onRowClick(c.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onRowClick(c.id);
+                    }
+                  }}
                   style={{ height: rowHeights[i] }}
                   className={cn(
-                    "flex w-full items-stretch overflow-hidden border-b text-left transition-colors hover:bg-gray-50",
+                    "flex w-full cursor-pointer items-stretch overflow-hidden border-b text-left transition-colors hover:bg-gray-50",
                     c.cancelled && "bg-red-50/60 hover:bg-red-50"
                   )}
                 >
@@ -332,28 +422,37 @@ export function ShortCalendarTable({
                     </>
                   )}
 
-                  {/* Общий статус / готовность акции (merged §6 + §7) */}
-                  <div className={cn("flex w-[300px] items-center px-3", CELL)}>
-                    <ReadinessCell campaign={c} />
+                  {/* Статус готовности акции (§2 + §3) */}
+                  <div className={cn("flex w-[340px] items-center px-3", CELL)}>
+                    <ReadinessCell
+                      campaign={c}
+                      expanded={expandedReadiness.has(c.id)}
+                      onToggle={() => toggleReadiness(c.id)}
+                    />
                   </div>
 
-                  {/* Статусы по КМ (union; §2 order — last) */}
+                  {/* Статусы по КМ (union; §2 order — last). §5: when the «Статус КМ
+                      по акции» filter is active, only cells with that status are shown. */}
                   {kmColumns.map((km) => {
                     const status = c.kmStatuses[km.id];
+                    const shown =
+                      status && (!kmFilterActive || status === kmStatusFilter)
+                        ? status
+                        : undefined;
                     return (
                       <div
                         key={km.id}
                         className={cn("flex w-[150px] items-center px-3", CELL)}
                       >
-                        {status ? (
-                          <PromoStatusBadge status={status} />
+                        {shown ? (
+                          <PromoStatusBadge status={shown} />
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </div>
                     );
                   })}
-                </button>
+                </div>
               );
             })}
           </div>

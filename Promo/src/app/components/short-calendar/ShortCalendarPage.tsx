@@ -49,12 +49,13 @@ function parseDate(value: string, endOfDay = false): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Inline «Готовность КМ» summary for mobile cards, e.g. "2 принято · 1 не заполнено". */
+/** Inline «Готовность КМ» summary for mobile cards, e.g. "2 согласовано · 1 не заполнено". */
 function readinessSummary(agg: KmAggregate): string {
   const parts: string[] = [];
-  if (agg.acceptedKd) parts.push(`${agg.acceptedKd} принято`);
-  if (agg.atKd) parts.push(`${agg.atKd} на согл. с КД`);
-  if (agg.notFilled) parts.push(`${agg.notFilled} не заполнено`);
+  if (agg.acceptedKd) parts.push(`${agg.acceptedKd} согласовано`);
+  if (agg.atKd) parts.push(`${agg.atKd} на согл. у КД`);
+  if (agg.atSeniorKm) parts.push(`${agg.atSeniorKm} на согл. у ст. КМ`);
+  if (agg.notFilled) parts.push(`${agg.notFilled} на корр./не заполнено`);
   if (agg.notParticipating) parts.push(`${agg.notParticipating} не участвует`);
   return parts.join(" · ") || "—";
 }
@@ -95,10 +96,9 @@ export function ShortCalendarPage() {
         !c.participatingKmIds.some((id) => c.kmStatuses[id] === filters.kmStatus)
       )
         return false;
-      // Контрольные — период акции (overlap with the selected range) + общий статус
+      // Контрольные — период акции (overlap with the selected range)
       if (from && c.endDate < from) return false;
       if (to && c.startDate > to) return false;
-      if (filters.status !== ALL && c.status !== filters.status) return false;
       // Распределение по категориям
       const dist = c.categoryDistribution ?? [];
       if (
@@ -214,6 +214,7 @@ export function ShortCalendarPage() {
               campaigns={filtered}
               onRowClick={(id) => navigate(`/short-calendar/${id}`)}
               expanded={effectiveExpanded}
+              kmStatusFilter={filters.kmStatus}
             />
           </div>
 

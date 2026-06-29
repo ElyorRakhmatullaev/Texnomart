@@ -35,7 +35,6 @@ export interface CalendarFilterValues {
   // Контрольные
   periodFrom: string; // yyyy-mm-dd
   periodTo: string; // yyyy-mm-dd
-  status: string;
   // Распределение по категориям
   distWeekday: string; // Date.getDay() as string, or ALL
   distCategory: string;
@@ -49,7 +48,6 @@ export const DEFAULT_FILTER_VALUES: CalendarFilterValues = {
   kmStatus: ALL,
   periodFrom: "",
   periodTo: "",
-  status: ALL,
   distWeekday: ALL,
   distCategory: ALL,
   distKm: ALL,
@@ -70,25 +68,19 @@ export function isFilterActive(v: CalendarFilterValues): boolean {
     v.kmStatus !== ALL ||
     v.periodFrom !== "" ||
     v.periodTo !== "" ||
-    v.status !== ALL ||
     hasDistributionFilter(v)
   );
 }
 
+// «Статус КМ по акции» (client feedback §5): exactly these 6, in this order.
+// «Согласовано старшим КМ» (auto-flips to «На согл. у КД») and «Согласовано и
+// отправлено смежным отделам» are intentionally NOT offered here.
 const KM_STATUSES: string[] = [
-  "Не заполнено / Ожидание корректировки от КМ",
-  "На согласовании у старшего КМ",
-  "Согласовано старшим КМ (ожидает КД)",
-  "На согласовании у коммерческого директора",
-  "Принято коммерческим директором",
-  "Не участвует",
-];
-
-const CAMPAIGN_STATUSES: string[] = [
   "На согласовании у старшего КМ",
   "На согласовании у коммерческого директора",
   "Переотправлено на корректировку КМ",
-  "Согласовано и отправлено смежным отделам",
+  "Согласовано КД",
+  "Не участвует",
   "Отменена",
 ];
 
@@ -197,7 +189,6 @@ export function CalendarFilters({
   const typeOptions = PROMO_TYPES.map((t) => ({ value: t.name, label: t.name }));
   const kmOptions = CATEGORY_MANAGERS.map((k) => ({ value: k.id, label: k.name }));
   const kmStatusOptions = KM_STATUSES.map((s) => ({ value: s, label: s }));
-  const statusOptions = CAMPAIGN_STATUSES.map((s) => ({ value: s, label: s }));
 
   return (
     <div className="space-y-3">
@@ -231,7 +222,7 @@ export function CalendarFilters({
           />
           <FilterSelect
             label="Статус КМ по акции"
-            placeholder="Все статусы КМ"
+            placeholder="Все статусы"
             value={values.kmStatus}
             onChange={(v) => onChange("kmStatus", v)}
             options={kmStatusOptions}
@@ -263,14 +254,6 @@ export function CalendarFilters({
               />
             </div>
           </label>
-          <FilterSelect
-            label="Общий статус акции"
-            placeholder="Все статусы"
-            value={values.status}
-            onChange={(v) => onChange("status", v)}
-            options={statusOptions}
-            width="w-[210px]"
-          />
         </Group>
 
         <div className="hidden self-stretch border-l border-gray-200 lg:block" />
