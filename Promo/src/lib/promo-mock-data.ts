@@ -3084,10 +3084,15 @@ export type AuditActionType =
   | "отклонение"
   | "отмена"
   | "Не участвует"
-  | "отправка отчёта";
+  | "отправка отчёта"
+  | "сброс пароля"
+  | "назначение прав"
+  | "отзыв прав"
+  | "блокировка"
+  | "разблокировка";
 
 /** What an action acted on. */
-export type AuditObjectType = "акция" | "строка" | "отчёт" | "план";
+export type AuditObjectType = "акция" | "строка" | "отчёт" | "план" | "пользователь";
 
 /** Soft tint per action type (paired with the label, never colour alone). */
 export const AUDIT_ACTION_META: Record<
@@ -3102,6 +3107,11 @@ export const AUDIT_ACTION_META: Record<
   "отмена": { bg: "bg-red-100", text: "text-red-800" },
   "Не участвует": { bg: "bg-gray-100", text: "text-gray-600" },
   "отправка отчёта": { bg: "bg-teal-50", text: "text-teal-700" },
+  "сброс пароля": { bg: "bg-sky-50", text: "text-sky-700" },
+  "назначение прав": { bg: "bg-indigo-50", text: "text-indigo-700" },
+  "отзыв прав": { bg: "bg-orange-50", text: "text-orange-700" },
+  "блокировка": { bg: "bg-rose-100", text: "text-rose-800" },
+  "разблокировка": { bg: "bg-green-50", text: "text-green-700" },
 };
 
 export const AUDIT_OBJECT_LABEL: Record<AuditObjectType, string> = {
@@ -3109,6 +3119,7 @@ export const AUDIT_OBJECT_LABEL: Record<AuditObjectType, string> = {
   "строка": "Строка",
   "отчёт": "Отчёт",
   "план": "План",
+  "пользователь": "Пользователь",
 };
 
 /** One immutable entry in the action log. */
