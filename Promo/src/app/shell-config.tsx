@@ -48,7 +48,8 @@ const TexnomartLogoIcon = (
  */
 export function createPromoShellConfig(
   currentRole: PromoRole,
-  unreadNotifications = 0
+  unreadNotifications = 0,
+  user?: { name: string; initials: string }
 ): AppShellConfig {
   const approvalsCount = countApprovalsAwaiting(currentRole);
 
@@ -56,9 +57,9 @@ export function createPromoShellConfig(
     logo: TexnomartLogoFull,
     logoCollapsed: TexnomartLogoIcon,
     user: {
-      name: "Сардор Мавлянов",
+      name: user?.name ?? "Сардор Мавлянов",
       role: currentRole,
-      initials: "СМ",
+      initials: user?.initials ?? "СМ",
     },
     searchPlaceholder: "Поиск акций, номенклатуры, отчётов...",
     collapseLabel: "Свернуть",
