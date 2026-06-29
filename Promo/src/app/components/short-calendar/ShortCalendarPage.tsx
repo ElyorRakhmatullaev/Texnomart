@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   ChevronDown,
   ChevronUp,
+  Download,
   Info,
   Plus,
   SlidersHorizontal,
@@ -13,6 +14,12 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { Button } from "@texnomart/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@texnomart/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@texnomart/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import { MobileListCard } from "@texnomart/shared/components/mobile-list-card";
@@ -180,7 +187,7 @@ export function ShortCalendarPage() {
       <PageHeader
         title="Краткий промо-календарь"
         showCompare={false}
-        onExport={handleExport}
+        showExport={false}
         subtitle={
           <span className="flex items-center gap-2">
             Найдено {filtered.length.toLocaleString("ru-RU")} акций
@@ -196,12 +203,75 @@ export function ShortCalendarPage() {
           </span>
         }
         actions={
-          canCreatePlan ? (
-            <Button onClick={() => setMode("plan")}>
-              <Plus className="size-4" />
-              Создать план
-            </Button>
-          ) : undefined
+          <>
+            {/* Filter toggle beside the title (§7) — calendar tab only; carries the
+                active-facet count + a «Очистить» when collapsed with active filters.
+                Rendered BEFORE «Экспорт» so the order reads «Фильтры → Экспорт». */}
+            {mode === "calendar" && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 min-w-[140px] justify-between"
+                  onClick={() => setFiltersOpen((o) => !o)}
+                  aria-expanded={filtersOpen}
+                >
+                  <span className="flex items-center gap-2">
+                    <SlidersHorizontal className="size-4" />
+                    Фильтры
+                    {activeFilterCount > 0 && (
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </span>
+                  {filtersOpen ? (
+                    <ChevronUp className="size-4" />
+                  ) : (
+                    <ChevronDown className="size-4" />
+                  )}
+                </Button>
+                {!filtersOpen && activeFilterCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 text-xs text-gray-500"
+                    onClick={() => setFilters(DEFAULT_FILTER_VALUES)}
+                  >
+                    <X className="mr-1 size-3" />
+                    Очистить
+                  </Button>
+                )}
+              </div>
+            )}
+            {/* Export rendered here (PageHeader's built-in export is disabled) so it
+                sits AFTER «Фильтры». */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="sm" className="h-9">
+                  <Download className="mr-2 size-4" />
+                  Экспорт
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport("xlsx")}>
+                  Excel (.xlsx)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("csv")}>
+                  CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("pdf")}>
+                  PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {canCreatePlan && (
+              <Button onClick={() => setMode("plan")}>
+                <Plus className="size-4" />
+                Создать план
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -212,56 +282,20 @@ export function ShortCalendarPage() {
         </TabsList>
 
         <TabsContent value="calendar" className="space-y-4">
-          {/* Collapsible filter block (§7) — the «Фильтры» toggle shows the active
-              facet count so the collapsed state still signals filtering. */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8"
-                onClick={() => setFiltersOpen((o) => !o)}
-                aria-expanded={filtersOpen}
-              >
-                <SlidersHorizontal className="size-4" />
-                Фильтры
-                {activeFilterCount > 0 && (
-                  <span className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
-                    {activeFilterCount}
-                  </span>
-                )}
-                {filtersOpen ? (
-                  <ChevronUp className="size-4" />
-                ) : (
-                  <ChevronDown className="size-4" />
-                )}
-              </Button>
-              {!filtersOpen && activeFilterCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 text-xs text-gray-500"
-                  onClick={() => setFilters(DEFAULT_FILTER_VALUES)}
-                >
-                  <X className="mr-1 size-3" />
-                  Очистить
-                </Button>
-              )}
-            </div>
-
-            {filtersOpen && (
-              <CalendarFilters
-                values={filters}
-                onChange={setFilter}
-                onClear={() => setFilters(DEFAULT_FILTER_VALUES)}
-                hideCancelled={hideCancelled}
-                onHideCancelledChange={setHideCancelled}
-                distExpanded={distExpanded}
-                onDistExpandedChange={setDistExpanded}
-                campaigns={PLANNED}
-              />
-            )}
-          </div>
+          {/* Filter block (§7) — toggled by the «Фильтры» button beside the page
+              title; the toggle carries the active-facet count. */}
+          {filtersOpen && (
+            <CalendarFilters
+              values={filters}
+              onChange={setFilter}
+              onClear={() => setFilters(DEFAULT_FILTER_VALUES)}
+              hideCancelled={hideCancelled}
+              onHideCancelledChange={setHideCancelled}
+              distExpanded={distExpanded}
+              onDistExpandedChange={setDistExpanded}
+              campaigns={PLANNED}
+            />
+          )}
 
           {/* Desktop: Pattern F frozen-column grid */}
           <div className="hidden md:block">
