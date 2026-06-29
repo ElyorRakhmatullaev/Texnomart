@@ -9,7 +9,7 @@ Monorepo containing Texnomart web applications with a shared design system, comp
 | Project | Path | Description | Status |
 |---|---|---|---|
 | **Broker Dashboard** | `Dashboard/` | BNPL credit broker admin panel (22 routes, React Router) | Active |
-| **Texnomart Promo** | `Promo/` | Promo-calendar: planning & approval of promo campaigns (role-based, 10 routes) | Active — bootstrap + Master shell + S1 done; **S2 complete (Phases 1–5)**; **S3 complete (Phases 1–3)**; **S4 complete (Phases 1–3)**; **S5 complete**; **S6 complete**; **S7 complete**; **S8 complete** — prompt pack S1–S8 fully built |
+| **Texnomart Promo** | `Promo/` | Promo-calendar: planning & approval of promo campaigns (role-based, 12 routes) | Active — bootstrap + Master shell + S1 done; **S2 complete (Phases 1–5)**; **S3 complete (Phases 1–3)**; **S4 complete (Phases 1–3)**; **S5 complete**; **S6 complete**; **S7 complete**; **S8 complete** — prompt pack S1–S8 fully built; **3rd-round feedback #0+A (Авторизация и учётки) complete** — 2FA removed, localStorage user store, temp-password + forced first-login change, `/users` admin screen (≥2-admin guard), live audit of admin actions (sub-projects **B** dark theme · **C** Профиль/Настройки · **D** матрица прав pending) |
 | **Shared UI** | `packages/ui/` | shadcn/ui component library (46 components + 2 utilities) | Active |
 | **Shared Patterns** | `packages/shared/` | Reusable pattern components, auth, hooks, formatters | Active |
 
@@ -257,7 +257,7 @@ Status colors are defined as CSS variables in each project's `src/styles/theme.c
 - Components use `"use client"` directive (Figma Make convention, safe to keep).
 - **Detail views are always full pages** at `/entity/:id` — never side drawers. Only config/settings panels use drawers.
 - **Mobile responsive**: all pages must work at sm/md/lg/xl breakpoints (Pattern K).
-- Auth flow: **Dashboard** `/login` → `/` (email/password only, **no 2FA**, always succeeds); **Promo** `/login` → `/login/2fa` → `/` (still 2FA). Mock auth state in the shared `AuthContext` (unchanged — exposes both paths).
+- Auth flow: **Dashboard** `/login` → `/` (email/password only, **no 2FA**, always succeeds); **Promo** `/login` → `/` (email/password validated against a localStorage **user store**, **no 2FA** since the 3rd-round feedback — temp-password users are forced through `/change-password` on first login). The shared `AuthContext` is unchanged (still exposes a 2FA path; Promo finalizes login via `verify2FA()` but no longer renders the 2FA step).
 - Dark mode: theme toggle exists, CSS variables defined in theme.css.
 
 ## When Adding a New Sub-Project
