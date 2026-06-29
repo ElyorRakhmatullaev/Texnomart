@@ -21,6 +21,7 @@ import {
 } from "@texnomart/ui/table";
 import { PromoStatusBadge } from "../../../components/PromoStatusBadge";
 import { RuDate } from "../../../components/RuDate";
+import { getLiveAuditEvents } from "../../../lib/audit-store";
 import {
   AUDIT_ACTION_META,
   AUDIT_OBJECT_LABEL,
@@ -88,7 +89,11 @@ function ObjectCell({ event }: { event: AuditEvent }) {
 }
 
 export function AuditLogTable() {
-  const events = React.useMemo(() => buildAuditLog(), []);
+  // Сиды (S8) + живые события модуля учёток (localStorage), новые сверху.
+  const events = React.useMemo(() => {
+    const merged = [...getLiveAuditEvents(), ...buildAuditLog()];
+    return merged.sort((a, b) => b.at.getTime() - a.at.getTime());
+  }, []);
   const [filters, setFilters] = React.useState<AuditFilters>(EMPTY_AUDIT_FILTERS);
   const [sheetOpen, setSheetOpen] = React.useState(false);
 
