@@ -30,6 +30,25 @@ Source of truth for colors, typography, spacing, and component styling.
 
 > `--background` (`#ffffff`) remains the base token (body, header, cards). The `<main>` content area overrides it with `bg-gray-50` in the shared AppShell.
 
+## Dark Theme
+
+Activated by the `.dark` class on `<html>`. **Promo** ships a full, QA'd dark theme (sub-project B): a `ThemeProvider` (`Promo/src/app/theme-context.tsx`) + an inline boot script in `index.html` persist `promo:pref-theme` and apply `.dark` before first paint (no FOUC); the header + Settings toggles share the provider via the shared `AppShell`'s optional controlled `theme` prop. **Dashboard** has `.dark` variables defined but the theme is not yet built/verified (its light mode is the source of truth).
+
+The `.dark` palette (per project's `theme.css`) is a **layered neutral scale** — `--background` is darkest (the `<main>` area, via `dark:bg-background`), and `--card`/`--popover`/`--sidebar` sit a step lighter so cards read against the page (the inverse of light's white-cards-on-`gray-50`). **The brand yellow is preserved in dark** — never shadcn's stock near-white primary.
+
+| Token | Light | Dark (Promo) |
+|---|---|---|
+| `--primary` / `--primary-foreground` | `#FFD60A` / `#000000` | **`#FFD60A` / `#000000`** (unchanged — brand) |
+| `--background` | `#ffffff` | `oklch(0.16 0 0)` (darkest — main area) |
+| `--card` / `--popover` | `#ffffff` | `oklch(0.215 0 0)` (elevated above bg) |
+| `--sidebar` | `#ffffff` | `oklch(0.215 0 0)`; active item = brand yellow (`--sidebar-primary`) |
+| `--foreground` | `oklch(0.145 0 0)` | `oklch(0.97 0 0)` |
+| `--muted` / `--muted-foreground` | `#ececf0` / `#717182` | `oklch(0.27 0 0)` / `oklch(0.72 0 0)` |
+| `--border` | `rgba(0,0,0,0.1)` | `oklch(1 0 0 / 12%)` |
+| `--status-*` | see below | same hues, lifted (e.g. `--status-approved` `#10B981` → `#34D399`) |
+
+**Authoring for both themes (hybrid):** prefer semantic token classes that adapt automatically (`bg-card`, `bg-background`, `bg-muted`, `bg-accent`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`/`text-primary`). For a hardcoded light color, KEEP the light class and APPEND a `dark:` variant: `text-gray-900 dark:text-gray-100`, `bg-white dark:bg-card`, `border-gray-200 dark:border-border`. Soft status tints → `bg-X-50 dark:bg-X-500/15` + `text-X-700 dark:text-X-300`. Leave **solid** `-500` fills/dots/bars as-is (vivid on dark). The brand yellow is the `primary` token, not inline hex.
+
 ## Status Colors
 
 ### Application Lifecycle
@@ -184,7 +203,7 @@ Tailwind v4 reads these via `@theme inline` — no `tailwind.config.js` needed.
 Detail-page tabs use an underline style, not pills:
 - **TabsList**: `bg-transparent border-b border-gray-200 rounded-none p-0 h-12 justify-start gap-1 overflow-x-auto overflow-y-hidden`
 - **TabsTrigger**: `flex-none` (content-width, NOT stretched), `px-4`, `-mb-px` so the active underline overlaps the list divider
-- **Active**: `text-gray-900 font-semibold` + `border-b-2 border-[#FFD60A]`; **inactive**: `text-gray-500` with `hover:text-gray-900 hover:bg-gray-50`
+- **Active**: `text-gray-900 dark:text-gray-100 font-semibold` + `border-b-2 border-primary` (the brand-yellow `primary` token, not `border-[#FFD60A]`); **inactive**: `text-gray-500 dark:text-gray-400` with `hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-accent`
 - Scroll container holding tabbed content should use `[scrollbar-gutter:stable]` to avoid width shift between tabs.
 
 ### Fixed Footer / Action Bar (Detail Pages)
@@ -198,7 +217,7 @@ For an always-present bottom action bar that stays pinned (even on short content
 ## Conventions
 
 - All UI text: **Russian** (Русский).
-- Colors in component code: exact hex via `style={{}}`, never Tailwind arbitrary classes like `bg-[#FFDD2D]`
+- Colors in component code: prefer **semantic token utility classes** that adapt to dark mode (`bg-primary`/`text-primary` for the brand yellow, `bg-card`/`text-foreground`/`border-border`/`text-muted-foreground`, etc.). Never use arbitrary Tailwind classes like `bg-[#FFDD2D]` or `bg-[#FFD60A]`. Reserve inline `style={{}}` hex for static values that are identical in both themes (e.g. a fixed brand accent, the card shadow); theme-variable colors must go through tokens or `dark:` variants so dark mode works.
 - Status badges: soft-tint (light bg + colored text + 1px colored border)
 - Loading: skeleton blocks, never spinners
 - Empty states: Lucide icon 48px + heading + description + CTA
