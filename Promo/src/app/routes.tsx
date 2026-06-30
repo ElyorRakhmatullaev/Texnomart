@@ -13,6 +13,7 @@ import { NotificationsPage } from "./components/notifications/NotificationsPage"
 import { PromoTypesProvider } from "./components/promo-types/PromoTypesProvider";
 import { PromoTypesPage } from "./components/promo-types/PromoTypesPage";
 import { AuditPage } from "./components/audit/AuditPage";
+import { PermissionsMatrixPage } from "./components/permissions/PermissionsMatrixPage";
 import { UsersPage } from "./components/users/UsersPage";
 import { ProfilePage } from "./components/profile/ProfilePage";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -125,6 +126,7 @@ export const router = createBrowserRouter([
       { path: "reports", Component: ReportsPage },
       { path: "notifications", Component: NotificationsPage },
       { path: "audit", Component: AuditPage },
+      { path: "permissions", Component: PermissionsMatrixPage },
       { path: "users", Component: UsersPage },
       { path: "profile", Component: ProfilePage },
       { path: "settings", Component: SettingsPage },

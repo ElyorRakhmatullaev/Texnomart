@@ -6,6 +6,7 @@ import {
   Bell,
   ShieldCheck,
   SlidersHorizontal,
+  KeyRound,
   Users,
 } from "lucide-react";
 import type { AppShellConfig } from "@texnomart/shared/types";
@@ -104,6 +105,12 @@ export function createPromoShellConfig(
             href: "/promo-types",
             roles: ["Коммерческий директор", "Администратор"],
           },
+          {
+            label: "Матрица прав",
+            icon: KeyRound,
+            href: "/permissions",
+            roles: ["Коммерческий директор", "Администратор"],
+          },
         ],
       },
     ],
@@ -116,6 +123,7 @@ export function createPromoShellConfig(
       { path: "/reports", label: "Отчёты смежным отделам" },
       { path: "/notifications", label: "Уведомления" },
       { path: "/audit", label: "Аудит-лог" },
+      { path: "/permissions", label: "Матрица прав" },
       { path: "/users", label: "Управление пользователями" },
       { path: "/promo-types", label: "Настройки типов промо" },
       { path: "/promo-types/:ruleId", label: "Правило", parent: "/promo-types", paramLabel: (id) => `Правило ${id}` },
