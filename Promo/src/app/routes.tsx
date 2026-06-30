@@ -14,6 +14,8 @@ import { PromoTypesProvider } from "./components/promo-types/PromoTypesProvider"
 import { PromoTypesPage } from "./components/promo-types/PromoTypesPage";
 import { AuditPage } from "./components/audit/AuditPage";
 import { UsersPage } from "./components/users/UsersPage";
+import { ProfilePage } from "./components/profile/ProfilePage";
+import { SettingsPage } from "./components/settings/SettingsPage";
 import { LoginPage } from "./components/auth/LoginPage";
 import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "./components/auth/ResetPasswordPage";
@@ -124,6 +126,8 @@ export const router = createBrowserRouter([
       { path: "notifications", Component: NotificationsPage },
       { path: "audit", Component: AuditPage },
       { path: "users", Component: UsersPage },
+      { path: "profile", Component: ProfilePage },
+      { path: "settings", Component: SettingsPage },
       {
         path: "promo-types",
         Component: PromoTypesLayout,
