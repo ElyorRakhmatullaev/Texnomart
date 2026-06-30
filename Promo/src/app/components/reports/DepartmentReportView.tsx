@@ -145,26 +145,26 @@ export function DepartmentReportView({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-semibold text-gray-900">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
                 {DEPARTMENT_LABELS[department]}
               </h2>
-              <Badge className="rounded-full border-0 bg-blue-50 text-xs text-blue-700">
+              <Badge className="rounded-full border-0 bg-blue-50 dark:bg-blue-500/15 text-xs text-blue-700 dark:text-blue-300">
                 Версия {versionNo}
               </Badge>
               {hasChangeData && unackedCount > 0 && (
-                <Badge className="rounded-full border-0 bg-amber-100 text-xs text-amber-800">
+                <Badge className="rounded-full border-0 bg-amber-100 dark:bg-amber-500/20 text-xs text-amber-800 dark:text-amber-300">
                   Новых/изменённых: {unackedCount}
                 </Badge>
               )}
             </div>
             <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
               <span>
-                Получено: <RuDate value={sentAt} className="tabular-nums text-gray-700" />
+                Получено: <RuDate value={sentAt} className="tabular-nums text-gray-700 dark:text-gray-200" />
               </span>
               {overdueDays > 0 && (
                 <>
                   <OverdueTag days={overdueDays} />
-                  <span className="text-xs text-red-600">
+                  <span className="text-xs text-red-600 dark:text-red-400">
                     отправлено позже срока (17 кал. дн. до старта)
                   </span>
                 </>
@@ -174,7 +174,7 @@ export function DepartmentReportView({
 
           <div className="flex flex-wrap items-center gap-2">
             {hasChangeData && (
-              <div className="flex items-center gap-2 rounded-md border bg-gray-50 px-2.5 py-1.5">
+              <div className="flex items-center gap-2 rounded-md border bg-gray-50 dark:bg-muted/40 px-2.5 py-1.5">
                 <Switch
                   id="only-changed"
                   checked={onlyChanged}
@@ -199,7 +199,7 @@ export function DepartmentReportView({
         </div>
 
         {/* Ознакомление ≠ согласование (§11.7) */}
-        <div className="mt-3 flex items-start gap-2 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-800">
+        <div className="mt-3 flex items-start gap-2 rounded-md bg-blue-50 dark:bg-blue-500/15 px-3 py-2 text-xs text-blue-800 dark:text-blue-300">
           <Info className="mt-0.5 size-3.5 shrink-0" />
           <span>
             Ознакомление не является согласованием и не меняет статус акции (§11.7).
@@ -213,7 +213,7 @@ export function DepartmentReportView({
         {/* §11.8 re-approval reminder + marketing approve action */}
         {canEditMarketingFlag && (
           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-2 rounded-md bg-orange-50 px-3 py-2 text-xs text-orange-800">
+            <div className="flex items-start gap-2 rounded-md bg-orange-50 dark:bg-orange-500/15 px-3 py-2 text-xs text-orange-800 dark:text-orange-300">
               <ShieldAlert className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 Изменение уже отправленных данных требует повторного согласования
@@ -236,11 +236,11 @@ export function DepartmentReportView({
 
       {/* ── marketing bulk-select strip ── */}
       {canEditMarketingFlag && selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-          <span className="text-sm font-medium text-amber-900">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 px-3 py-2">
+          <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
             Выбрано: {selected.size}
           </span>
-          <span className="text-sm text-amber-800">· «В рекламу»:</span>
+          <span className="text-sm text-amber-800 dark:text-amber-300">· «В рекламу»:</span>
           <Button size="sm" onClick={() => applyBulk(true)}>
             Включить
           </Button>
@@ -365,7 +365,7 @@ function ReportTable({
     <table className="w-full border-collapse text-sm">
       <thead>
         {hasGroups && (
-          <tr className="border-b bg-gray-50/80">
+          <tr className="border-b bg-gray-50/80 dark:bg-muted/40">
             {canEditMarketingFlag && <th className="w-10" />}
             {groups.map((g, i) => (
               <th
@@ -379,15 +379,15 @@ function ReportTable({
             <th />
           </tr>
         )}
-        <tr className="border-b bg-gray-50/80">
+        <tr className="border-b bg-gray-50/80 dark:bg-muted/40">
           {canEditMarketingFlag && (
-            <th className="sticky left-0 z-10 w-10 bg-gray-50/80 px-2 py-2" />
+            <th className="sticky left-0 z-10 w-10 bg-gray-50/80 dark:bg-muted/40 px-2 py-2" />
           )}
           {fields.map((f) => (
             <th
               key={f.id}
               className={cn(
-                "whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-gray-700",
+                "whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-200",
                 isNumericKind(f.kind) && "text-right",
                 f.kind === "check" && "text-center"
               )}
@@ -395,7 +395,7 @@ function ReportTable({
               {f.label}
             </th>
           ))}
-          <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700">
+          <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 dark:text-gray-200">
             {/* acknowledge action column */}
           </th>
         </tr>
@@ -408,15 +408,15 @@ function ReportTable({
             <tr
               key={line.id}
               className={cn(
-                "border-b last:border-0 hover:bg-gray-50/50",
-                added && "bg-emerald-50/60"
+                "border-b last:border-0 hover:bg-gray-50/50 dark:hover:bg-accent",
+                added && "bg-emerald-50/60 dark:bg-emerald-500/10"
               )}
             >
               {canEditMarketingFlag && (
                 <td
                   className={cn(
-                    "sticky left-0 z-10 bg-white px-2 py-2",
-                    added && "bg-emerald-50"
+                    "sticky left-0 z-10 bg-white dark:bg-card px-2 py-2",
+                    added && "bg-emerald-50 dark:bg-emerald-500/10"
                   )}
                 >
                   <Checkbox
@@ -435,8 +435,8 @@ function ReportTable({
                       "whitespace-nowrap px-3 py-2 align-middle",
                       isNumericKind(f.kind) && "text-right tabular-nums",
                       f.kind === "check" && "text-center",
-                      struck && "text-gray-400 line-through",
-                      changed && "bg-amber-100 ring-1 ring-inset ring-amber-300"
+                      struck && "text-gray-400 dark:text-gray-500 line-through",
+                      changed && "bg-amber-100 dark:bg-amber-500/15 ring-1 ring-inset ring-amber-300 dark:ring-amber-500/40"
                     )}
                   >
                     <CellValue
@@ -457,7 +457,7 @@ function ReportTable({
                     onClick={() => onAcknowledgeLine(line.id)}
                     className={cn(
                       buttonVariants({ variant: "ghost", size: "sm" }),
-                      "h-8 text-xs text-emerald-700 hover:bg-emerald-50"
+                      "h-8 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/15"
                     )}
                   >
                     <Check className="size-3.5" />
@@ -515,8 +515,8 @@ function ReportCard({
     <Card
       className={cn(
         "p-4",
-        added && "border-emerald-300 bg-emerald-50/50",
-        struck && "border-red-200 bg-red-50/40"
+        added && "border-emerald-300 dark:border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-500/10",
+        struck && "border-red-200 dark:border-red-500/30 bg-red-50/40 dark:bg-red-500/10"
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -532,8 +532,8 @@ function ReportCard({
           <div className="min-w-0">
             <div
               className={cn(
-                "text-sm font-medium text-gray-900",
-                struck && "text-red-700 line-through"
+                "text-sm font-medium text-gray-900 dark:text-gray-100",
+                struck && "text-red-700 dark:text-red-300 line-through"
               )}
             >
               {String(title)}
@@ -544,7 +544,7 @@ function ReportCard({
           </div>
         </div>
         {added && (
-          <Badge className="shrink-0 rounded-full border-0 bg-emerald-100 text-[10px] text-emerald-800">
+          <Badge className="shrink-0 rounded-full border-0 bg-emerald-100 dark:bg-emerald-500/20 text-[10px] text-emerald-800 dark:text-emerald-300">
             добавлено
           </Badge>
         )}
@@ -561,15 +561,15 @@ function ReportCard({
               className={cn(
                 "flex items-center justify-between gap-3 rounded-md px-2",
                 editableFlag ? "min-h-11 py-1" : "py-0.5",
-                changed && "bg-amber-100 ring-1 ring-inset ring-amber-300"
+                changed && "bg-amber-100 dark:bg-amber-500/15 ring-1 ring-inset ring-amber-300 dark:ring-amber-500/40"
               )}
             >
               <dt className="text-xs text-muted-foreground">{f.label}</dt>
               <dd
                 className={cn(
-                  "text-sm text-gray-800",
+                  "text-sm text-gray-800 dark:text-gray-100",
                   isNumericKind(f.kind) && "tabular-nums",
-                  struck && f.kind !== "check" && "text-gray-400 line-through"
+                  struck && f.kind !== "check" && "text-gray-400 dark:text-gray-500 line-through"
                 )}
               >
                 <CellValue
@@ -592,7 +592,7 @@ function ReportCard({
           onClick={onAcknowledge}
           className={cn(
             buttonVariants({ variant: "outline", size: "sm" }),
-            "mt-3 h-11 w-full text-emerald-700"
+            "mt-3 h-11 w-full text-emerald-700 dark:text-emerald-300"
           )}
         >
           <Check className="size-4" />
@@ -648,13 +648,13 @@ function ReadonlyCheck({ on }: { on: boolean }) {
   return on ? (
     <Check className="inline size-4 text-emerald-600" />
   ) : (
-    <Minus className="inline size-4 text-gray-300" />
+    <Minus className="inline size-4 text-gray-300 dark:text-gray-600" />
   );
 }
 
 function EmptyNote({ onlyChanged }: { onlyChanged: boolean }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 bg-white py-12 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-12 text-center">
       <Info className="size-8 text-muted-foreground/50" />
       <p className="max-w-[280px] text-sm text-muted-foreground">
         {onlyChanged

@@ -19,7 +19,7 @@ export function OverdueTag({ days, className }: OverdueTagProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[11px] font-medium text-red-700 tabular-nums",
+        "inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-500/15 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300 tabular-nums",
         className
       )}
       title={`Просрочка: ${days} дн.`}

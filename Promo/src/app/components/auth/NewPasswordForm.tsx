@@ -50,7 +50,7 @@ export function NewPasswordForm({
   );
   const strength = React.useMemo(() => Object.values(criteria).filter(Boolean).length, [criteria]);
   const strengthColor = React.useMemo(() => {
-    if (strength === 0) return "bg-gray-200";
+    if (strength === 0) return "bg-gray-200 dark:bg-gray-700";
     if (strength === 1) return "bg-red-500";
     if (strength === 2) return "bg-orange-500";
     if (strength === 3) return "bg-yellow-500";
@@ -77,7 +77,7 @@ export function NewPasswordForm({
     <div className="space-y-6">
       <div className="space-y-2">
         <h2 className="text-2xl font-semibold">{title}</h2>
-        <p className="text-base text-gray-700">{description}</p>
+        <p className="text-base text-gray-700 dark:text-gray-200">{description}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -85,7 +85,7 @@ export function NewPasswordForm({
           <div className="space-y-2">
             <Label htmlFor="currentPassword">{currentPasswordLabel}</Label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500 dark:text-gray-400" />
               <Input
                 id="currentPassword"
                 type={showCurrentPassword ? "text" : "password"}
@@ -102,13 +102,13 @@ export function NewPasswordForm({
               <button
                 type="button"
                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
               >
                 {showCurrentPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
             </div>
             {currentError && (
-              <p className="text-sm text-red-600">Текущий пароль неверён</p>
+              <p className="text-sm text-red-600 dark:text-red-400">Текущий пароль неверён</p>
             )}
           </div>
         )}
@@ -116,7 +116,7 @@ export function NewPasswordForm({
         <div className="space-y-2">
           <Label htmlFor="password">Новый пароль</Label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500 dark:text-gray-400" />
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
@@ -163,7 +163,7 @@ export function NewPasswordForm({
         <div className="space-y-2">
           <Label htmlFor="confirmPassword">Подтвердите пароль</Label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500 dark:text-gray-400" />
             <Input
               id="confirmPassword"
               type={showConfirmPassword ? "text" : "password"}
@@ -187,13 +187,13 @@ export function NewPasswordForm({
             <div className="flex items-center gap-2 text-sm">
               {passwordsMatch ? (
                 <>
-                  <CheckCircle2 className="size-4 text-green-600" />
-                  <span className="text-green-600">Пароли совпадают</span>
+                  <CheckCircle2 className="size-4 text-green-600 dark:text-green-400" />
+                  <span className="text-green-600 dark:text-green-400">Пароли совпадают</span>
                 </>
               ) : (
                 <>
-                  <Circle className="size-4 text-red-600" />
-                  <span className="text-red-600">Пароли не совпадают</span>
+                  <Circle className="size-4 text-red-600 dark:text-red-400" />
+                  <span className="text-red-600 dark:text-red-400">Пароли не совпадают</span>
                 </>
               )}
             </div>
@@ -211,8 +211,8 @@ export function NewPasswordForm({
 function CriteriaItem({ met, text }: { met: boolean; text: string }) {
   return (
     <div className="flex items-center gap-2 text-sm">
-      <CheckCircle2 className={cn("size-4", met ? "text-green-600" : "text-gray-400")} />
-      <span className={cn(met ? "text-green-600" : "text-gray-600")}>{text}</span>
+      <CheckCircle2 className={cn("size-4", met ? "text-green-600 dark:text-green-400" : "text-gray-400 dark:text-gray-500")} />
+      <span className={cn(met ? "text-green-600 dark:text-green-400" : "text-gray-600 dark:text-gray-300")}>{text}</span>
     </div>
   );
 }

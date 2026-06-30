@@ -8,11 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@texnomart/ui/card";
 import { cn } from "@texnomart/ui/utils";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { useRole } from "../../role-context";
-
-type ThemeOption = "light" | "dark" | "system";
+import { useTheme, type ThemeOption } from "../../theme-context";
 
 const LANG_KEY = "promo:pref-language";
-const THEME_KEY = "promo:pref-theme";
 
 const LANGUAGES = [
   { id: "ru", label: "Русский" },
@@ -26,32 +24,13 @@ const THEMES: { id: ThemeOption; label: string; icon: typeof Sun }[] = [
   { id: "system", label: "Системная", icon: Laptop },
 ];
 
-function applyTheme(theme: ThemeOption) {
-  if (typeof document === "undefined") return;
-  const root = document.documentElement;
-  if (theme === "dark") {
-    root.classList.add("dark");
-  } else if (theme === "light") {
-    root.classList.remove("dark");
-  } else {
-    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    root.classList.toggle("dark", isDark);
-  }
-}
-
 export function SettingsPage() {
   const { currentRole } = useRole();
+  const { theme, setTheme } = useTheme();
 
   const [language, setLanguage] = React.useState<string>(() => {
     if (typeof window === "undefined") return "ru";
     return window.localStorage.getItem(LANG_KEY) ?? "ru";
-  });
-
-  const [theme, setTheme] = React.useState<ThemeOption>(() => {
-    if (typeof window === "undefined") return "light";
-    const stored = window.localStorage.getItem(THEME_KEY) as ThemeOption | null;
-    if (stored) return stored;
-    return document.documentElement.classList.contains("dark") ? "dark" : "light";
   });
 
   const handleLanguage = (id: string) => {
@@ -62,8 +41,6 @@ export function SettingsPage() {
 
   const handleTheme = (id: ThemeOption) => {
     setTheme(id);
-    window.localStorage.setItem(THEME_KEY, id);
-    applyTheme(id);
     toast.success(`Тема: ${THEMES.find((t) => t.id === id)?.label}`);
   };
 
@@ -92,8 +69,8 @@ export function SettingsPage() {
               className={cn(
                 "flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors",
                 language === lang.id
-                  ? "border-[#FFD60A] bg-[#FFD60A]/10"
-                  : "border-transparent hover:bg-gray-50"
+                  ? "border-primary bg-primary/10"
+                  : "border-transparent hover:bg-accent"
               )}
             >
               <input
@@ -104,11 +81,11 @@ export function SettingsPage() {
                 onChange={() => handleLanguage(lang.id)}
                 className="accent-[#FFD60A]"
               />
-              <Globe className="size-4 text-gray-500" />
-              <span className="text-sm font-medium text-gray-900">{lang.label}</span>
+              <Globe className="size-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-foreground">{lang.label}</span>
             </label>
           ))}
-          <p className="pt-1 text-xs text-gray-500">
+          <p className="pt-1 text-xs text-muted-foreground">
             Выбор сохраняется, но перевод интерфейса появится в следующих версиях
             (сейчас все экраны на русском).
           </p>
@@ -133,17 +110,17 @@ export function SettingsPage() {
                   className={cn(
                     "rounded-xl border-2 p-1 transition-all",
                     active
-                      ? "border-[#FFD60A] ring-2 ring-[#FFD60A]/30"
-                      : "border-gray-200 hover:border-gray-300"
+                      ? "border-primary ring-2 ring-primary/30"
+                      : "border-border hover:border-muted-foreground/40"
                   )}
                 >
-                  <div className="flex h-16 items-center justify-center rounded-lg bg-gray-50">
-                    <Icon className="size-7 text-gray-600" />
+                  <div className="flex h-16 items-center justify-center rounded-lg bg-muted">
+                    <Icon className="size-7 text-muted-foreground" />
                   </div>
                   <p
                     className={cn(
                       "mb-1 mt-2 text-sm font-medium",
-                      active ? "text-gray-900" : "text-gray-600"
+                      active ? "text-foreground" : "text-muted-foreground"
                     )}
                   >
                     {t.label}
@@ -152,9 +129,9 @@ export function SettingsPage() {
               );
             })}
           </div>
-          <p className="text-xs text-gray-500">
-            Полноценная тёмная тема дорабатывается — переключатель меняет режим,
-            визуальная отделка дорабатывается отдельно.
+          <p className="text-xs text-muted-foreground">
+            Тема применяется сразу и сохраняется между сессиями. «Системная»
+            следует за настройкой оформления вашей ОС.
           </p>
         </CardContent>
       </Card>
@@ -190,13 +167,13 @@ function SettingsLink({ to, label, hint }: { to: string; label: string; hint: st
   return (
     <Link
       to={to}
-      className="flex items-center justify-between gap-3 border-b border-gray-100 py-3 last:border-0 hover:bg-gray-50"
+      className="flex items-center justify-between gap-3 border-b border-border py-3 last:border-0 hover:bg-accent"
     >
       <div>
-        <p className="text-sm font-medium text-gray-900">{label}</p>
-        <p className="text-xs text-gray-500">{hint}</p>
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{hint}</p>
       </div>
-      <ChevronRight className="size-4 shrink-0 text-gray-400" />
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
     </Link>
   );
 }

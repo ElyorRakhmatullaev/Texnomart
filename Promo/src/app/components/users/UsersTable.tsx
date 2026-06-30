@@ -24,9 +24,9 @@ import type { PromoUser } from "../../../lib/users-store";
 export type UserRowAction = "reset" | "toggle-admin" | "toggle-status";
 
 const STATUS_META: Record<PromoUser["status"], { label: string; cls: string }> = {
-  active: { label: "Активен", cls: "bg-emerald-50 text-emerald-700" },
-  "temp-password": { label: "Временный пароль", cls: "bg-amber-50 text-amber-700" },
-  blocked: { label: "Заблокирован", cls: "bg-gray-200 text-gray-600" },
+  active: { label: "Активен", cls: "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+  "temp-password": { label: "Временный пароль", cls: "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  blocked: { label: "Заблокирован", cls: "bg-gray-200 dark:bg-muted text-gray-600 dark:text-gray-300" },
 };
 
 function formatDate(iso: string): string {
@@ -93,9 +93,9 @@ export function UsersTable(props: UsersTableProps) {
   return (
     <>
       {/* Desktop */}
-      <div className="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:block">
+      <div className="hidden overflow-hidden rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:block">
         <Table>
-          <TableHeader className="bg-gray-50">
+          <TableHeader className="bg-gray-50 dark:bg-muted/40">
             <TableRow>
               <TableHead className="min-w-[200px]">ФИО</TableHead>
               <TableHead className="min-w-[200px]">Email</TableHead>
@@ -108,15 +108,15 @@ export function UsersTable(props: UsersTableProps) {
           <TableBody>
             {users.map((u) => (
               <TableRow key={u.id}>
-                <TableCell className="font-medium text-gray-900">{u.fullName}</TableCell>
-                <TableCell className="text-gray-700">{u.email}</TableCell>
-                <TableCell className="text-gray-700">{u.role}</TableCell>
+                <TableCell className="font-medium text-gray-900 dark:text-gray-100">{u.fullName}</TableCell>
+                <TableCell className="text-gray-700 dark:text-gray-200">{u.email}</TableCell>
+                <TableCell className="text-gray-700 dark:text-gray-200">{u.role}</TableCell>
                 <TableCell>
                   <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", STATUS_META[u.status].cls)}>
                     {STATUS_META[u.status].label}
                   </span>
                 </TableCell>
-                <TableCell className="tabular-nums text-sm text-gray-600">{formatDate(u.createdAt)}</TableCell>
+                <TableCell className="tabular-nums text-sm text-gray-600 dark:text-gray-300">{formatDate(u.createdAt)}</TableCell>
                 <TableCell className="text-right">
                   <RowMenu {...props} user={u} />
                 </TableCell>
@@ -129,20 +129,20 @@ export function UsersTable(props: UsersTableProps) {
       {/* Mobile cards */}
       <div className="flex flex-col gap-2.5 md:hidden">
         {users.map((u) => (
-          <div key={u.id} className="rounded-lg border border-gray-200 bg-white p-3 shadow-[0px_2px_4px_rgba(204,204,204,0.25)]">
+          <div key={u.id} className="rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card p-3 shadow-[0px_2px_4px_rgba(204,204,204,0.25)]">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="font-medium text-gray-900">{u.fullName}</p>
-                <p className="truncate text-sm text-gray-600">{u.email}</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">{u.fullName}</p>
+                <p className="truncate text-sm text-gray-600 dark:text-gray-300">{u.email}</p>
               </div>
               <RowMenu {...props} user={u} />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-              <Badge variant="outline" className="font-normal text-gray-600">{u.role}</Badge>
+              <Badge variant="outline" className="font-normal text-gray-600 dark:text-gray-300">{u.role}</Badge>
               <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", STATUS_META[u.status].cls)}>
                 {STATUS_META[u.status].label}
               </span>
-              <span className="ml-auto tabular-nums text-xs text-gray-500">{formatDate(u.createdAt)}</span>
+              <span className="ml-auto tabular-nums text-xs text-gray-500 dark:text-gray-400">{formatDate(u.createdAt)}</span>
             </div>
           </div>
         ))}

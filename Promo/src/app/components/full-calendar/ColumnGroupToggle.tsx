@@ -38,7 +38,7 @@ export function ColumnGroupToggle({ visible, onChange }: ColumnGroupToggleProps)
             and anchor the popover correctly. */}
         <button
           type="button"
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 gap-2 bg-white")}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 gap-2 bg-white dark:bg-card")}
         >
           <Columns3 className="size-4 text-muted-foreground" />
           <span>Колонки</span>

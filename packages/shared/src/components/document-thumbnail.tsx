@@ -17,7 +17,7 @@ export function DocumentThumbnail({
   onDownload,
 }: DocumentThumbnailProps) {
   return (
-    <div className="group relative aspect-[3/4] rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
+    <div className="group relative aspect-[3/4] rounded-lg bg-gray-100 dark:bg-muted flex items-center justify-center overflow-hidden">
       {imageUrl ? (
         <img
           src={imageUrl}
@@ -25,7 +25,7 @@ export function DocumentThumbnail({
           className="h-full w-full object-cover"
         />
       ) : (
-        <span className="text-xs text-gray-400">{label}</span>
+        <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>
       )}
       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
         {onView && (
@@ -61,10 +61,10 @@ export function DocumentUploadTile({
   return (
     <div
       onClick={onUpload}
-      className="aspect-[3/4] rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-gray-400 transition-colors"
+      className="aspect-[3/4] rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
     >
-      <Upload className="h-5 w-5 text-gray-400" />
-      <span className="text-xs text-gray-400">{label}</span>
+      <Upload className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+      <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>
     </div>
   );
 }

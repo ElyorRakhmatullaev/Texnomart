@@ -112,7 +112,7 @@ export function ExcelImportDialog({
           {/* Target campaign + template */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <label className="flex-1 space-y-1.5 text-sm">
-              <span className="font-medium text-gray-700">Акция для импорта</span>
+              <span className="font-medium text-gray-700 dark:text-gray-200">Акция для импорта</span>
               <Select value={campaignId} onValueChange={setCampaignId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Выберите акцию" />
@@ -136,10 +136,10 @@ export function ExcelImportDialog({
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={onDrop}
-            className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-gray-50 px-4 py-6 text-center"
+            className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-gray-50 dark:bg-muted/40 px-4 py-6 text-center"
           >
             <FileSpreadsheet className="size-8 text-muted-foreground/70" />
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-gray-700 dark:text-gray-200">
               {fileName ? (
                 <span className="font-medium">{fileName}</span>
               ) : (
@@ -191,19 +191,19 @@ export function ExcelImportDialog({
           {result && !result.structureError && result.rows.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center gap-3 text-sm">
-                <span className="font-medium text-gray-700">
+                <span className="font-medium text-gray-700 dark:text-gray-200">
                   Предпросмотр: {result.rows.length} строк
                 </span>
-                <span className="text-green-700">
+                <span className="text-green-700 dark:text-green-300">
                   к импорту: {importable.length}
                 </span>
                 {errorCount > 0 && (
-                  <span className="text-red-600">с ошибками: {errorCount}</span>
+                  <span className="text-red-600 dark:text-red-400">с ошибками: {errorCount}</span>
                 )}
               </div>
               <div className="max-h-[240px] overflow-y-auto rounded-md border">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-gray-50 text-xs text-gray-600">
+                  <thead className="sticky top-0 bg-gray-50 dark:bg-muted/40 text-xs text-gray-600 dark:text-gray-300">
                     <tr className="border-b">
                       <th className="px-3 py-2 text-left font-medium">№</th>
                       <th className="px-3 py-2 text-left font-medium">
@@ -218,15 +218,15 @@ export function ExcelImportDialog({
                         key={row.row}
                         className={cn(
                           "border-b last:border-0",
-                          row.status === "error" && "bg-red-50/60",
-                          row.status === "duplicate" && "bg-amber-50/60"
+                          row.status === "error" && "bg-red-50/60 dark:bg-red-500/10",
+                          row.status === "duplicate" && "bg-amber-50/60 dark:bg-amber-500/10"
                         )}
                       >
                         <td className="px-3 py-2 tabular-nums text-muted-foreground">
                           {row.row}
                         </td>
                         <td className="px-3 py-2">
-                          <span className="text-gray-900">
+                          <span className="text-gray-900 dark:text-gray-100">
                             {row.name ?? row.nomenclatureId}
                           </span>
                           {row.name && (
@@ -264,15 +264,15 @@ export function ExcelImportDialog({
 function RowStatus({ row }: { row: ParsedImportRow }) {
   if (row.status === "ok") {
     return (
-      <span className="inline-flex rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-800">
+      <span className="inline-flex rounded bg-green-100 dark:bg-green-500/20 px-1.5 py-0.5 text-xs font-medium text-green-800 dark:text-green-300">
         Готово
       </span>
     );
   }
   const tone =
     row.status === "duplicate"
-      ? "bg-amber-100 text-amber-800"
-      : "bg-red-100 text-red-800";
+      ? "bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300"
+      : "bg-red-100 dark:bg-red-500/20 text-red-800 dark:text-red-300";
   return (
     <span className="flex flex-col gap-0.5">
       <span

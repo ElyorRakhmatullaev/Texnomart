@@ -18,19 +18,19 @@ export function InfoRow({
   if (layout === "between") {
     return (
       <div className="flex items-start justify-between gap-4">
-        <span className="text-sm text-gray-500 shrink-0">{label}</span>
-        <span className="text-sm text-gray-900 text-right">{value}</span>
+        <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">{label}</span>
+        <span className="text-sm text-gray-900 dark:text-gray-100 text-right">{value}</span>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-      <span className="text-xs text-gray-500 sm:w-[140px] shrink-0">
+      <span className="text-xs text-gray-500 dark:text-gray-400 sm:w-[140px] shrink-0">
         {label}
       </span>
       <span
-        className={`text-sm text-gray-900 ${bold ? "font-semibold" : "font-medium"}`}
+        className={`text-sm text-gray-900 dark:text-gray-100 ${bold ? "font-semibold" : "font-medium"}`}
       >
         {value}
       </span>

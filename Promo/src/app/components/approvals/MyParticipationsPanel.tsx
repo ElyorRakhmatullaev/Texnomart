@@ -57,7 +57,7 @@ export function MyParticipationsPanel() {
   return (
     <>
       <Card className="p-4">
-        <h2 className="text-sm font-semibold text-gray-900">Мои участия</h2>
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Мои участия</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Категорийный менеджер отправляет данные из полного промо-календаря. Здесь
           можно заявить о неучастии в акции — заявка уйдёт старшему КМ.
@@ -70,11 +70,11 @@ export function MyParticipationsPanel() {
             return (
               <li
                 key={`${row.campaignId}~${row.kmId}`}
-                className="flex flex-col gap-2 rounded-lg border bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-lg border bg-gray-50 dark:bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-gray-900">
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
                       {c?.name ?? row.campaignId}
                     </span>
                     <PromoStatusBadge status={row.kmStatus} />
@@ -93,7 +93,7 @@ export function MyParticipationsPanel() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="shrink-0 text-gray-700"
+                    className="shrink-0 text-gray-700 dark:text-gray-200"
                     onClick={() => openRequest(row)}
                   >
                     <UserMinus className="size-4" />

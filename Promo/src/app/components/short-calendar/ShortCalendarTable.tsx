@@ -37,7 +37,7 @@ const BASE_ROW_H = 80; // px — fits the collapsed «Статус готовн�
 const READINESS_EXPANDED_H = 148; // px — a row whose readiness block is expanded (labels under each segment)
 const SUBROW_H = 32; // px per distribution sub-row (expanded)
 
-const CELL = "border-r border-gray-100";
+const CELL = "border-r border-gray-100 dark:border-border";
 
 /** Capitalised short weekday, e.g. "Пн". */
 function weekdayShort(date: Date): string {
@@ -183,7 +183,7 @@ export function ShortCalendarTable({
       {/* ── STICKY TOP band — pinned to the page scroll (§13). `-top-4` cancels
             <main>'s p-4 (16px) so it sits flush at the content top. It stacks a synced
             top horizontal scrollbar (§1) over the column-title row. ───────────────── */}
-      <div className="sticky -top-4 z-30 border-b bg-gray-50">
+      <div className="sticky -top-4 z-30 border-b bg-gray-50 dark:bg-muted/40">
         {/* Top horizontal scrollbar — synced with the body's bottom scrollbar (§1).
             A spacer the width of the frozen pane keeps it aligned with the scroll area;
             the inner track width = the scroll content width so the thumb matches. */}
@@ -203,7 +203,7 @@ export function ShortCalendarTable({
           <div
             ref={frozenHeadRef}
             className={cn(
-              "flex shrink-0 items-center gap-2.5 border-r px-3 text-[13px] font-semibold text-gray-700",
+              "flex shrink-0 items-center gap-2.5 border-r px-3 text-[13px] font-semibold text-gray-700 dark:text-gray-200",
               HEADER_H
             )}
           >
@@ -214,7 +214,7 @@ export function ShortCalendarTable({
           <div ref={headRef} className="min-w-0 flex-1 overflow-hidden">
             <div
               className={cn(
-                "flex min-w-max items-center text-[13px] font-semibold text-gray-700",
+                "flex min-w-max items-center text-[13px] font-semibold text-gray-700 dark:text-gray-200",
                 HEADER_H
               )}
             >
@@ -259,7 +259,7 @@ export function ShortCalendarTable({
       {/* ── BODY band — natural height; the MAIN PAGE handles vertical scroll ────── */}
       <div className="flex">
         {/* Frozen identity pane */}
-        <div className="shrink-0 border-r bg-white">
+        <div className="shrink-0 border-r bg-white dark:bg-card">
           {campaigns.map((c, i) => (
             <button
               key={c.id}
@@ -267,20 +267,20 @@ export function ShortCalendarTable({
               onClick={() => onRowClick(c.id)}
               style={{ height: rowHeights[i] }}
               className={cn(
-                "flex w-full items-center gap-2.5 border-b px-3 text-left transition-colors hover:bg-gray-50",
-                c.cancelled && "bg-red-50/60 hover:bg-red-50"
+                "flex w-full items-center gap-2.5 border-b px-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-accent",
+                c.cancelled && "bg-red-50/60 hover:bg-red-50 dark:bg-red-500/15 dark:hover:bg-red-500/20"
               )}
             >
               <span className="w-[104px] text-xs font-medium tabular-nums text-muted-foreground">
                 {formatPromoNo(c.id)}
               </span>
-              <span className="w-[120px] truncate text-sm text-gray-700">
+              <span className="w-[120px] truncate text-sm text-gray-700 dark:text-gray-200">
                 {c.type}
               </span>
               <span
                 className={cn(
-                  "w-[200px] truncate text-sm font-semibold text-gray-900",
-                  c.cancelled && "text-red-700 line-through"
+                  "w-[200px] truncate text-sm font-semibold text-gray-900 dark:text-gray-100",
+                  c.cancelled && "text-red-700 line-through dark:text-red-300"
                 )}
               >
                 {c.name}
@@ -319,8 +319,8 @@ export function ShortCalendarTable({
                   }}
                   style={{ height: rowHeights[i] }}
                   className={cn(
-                    "flex w-full cursor-pointer items-stretch overflow-hidden border-b text-left transition-colors hover:bg-gray-50",
-                    c.cancelled && "bg-red-50/60 hover:bg-red-50"
+                    "flex w-full cursor-pointer items-stretch overflow-hidden border-b text-left transition-colors hover:bg-gray-50 dark:hover:bg-accent",
+                    c.cancelled && "bg-red-50/60 hover:bg-red-50 dark:bg-red-500/15 dark:hover:bg-red-500/20"
                   )}
                 >
                   {/* Период + day-of-week strip */}
@@ -330,7 +330,7 @@ export function ShortCalendarTable({
                       CELL
                     )}
                   >
-                    <div className="text-sm tabular-nums text-gray-900">
+                    <div className="text-sm tabular-nums text-gray-900 dark:text-gray-100">
                       <RuDate value={c.startDate} /> — <RuDate value={c.endDate} />
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -346,7 +346,7 @@ export function ShortCalendarTable({
                       CELL
                     )}
                   >
-                    <span className="text-sm tabular-nums text-gray-900">
+                    <span className="text-sm tabular-nums text-gray-900 dark:text-gray-100">
                       <RuDate value={deadline} />
                     </span>
                     <OverdueTag days={overdue} />
@@ -361,7 +361,7 @@ export function ShortCalendarTable({
                       CELL
                     )}
                   >
-                    <span className="text-sm tabular-nums text-gray-900">
+                    <span className="text-sm tabular-nums text-gray-900 dark:text-gray-100">
                       <RuDate value={report.deadline} />
                     </span>
                     {!report.sent && <OverdueTag days={report.overdueDays} />}
@@ -383,14 +383,14 @@ export function ShortCalendarTable({
                                 style={{ height: g.items.length * SUBROW_H }}
                                 className={cn(
                                   gi < groups.length - 1 &&
-                                    "border-b border-gray-100"
+                                    "border-b border-gray-100 dark:border-border"
                                 )}
                               >
                                 <div
                                   style={{ height: SUBROW_H }}
                                   className="flex flex-col justify-center"
                                 >
-                                  <span className="text-xs font-medium text-gray-800">
+                                  <span className="text-xs font-medium text-gray-800 dark:text-gray-100">
                                     {weekdayFull(g.date)}
                                   </span>
                                   <span className="text-[11px] tabular-nums text-muted-foreground">
@@ -414,7 +414,7 @@ export function ShortCalendarTable({
                                 <div
                                   key={`${g.key}-cat-${idx}`}
                                   style={{ height: SUBROW_H }}
-                                  className="flex items-center border-b border-gray-100 text-xs text-gray-800 last:border-b-0"
+                                  className="flex items-center border-b border-gray-100 text-xs text-gray-800 last:border-b-0 dark:border-border dark:text-gray-100"
                                 >
                                   <span className="truncate">{it.category}</span>
                                 </div>
@@ -435,7 +435,7 @@ export function ShortCalendarTable({
                                 <div
                                   key={`${g.key}-km-${idx}`}
                                   style={{ height: SUBROW_H }}
-                                  className="flex items-center border-b border-gray-100 text-xs text-gray-700 last:border-b-0"
+                                  className="flex items-center border-b border-gray-100 text-xs text-gray-700 last:border-b-0 dark:border-border dark:text-gray-200"
                                 >
                                   <span className="truncate">
                                     {kmName(it.responsibleKmId)}
@@ -469,7 +469,7 @@ export function ShortCalendarTable({
                   >
                     {report.sent ? (
                       <>
-                        <span className="flex items-center gap-1 text-sm font-medium text-emerald-700">
+                        <span className="flex items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-300">
                           <CheckCircle2 className="size-3.5 shrink-0" />
                           Отправлено
                         </span>
@@ -483,7 +483,7 @@ export function ShortCalendarTable({
                           Не отправлено
                         </span>
                         {report.overdueDays > 0 && (
-                          <span className="text-[11px] font-medium text-red-600">
+                          <span className="text-[11px] font-medium text-red-600 dark:text-red-400">
                             отчёт просрочен
                           </span>
                         )}

@@ -28,19 +28,19 @@ import { appendAuditEvent } from "../../../lib/audit-store";
 import type { AuditActionType } from "../../../lib/promo-mock-data";
 
 const TAB_TRIGGER =
-  "flex-none whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-[#FFD60A] data-[state=active]:bg-transparent data-[state=active]:text-gray-900 data-[state=active]:shadow-none";
+  "flex-none whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-gray-900 dark:data-[state=active]:text-gray-100 data-[state=active]:shadow-none";
 
 const STATUS_META: Record<UserStatus, { label: string; cls: string }> = {
-  active: { label: "Активен", cls: "bg-emerald-50 text-emerald-700" },
-  "temp-password": { label: "Временный пароль", cls: "bg-amber-50 text-amber-700" },
-  blocked: { label: "Заблокирован", cls: "bg-gray-200 text-gray-600" },
+  active: { label: "Активен", cls: "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+  "temp-password": { label: "Временный пароль", cls: "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  blocked: { label: "Заблокирован", cls: "bg-gray-200 dark:bg-muted text-gray-600 dark:text-gray-300" },
 };
 
 function ReadRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-gray-100 py-2.5 last:border-0">
-      <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-right text-sm font-medium text-gray-900">{children}</span>
+    <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-border py-2.5 last:border-0">
+      <span className="text-sm text-gray-500 dark:text-gray-400">{label}</span>
+      <span className="text-right text-sm font-medium text-gray-900 dark:text-gray-100">{children}</span>
     </div>
   );
 }
@@ -71,13 +71,13 @@ function InfoTab({ user, onSaved }: { user: PromoUser; onSaved: (comment: string
       <Card>
         <CardContent className="flex flex-col items-center gap-3 pt-6 sm:flex-row sm:items-center sm:gap-4">
           <Avatar className="size-16 text-xl">
-            <AvatarFallback className="bg-[#FFD60A] text-black text-xl font-semibold">
+            <AvatarFallback className="bg-primary text-black text-xl font-semibold">
               {getInitials(user.fullName)}
             </AvatarFallback>
           </Avatar>
           <div className="text-center sm:text-left">
-            <p className="text-lg font-semibold text-gray-900">{user.fullName}</p>
-            <p className="text-sm text-gray-500">{user.email}</p>
+            <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{user.fullName}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
           </div>
           <span
             className={cn(
@@ -107,8 +107,8 @@ function InfoTab({ user, onSaved }: { user: PromoUser; onSaved: (comment: string
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email (логин)</Label>
-            <Input id="email" value={user.email} readOnly className="bg-gray-50" />
-            <p className="text-xs text-gray-500">
+            <Input id="email" value={user.email} readOnly className="bg-gray-50 dark:bg-muted/40" />
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               Email используется как логин и изменяется только администратором.
             </p>
           </div>
@@ -127,7 +127,7 @@ function InfoTab({ user, onSaved }: { user: PromoUser; onSaved: (comment: string
         </CardHeader>
         <CardContent className="pt-0">
           <ReadRow label="Роль учётной записи">
-            <Badge variant="outline" className="font-normal text-gray-700">
+            <Badge variant="outline" className="font-normal text-gray-700 dark:text-gray-200">
               {user.role}
             </Badge>
           </ReadRow>
@@ -148,10 +148,10 @@ function InfoTab({ user, onSaved }: { user: PromoUser; onSaved: (comment: string
             {user.lastPasswordChangeAt ? (
               <RuDate value={new Date(user.lastPasswordChangeAt)} withTime className="tabular-nums" />
             ) : (
-              <span className="text-gray-400">—</span>
+              <span className="text-gray-400 dark:text-gray-500">—</span>
             )}
           </ReadRow>
-          <p className="pt-3 text-xs text-gray-500">
+          <p className="pt-3 text-xs text-gray-500 dark:text-gray-400">
             Роль и права назначаются администратором в разделе «Управление пользователями».
             Активную роль интерфейса можно переключить в меню пользователя.
           </p>
@@ -178,16 +178,16 @@ function SecurityTab({ user, onChanged }: { user: PromoUser; onChanged: () => vo
     <div className="space-y-6">
       <Card>
         <CardContent className="space-y-4 pt-6">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Последнее изменение пароля:{" "}
             {user.lastPasswordChangeAt ? (
               <RuDate
                 value={new Date(user.lastPasswordChangeAt)}
                 withTime
-                className="font-medium text-gray-700 tabular-nums"
+                className="font-medium text-gray-700 dark:text-gray-200 tabular-nums"
               />
             ) : (
-              <span className="text-gray-400">ещё не менялся</span>
+              <span className="text-gray-400 dark:text-gray-500">ещё не менялся</span>
             )}
           </p>
           <NewPasswordForm
@@ -203,10 +203,10 @@ function SecurityTab({ user, onChanged }: { user: PromoUser; onChanged: () => vo
 
       <Card>
         <CardContent className="flex items-start gap-3 pt-6">
-          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-gray-400" />
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-gray-400 dark:text-gray-500" />
           <div>
-            <p className="text-sm font-medium text-gray-900">Двухфакторная аутентификация</p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Двухфакторная аутентификация</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               Вход в систему выполняется по email и паролю. Двухфакторная аутентификация
               в текущей версии не используется.
             </p>
@@ -243,8 +243,8 @@ export function ProfilePage() {
     return (
       <div className="flex flex-col">
         <PageHeader title="Мой профиль" showCompare={false} showExport={false} />
-        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-gray-200 bg-white py-16 text-center">
-          <User className="size-12 text-gray-300" />
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center">
+          <User className="size-12 text-gray-300 dark:text-gray-500" />
           <p className="text-sm text-muted-foreground">Не удалось загрузить профиль пользователя.</p>
         </div>
       </div>

@@ -63,7 +63,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreate }: CreateUserDia
           <div className="space-y-2">
             <Label htmlFor="email">Email (логин)</Label>
             <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@texnomart.uz" required />
-            {email && !emailValid && <p className="text-xs text-red-600">Введите корректный email.</p>}
+            {email && !emailValid && <p className="text-xs text-red-600 dark:text-red-400">Введите корректный email.</p>}
           </div>
           <div className="space-y-2">
             <Label>Роль</Label>

@@ -61,7 +61,7 @@ interface AuditLogFiltersProps {
 }
 
 const FIELD =
-  "h-8 rounded-md border border-input bg-white px-2 text-sm text-gray-900 shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+  "h-8 rounded-md border border-input bg-white dark:bg-card px-2 text-sm text-gray-900 dark:text-gray-100 shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
 export function AuditLogFilters({
   values,
@@ -84,7 +84,7 @@ export function AuditLogFilters({
     >
       <Field label="Пользователь" stack={stack}>
         <Select value={values.user} onValueChange={(v) => onChange({ user: v })}>
-          <SelectTrigger className={`${triggerW} h-8 bg-white text-sm`}>
+          <SelectTrigger className={`${triggerW} h-8 bg-white dark:bg-card text-sm`}>
             <SelectValue placeholder="Пользователь" />
           </SelectTrigger>
           <SelectContent>
@@ -100,7 +100,7 @@ export function AuditLogFilters({
 
       <Field label="Роль" stack={stack}>
         <Select value={values.role} onValueChange={(v) => onChange({ role: v })}>
-          <SelectTrigger className={`${triggerW} h-8 bg-white text-sm`}>
+          <SelectTrigger className={`${triggerW} h-8 bg-white dark:bg-card text-sm`}>
             <SelectValue placeholder="Роль" />
           </SelectTrigger>
           <SelectContent>
@@ -119,7 +119,7 @@ export function AuditLogFilters({
           value={values.action}
           onValueChange={(v) => onChange({ action: v })}
         >
-          <SelectTrigger className={`${triggerW} h-8 bg-white text-sm`}>
+          <SelectTrigger className={`${triggerW} h-8 bg-white dark:bg-card text-sm`}>
             <SelectValue placeholder="Тип действия" />
           </SelectTrigger>
           <SelectContent>
@@ -138,7 +138,7 @@ export function AuditLogFilters({
           value={values.object}
           onValueChange={(v) => onChange({ object: v })}
         >
-          <SelectTrigger className={`${triggerW} h-8 bg-white text-sm`}>
+          <SelectTrigger className={`${triggerW} h-8 bg-white dark:bg-card text-sm`}>
             <SelectValue placeholder="Объект" />
           </SelectTrigger>
           <SelectContent>
@@ -174,7 +174,7 @@ export function AuditLogFilters({
         <Button
           variant="ghost"
           size="sm"
-          className={`h-8 text-xs text-gray-500 ${stack ? "self-start" : ""}`}
+          className={`h-8 text-xs text-gray-500 dark:text-gray-400 ${stack ? "self-start" : ""}`}
           onClick={onClear}
         >
           <X className="mr-1 h-3 w-3" />

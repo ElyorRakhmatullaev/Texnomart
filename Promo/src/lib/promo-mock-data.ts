@@ -2663,12 +2663,12 @@ export const NOTIFICATION_TYPE_META: Record<
   NotificationType,
   { label: string; bg: string; text: string }
 > = {
-  "data-changed": { label: "Новые/изменённые данные", bg: "bg-blue-50", text: "text-blue-700" },
-  "campaign-cancelled": { label: "Акция отменена", bg: "bg-red-50", text: "text-red-700" },
-  "line-removed": { label: "Удалена позиция", bg: "bg-orange-50", text: "text-orange-700" },
-  "marketing-reapproval": { label: "Повторное согласование маркетинга", bg: "bg-pink-50", text: "text-pink-700" },
-  "km-assignment": { label: "Назначение КМ", bg: "bg-violet-50", text: "text-violet-700" },
-  "ad-approval": { label: "Утверждение «В рекламу»", bg: "bg-emerald-50", text: "text-emerald-700" },
+  "data-changed": { label: "Новые/изменённые данные", bg: "bg-blue-50 dark:bg-blue-500/15", text: "text-blue-700 dark:text-blue-300" },
+  "campaign-cancelled": { label: "Акция отменена", bg: "bg-red-50 dark:bg-red-500/15", text: "text-red-700 dark:text-red-300" },
+  "line-removed": { label: "Удалена позиция", bg: "bg-orange-50 dark:bg-orange-500/15", text: "text-orange-700 dark:text-orange-300" },
+  "marketing-reapproval": { label: "Повторное согласование маркетинга", bg: "bg-pink-50 dark:bg-pink-500/15", text: "text-pink-700 dark:text-pink-300" },
+  "km-assignment": { label: "Назначение КМ", bg: "bg-violet-50 dark:bg-violet-500/15", text: "text-violet-700 dark:text-violet-300" },
+  "ad-approval": { label: "Утверждение «В рекламу»", bg: "bg-emerald-50 dark:bg-emerald-500/15", text: "text-emerald-700 dark:text-emerald-300" },
 };
 
 export interface PromoNotification {
@@ -2902,10 +2902,10 @@ export const PROMO_TYPE_RULE_STATUS_TINT: Record<
   PromoTypeRuleStatus,
   { bg: string; text: string }
 > = {
-  draft: { bg: "bg-gray-100", text: "text-gray-600" },
-  pending: { bg: "bg-amber-50", text: "text-amber-700" },
-  approved: { bg: "bg-emerald-50", text: "text-emerald-700" },
-  archived: { bg: "bg-gray-100", text: "text-gray-500" },
+  draft: { bg: "bg-gray-100 dark:bg-muted", text: "text-gray-600 dark:text-gray-300" },
+  pending: { bg: "bg-amber-50 dark:bg-amber-500/15", text: "text-amber-700 dark:text-amber-300" },
+  approved: { bg: "bg-emerald-50 dark:bg-emerald-500/15", text: "text-emerald-700 dark:text-emerald-300" },
+  archived: { bg: "bg-gray-100 dark:bg-muted", text: "text-gray-500 dark:text-gray-400" },
 };
 
 export interface RuleHistoryEntry {
@@ -3101,21 +3101,21 @@ export const AUDIT_ACTION_META: Record<
   AuditActionType,
   { bg: string; text: string }
 > = {
-  "создание": { bg: "bg-blue-50", text: "text-blue-700" },
-  "изменение": { bg: "bg-amber-50", text: "text-amber-700" },
-  "отправка на согласование": { bg: "bg-violet-50", text: "text-violet-700" },
-  "согласование": { bg: "bg-emerald-50", text: "text-emerald-700" },
-  "отклонение": { bg: "bg-red-50", text: "text-red-700" },
-  "отмена": { bg: "bg-red-100", text: "text-red-800" },
-  "Не участвует": { bg: "bg-gray-100", text: "text-gray-600" },
-  "отправка отчёта": { bg: "bg-teal-50", text: "text-teal-700" },
-  "сброс пароля": { bg: "bg-sky-50", text: "text-sky-700" },
-  "назначение прав": { bg: "bg-indigo-50", text: "text-indigo-700" },
-  "отзыв прав": { bg: "bg-orange-50", text: "text-orange-700" },
-  "блокировка": { bg: "bg-rose-100", text: "text-rose-800" },
-  "разблокировка": { bg: "bg-green-50", text: "text-green-700" },
-  "смена пароля": { bg: "bg-cyan-50", text: "text-cyan-700" },
-  "изменение профиля": { bg: "bg-slate-100", text: "text-slate-700" },
+  "создание": { bg: "bg-blue-50 dark:bg-blue-500/15", text: "text-blue-700 dark:text-blue-300" },
+  "изменение": { bg: "bg-amber-50 dark:bg-amber-500/15", text: "text-amber-700 dark:text-amber-300" },
+  "отправка на согласование": { bg: "bg-violet-50 dark:bg-violet-500/15", text: "text-violet-700 dark:text-violet-300" },
+  "согласование": { bg: "bg-emerald-50 dark:bg-emerald-500/15", text: "text-emerald-700 dark:text-emerald-300" },
+  "отклонение": { bg: "bg-red-50 dark:bg-red-500/15", text: "text-red-700 dark:text-red-300" },
+  "отмена": { bg: "bg-red-100 dark:bg-red-500/20", text: "text-red-800 dark:text-red-300" },
+  "Не участвует": { bg: "bg-gray-100 dark:bg-muted", text: "text-gray-600 dark:text-gray-300" },
+  "отправка отчёта": { bg: "bg-teal-50 dark:bg-teal-500/15", text: "text-teal-700 dark:text-teal-300" },
+  "сброс пароля": { bg: "bg-sky-50 dark:bg-sky-500/15", text: "text-sky-700 dark:text-sky-300" },
+  "назначение прав": { bg: "bg-indigo-50 dark:bg-indigo-500/15", text: "text-indigo-700 dark:text-indigo-300" },
+  "отзыв прав": { bg: "bg-orange-50 dark:bg-orange-500/15", text: "text-orange-700 dark:text-orange-300" },
+  "блокировка": { bg: "bg-rose-100 dark:bg-rose-500/20", text: "text-rose-800 dark:text-rose-300" },
+  "разблокировка": { bg: "bg-green-50 dark:bg-green-500/15", text: "text-green-700 dark:text-green-300" },
+  "смена пароля": { bg: "bg-cyan-50 dark:bg-cyan-500/15", text: "text-cyan-700 dark:text-cyan-300" },
+  "изменение профиля": { bg: "bg-slate-100 dark:bg-slate-500/20", text: "text-slate-700 dark:text-slate-300" },
 };
 
 export const AUDIT_OBJECT_LABEL: Record<AuditObjectType, string> = {

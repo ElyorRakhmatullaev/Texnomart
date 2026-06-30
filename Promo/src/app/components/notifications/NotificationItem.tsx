@@ -51,7 +51,7 @@ export function NotificationItem({
     <div
       className={cn(
         "flex gap-3 rounded-lg border p-3 md:p-4 transition-colors",
-        n.read ? "bg-gray-50/60 border-gray-100" : "bg-white border-gray-200"
+        n.read ? "bg-gray-50/60 dark:bg-muted/40 border-gray-100 dark:border-border" : "bg-white dark:bg-card border-gray-200 dark:border-border"
       )}
     >
       {/* Unread dot + type icon */}
@@ -66,7 +66,7 @@ export function NotificationItem({
           <Icon className="size-[18px]" />
         </span>
         {!n.read && (
-          <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-destructive ring-2 ring-white" />
+          <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-destructive ring-2 ring-white dark:ring-card" />
         )}
       </div>
 
@@ -82,7 +82,7 @@ export function NotificationItem({
             {meta.label}
           </span>
           {n.reportVersion != null && (
-            <span className="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600 tabular-nums">
+            <span className="inline-flex items-center rounded-md bg-gray-100 dark:bg-muted px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-300 tabular-nums">
               отчёт v{n.reportVersion}
             </span>
           )}
@@ -92,7 +92,7 @@ export function NotificationItem({
         </div>
 
         {n.campaignName && (
-          <p className="text-sm font-semibold text-gray-900">
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             {n.campaignName}
           </p>
         )}
@@ -100,14 +100,14 @@ export function NotificationItem({
         <p
           className={cn(
             "text-sm",
-            n.read ? "text-muted-foreground" : "text-gray-700"
+            n.read ? "text-muted-foreground" : "text-gray-700 dark:text-gray-200"
           )}
         >
           {n.description}
         </p>
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          <span className="font-medium text-gray-600">{n.actor.name}</span>
+          <span className="font-medium text-gray-600 dark:text-gray-300">{n.actor.name}</span>
           <span aria-hidden>·</span>
           <span>{n.actor.role}</span>
           <span aria-hidden>·</span>

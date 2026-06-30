@@ -95,7 +95,7 @@ export function LoginPage() {
       <div className="space-y-6">
         <div className="space-y-2">
           <h2 className="text-2xl font-semibold">Добро пожаловать</h2>
-          <p className="text-base text-gray-700">Войдите в свою учётную запись</p>
+          <p className="text-base text-gray-700 dark:text-gray-200">Войдите в свою учётную запись</p>
         </div>
 
         {error && !isBlocked && (
@@ -123,7 +123,7 @@ export function LoginPage() {
           <div className="space-y-2">
             <Label htmlFor="email">Email или телефон</Label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500 dark:text-gray-400" />
               <Input
                 id="email"
                 type="text"
@@ -140,7 +140,7 @@ export function LoginPage() {
           <div className="space-y-2">
             <Label htmlFor="password">Пароль</Label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500 dark:text-gray-400" />
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
@@ -154,7 +154,7 @@ export function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                 disabled={isBlocked}
               >
                 {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}

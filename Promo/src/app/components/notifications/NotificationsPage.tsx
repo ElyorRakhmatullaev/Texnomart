@@ -41,7 +41,7 @@ function GroupedList({
     <div className="space-y-5">
       {groups.map((group) => (
         <div key={group.key} className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
             {group.key}
           </h3>
           <div className="space-y-2">
@@ -130,10 +130,10 @@ export function NotificationsPage() {
       />
 
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-gray-200 bg-white py-16 text-center">
-          <BellOff className="size-12 text-gray-300" />
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center">
+          <BellOff className="size-12 text-gray-300 dark:text-gray-600" />
           <div>
-            <p className="font-medium text-gray-900">Уведомлений нет</p>
+            <p className="font-medium text-gray-900 dark:text-gray-100">Уведомлений нет</p>
             <p className="text-sm text-muted-foreground">
               Для выбранной роли и фильтра уведомления отсутствуют.
             </p>
@@ -145,7 +145,7 @@ export function NotificationsPage() {
           {unread.length > 0 && (
             <section className="space-y-3">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-gray-900">
+                <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   Непрочитанные
                 </h2>
                 <Badge variant="secondary" className="tabular-nums">
@@ -163,10 +163,10 @@ export function NotificationsPage() {
           {read.length > 0 && (
             <section className="space-y-3">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-gray-400">
+                <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500">
                   Прочитано
                 </h2>
-                <Badge variant="outline" className="tabular-nums text-gray-400">
+                <Badge variant="outline" className="tabular-nums text-gray-400 dark:text-gray-500">
                   {read.length}
                 </Badge>
               </div>

@@ -52,7 +52,7 @@ function editText(value: number | string | undefined, kind: EditableKind): strin
 const RequiredMarker = () => (
   <Tooltip>
     <TooltipTrigger asChild>
-      <span className="inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-[11px] font-medium text-red-700">
+      <span className="inline-flex items-center gap-1 rounded bg-red-50 dark:bg-red-500/15 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
         <AlertCircle className="size-3" />
         не заполнено
       </span>
@@ -123,7 +123,7 @@ export function EditableCell({
         }}
         inputMode={isNumeric ? "decimal" : "text"}
         className={cn(
-          "h-7 w-full rounded border border-[#FFD60A] bg-white px-1.5 text-sm outline-none ring-2 ring-[#FFD60A]/30",
+          "h-7 w-full rounded border border-primary bg-white dark:bg-card px-1.5 text-sm outline-none ring-2 ring-primary/30",
           align === "right" ? "text-right tabular-nums" : "text-left"
         )}
       />
@@ -164,7 +164,7 @@ export function EditableCell({
       type="button"
       onClick={startEdit}
       className={cn(
-        "group/cell inline-flex min-h-7 w-full items-center gap-1 rounded px-1 text-left hover:bg-[#FFD60A]/10",
+        "group/cell inline-flex min-h-7 w-full items-center gap-1 rounded px-1 text-left hover:bg-primary/10",
         align === "right" && "justify-end text-right"
       )}
     >

@@ -83,7 +83,7 @@ function ActionButtons({
         </Button>
         <Button
           variant="outline"
-          className="w-full border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
+          className="w-full border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
           onClick={onRejectNonParticipation}
         >
           <X className="size-4" />
@@ -100,7 +100,7 @@ function ActionButtons({
       </Button>
       <Button
         variant="outline"
-        className="w-full border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
+        className="w-full border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
         disabled={selectedCount === 0}
         onClick={onRejectSelected}
       >
@@ -109,7 +109,7 @@ function ActionButtons({
       </Button>
       <Button
         variant="ghost"
-        className="w-full text-red-700 hover:bg-red-50 hover:text-red-700"
+        className="w-full text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
         onClick={onRejectSet}
       >
         Отклонить весь набор
@@ -139,13 +139,13 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
   return (
     <div className="space-y-4">
       {/* Actions — buttons hidden below lg (mobile uses the fixed bottom bar). */}
-      <div className="rounded-xl border bg-white p-4">
-        <h2 className="text-sm font-semibold text-gray-900">
+      <div className="rounded-xl border bg-white dark:bg-card p-4">
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           {isNonPart ? "Решение по «Не участвует»" : "Действия согласования"}
         </h2>
 
         {autoEscalated && (
-          <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+          <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/15 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300">
             <Zap className="mt-0.5 size-3.5 shrink-0" />
             Авто-передано КД по истечении срока (Старший КМ не отреагировал за 2
             раб. дн.).
@@ -153,13 +153,13 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
         )}
 
         {isNonPart && item.nonParticipationReason && (
-          <div className="mt-2 rounded-lg border-l-2 border-l-gray-300 bg-gray-50 px-2.5 py-1.5">
-            <p className="text-xs font-medium text-gray-600">
+          <div className="mt-2 rounded-lg border-l-2 border-l-gray-300 dark:border-l-gray-600 bg-gray-50 dark:bg-muted/40 px-2.5 py-1.5">
+            <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
               {item.nonParticipationByKd
                 ? "Причина (установлено КД)"
                 : "Причина неучастия (КМ)"}
             </p>
-            <p className="mt-0.5 text-sm text-gray-800">
+            <p className="mt-0.5 text-sm text-gray-800 dark:text-gray-100">
               {item.nonParticipationReason}
             </p>
           </div>
@@ -196,7 +196,7 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
             <Button
               variant="outline"
               size="sm"
-              className="w-full text-gray-700"
+              className="w-full text-gray-700 dark:text-gray-200"
               onClick={onKdSetNonParticipation}
             >
               <UserMinus className="size-4" />
@@ -210,12 +210,12 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
       </div>
 
       {/* Advance gate — every КМ needs a final decision before the campaign moves on. */}
-      <div className="rounded-xl border bg-white p-4">
-        <h3 className="text-sm font-semibold text-gray-900">Готовность кампании</h3>
+      <div className="rounded-xl border bg-white dark:bg-card p-4">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Готовность кампании</h3>
         <p className="mt-1 text-xs text-muted-foreground tabular-nums">
           Финальных решений КМ: {decision.finalised} из {decision.total}
         </p>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-muted">
           <div
             className={cn(
               "h-full rounded-full",
@@ -229,7 +229,7 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
         <p
           className={cn(
             "mt-2 text-xs",
-            decision.canAdvance ? "text-emerald-700" : "text-amber-700"
+            decision.canAdvance ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"
           )}
         >
           {decision.canAdvance
@@ -239,8 +239,8 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
       </div>
 
       {item.comments.length > 0 && (
-        <div className="rounded-xl border bg-white p-4">
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+        <div className="rounded-xl border bg-white dark:bg-card p-4">
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100">
             <MessageSquare className="size-4 text-muted-foreground" />
             Комментарии проверки
           </h3>
@@ -249,20 +249,20 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
               <li
                 key={i}
                 className={cn(
-                  "rounded-lg border-l-2 bg-gray-50 px-3 py-2",
-                  c.lineIds ? "border-l-red-300" : "border-l-gray-300"
+                  "rounded-lg border-l-2 bg-gray-50 dark:bg-muted/40 px-3 py-2",
+                  c.lineIds ? "border-l-red-300 dark:border-l-red-500/50" : "border-l-gray-300 dark:border-l-gray-600"
                 )}
               >
                 <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-gray-700">{c.author}</span>
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{c.author}</span>
                   <RuDate value={new Date(c.at)} withTime />
                   {c.lineIds && (
-                    <span className="rounded bg-red-100 px-1 text-[11px] font-medium text-red-700">
+                    <span className="rounded bg-red-100 dark:bg-red-500/20 px-1 text-[11px] font-medium text-red-700 dark:text-red-300">
                       строк: {c.lineIds.length}
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-sm text-gray-800">{c.text}</p>
+                <p className="mt-1 text-sm text-gray-800 dark:text-gray-100">{c.text}</p>
               </li>
             ))}
           </ul>
@@ -290,7 +290,7 @@ export function MobileReviewActionBar(
   >
 ) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-white p-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] lg:hidden">
+    <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-white dark:bg-card p-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] lg:hidden">
       <ActionButtons {...props} />
     </div>
   );

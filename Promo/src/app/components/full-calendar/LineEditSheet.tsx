@@ -90,7 +90,7 @@ export function LineEditSheet({
         {line && campaign ? (
           <div className="flex-1 space-y-6 overflow-y-auto p-4">
             {/* Read-only campaign + 1С context */}
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border bg-gray-50 p-3 text-sm">
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border bg-gray-50 dark:bg-muted/40 p-3 text-sm">
               <Info label="Признак">
                 {campaign.planned ? "Плановая" : "Внеплановая"}
               </Info>
@@ -191,10 +191,10 @@ export function LineEditSheet({
                         type="button"
                         onClick={() => onGiftPick(line.id)}
                         className={cn(
-                          "flex h-9 w-full items-center gap-1.5 rounded-md border px-3 text-left text-sm hover:bg-gray-50",
+                          "flex h-9 w-full items-center gap-1.5 rounded-md border px-3 text-left text-sm hover:bg-gray-50 dark:hover:bg-accent",
                           line.giftNomenclatureId
-                            ? "text-gray-900"
-                            : "text-red-600"
+                            ? "text-gray-900 dark:text-gray-100"
+                            : "text-red-600 dark:text-red-400"
                         )}
                       >
                         <Gift className="size-4 shrink-0" />
@@ -280,7 +280,7 @@ export function LineEditSheet({
               (onRequestRemoval && isApprovedCampaign(campaign))) && (
               <Section title="Участие в акции">
                 {line.removed ? (
-                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  <div className="rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/15 p-3 text-sm text-red-700 dark:text-red-300">
                     <span className="flex items-center gap-1.5 font-medium">
                       <Ban className="size-4" />
                       Позиция исключена из акции
@@ -290,13 +290,13 @@ export function LineEditSheet({
                     )}
                   </div>
                 ) : line.removalPending ? (
-                  <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
-                    <span className="flex items-center gap-1.5 text-sm font-medium text-orange-800">
+                  <div className="rounded-lg border border-orange-200 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/15 p-3">
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-orange-800 dark:text-orange-300">
                       <Ban className="size-4" />
                       Запрошено исключение — ожидает согласования КД
                     </span>
                     {line.removalReason && (
-                      <p className="mt-1 text-xs text-orange-700">
+                      <p className="mt-1 text-xs text-orange-700 dark:text-orange-300">
                         {line.removalReason}
                       </p>
                     )}
@@ -333,7 +333,7 @@ export function LineEditSheet({
                     </p>
                     <Button
                       variant="secondary"
-                      className="min-h-11 w-full text-red-600 hover:text-red-700"
+                      className="min-h-11 w-full text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                       onClick={() => onRequestRemoval!(line.id)}
                     >
                       <Ban className="size-4" />
@@ -388,7 +388,7 @@ function Field({
     <div className="space-y-1.5">
       <Label>
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-red-500 dark:text-red-400">*</span>}
       </Label>
       {children}
     </div>
@@ -441,7 +441,7 @@ function CheckField({
     <label
       className={cn(
         "flex items-center gap-2.5 text-sm",
-        disabled ? "text-muted-foreground" : "text-gray-900"
+        disabled ? "text-muted-foreground" : "text-gray-900 dark:text-gray-100"
       )}
     >
       <Checkbox
@@ -464,16 +464,16 @@ function Info({
   return (
     <div className="min-w-0">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="truncate font-medium text-gray-900">{children}</dd>
+      <dd className="truncate font-medium text-gray-900 dark:text-gray-100">{children}</dd>
     </div>
   );
 }
 
 function ReadOnlyText({ text, required }: { text?: string; required?: boolean }) {
   if (text)
-    return <p className="text-sm text-gray-900">{text}</p>;
+    return <p className="text-sm text-gray-900 dark:text-gray-100">{text}</p>;
   return required ? (
-    <p className="text-sm font-medium text-red-600">не заполнено</p>
+    <p className="text-sm font-medium text-red-600 dark:text-red-400">не заполнено</p>
   ) : (
     <p className="text-sm text-muted-foreground">—</p>
   );

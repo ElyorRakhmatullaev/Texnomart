@@ -235,7 +235,7 @@ export function ShortCalendarPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 text-xs text-gray-500"
+                    className="h-9 text-xs text-gray-500 dark:text-gray-400"
                     onClick={() => setFilters(DEFAULT_FILTER_VALUES)}
                   >
                     <X className="mr-1 size-3" />
@@ -369,7 +369,7 @@ function MobileCampaignCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <span>Отчёт смежным:</span>
           {report.sent ? (
-            <span className="font-medium text-emerald-700">
+            <span className="font-medium text-emerald-700 dark:text-emerald-300">
               отправлено <RuDate value={report.sentAt!} /> · в.{report.versionNo}
             </span>
           ) : (
@@ -381,7 +381,7 @@ function MobileCampaignCard({
           )}
         </div>
         {kmNames && <div>КМ: {kmNames}</div>}
-        <div className="font-medium text-gray-700">
+        <div className="font-medium text-gray-700 dark:text-gray-200">
           Готовность КМ: {readinessSummary(agg)}
         </div>
         <AggregatedIndicators aggregate={agg} />

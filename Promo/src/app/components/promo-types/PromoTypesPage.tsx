@@ -83,10 +83,10 @@ export function PromoTypesPage() {
               />
             </>
           ) : (
-            <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-gray-200 bg-white py-16 text-center">
+            <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center">
               <Settings2 className="size-12 text-muted-foreground" />
               <div>
-                <p className="font-medium text-gray-900">
+                <p className="font-medium text-gray-900 dark:text-gray-100">
                   Выберите правило
                 </p>
                 <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">

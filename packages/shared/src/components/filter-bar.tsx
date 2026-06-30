@@ -38,7 +38,7 @@ export function FilterBar({
   return (
     <div
       className={cn(
-        "flex items-center gap-2 flex-wrap shrink-0 bg-gray-50 rounded-md px-3 py-2",
+        "flex items-center gap-2 flex-wrap shrink-0 bg-gray-50 dark:bg-muted rounded-md px-3 py-2",
         className
       )}
     >
@@ -48,7 +48,7 @@ export function FilterBar({
           value={values[filter.key] ?? "all"}
           onValueChange={(v) => onFilterChange(filter.key, v)}
         >
-          <SelectTrigger className="w-[160px] h-8 text-sm bg-white">
+          <SelectTrigger className="w-[160px] h-8 text-sm bg-white dark:bg-input-background">
             <SelectValue placeholder={filter.label} />
           </SelectTrigger>
           <SelectContent>
@@ -66,7 +66,7 @@ export function FilterBar({
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 text-xs text-gray-500"
+          className="h-8 text-xs text-gray-500 dark:text-gray-400"
           onClick={onClear}
         >
           <X className="h-3 w-3 mr-1" />
@@ -74,7 +74,7 @@ export function FilterBar({
         </Button>
       )}
       {resultCount !== undefined && (
-        <div className="ml-auto text-xs text-gray-500">
+        <div className="ml-auto text-xs text-gray-500 dark:text-gray-400">
           Найдено: {resultCount.toLocaleString("ru-RU")}
         </div>
       )}

@@ -16,6 +16,7 @@ import { AppShell as SharedAppShell } from "@texnomart/shared/components/app-she
 import { createPromoShellConfig } from "../shell-config";
 import { useRole } from "../role-context";
 import { useCurrentUser } from "../current-user-context";
+import { useTheme } from "../theme-context";
 import { getInitials } from "@texnomart/shared/utils/formatters";
 import { useNotifications } from "./notifications/NotificationsProvider";
 import { notificationsForRole } from "../../lib/promo-mock-data";
@@ -114,6 +115,7 @@ export function AppShell() {
   const { currentUser } = useCurrentUser();
   const { pathname } = useLocation();
   const { notifications } = useNotifications();
+  const { theme, cycleTheme } = useTheme();
 
   // Bell shows only what the active role may see (§11.3.1); the nav badge + bell
   // count both come from this live, role-filtered set so acknowledging updates them.
@@ -160,6 +162,7 @@ export function AppShell() {
       notificationsHref="/notifications"
       headerActions={<PromoCommandSearch />}
       maxWidth={maxWidth}
+      theme={{ value: theme, onCycle: cycleTheme }}
       roleSwitcher={{
         roles,
         current: currentRole,

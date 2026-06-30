@@ -130,7 +130,7 @@ function FilterSelect({
         {label}
       </span>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className={cn("h-8 bg-white text-sm", width)}>
+        <SelectTrigger className={cn("h-8 bg-white text-sm dark:bg-card", width)}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -155,7 +155,7 @@ function Group({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
         {title}
       </span>
       <div className="flex flex-wrap items-end gap-2">{children}</div>
@@ -249,7 +249,7 @@ export function CalendarFilters({
           />
         </Group>
 
-        <div className="hidden self-stretch border-l border-gray-200 lg:block" />
+        <div className="hidden self-stretch border-l border-gray-200 lg:block dark:border-border" />
 
         {/* ── Контрольные ──────────────────────────────────────────── */}
         <Group title="Контрольные">
@@ -262,20 +262,20 @@ export function CalendarFilters({
                 type="date"
                 value={values.periodFrom}
                 onChange={(e) => onChange("periodFrom", e.target.value)}
-                className="h-8 w-[140px] bg-white text-sm"
+                className="h-8 w-[140px] bg-white text-sm dark:bg-card"
               />
               <span className="text-muted-foreground">—</span>
               <Input
                 type="date"
                 value={values.periodTo}
                 onChange={(e) => onChange("periodTo", e.target.value)}
-                className="h-8 w-[140px] bg-white text-sm"
+                className="h-8 w-[140px] bg-white text-sm dark:bg-card"
               />
             </div>
           </label>
         </Group>
 
-        <div className="hidden self-stretch border-l border-gray-200 lg:block" />
+        <div className="hidden self-stretch border-l border-gray-200 lg:block dark:border-border" />
 
         {/* ── Распределение по категориям ──────────────────────────── */}
         <Group title="Распределение по категориям">
@@ -334,7 +334,7 @@ export function CalendarFilters({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 text-xs text-gray-500"
+            className="h-8 text-xs text-gray-500 dark:text-gray-400"
             onClick={onClear}
           >
             <X className="mr-1 size-3" />

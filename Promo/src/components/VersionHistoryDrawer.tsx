@@ -38,11 +38,11 @@ import type {
 } from "../lib/promo-mock-data";
 
 const CHANGE_TYPE_STYLE: Record<VersionChangeType, string> = {
-  "Первичная отправка": "bg-blue-50 text-blue-700",
-  "Корректировка": "bg-amber-50 text-amber-700",
-  "Добавление": "bg-emerald-50 text-emerald-700",
-  "Отмена": "bg-red-50 text-red-700",
-  "Отправка отчёта": "bg-violet-50 text-violet-700",
+  "Первичная отправка": "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300",
+  "Корректировка": "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  "Добавление": "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  "Отмена": "bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-300",
+  "Отправка отчёта": "bg-violet-50 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300",
 };
 
 // Stub fallback so consumers that don't pass versions (e.g. the approvals detail
@@ -172,14 +172,14 @@ export function VersionHistoryDrawer({
             className="m-0 flex-1 overflow-y-auto p-4"
           >
             {hasPending && (
-              <div className="mb-3 rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/50 p-3">
+              <div className="mb-3 rounded-lg border-2 border-dashed border-amber-300 dark:border-amber-500/40 bg-amber-50/50 dark:bg-amber-500/10 p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800">
+                  <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-300">
                     <FileClock className="size-4" />
                     Черновик — не отправлено
                   </span>
                 </div>
-                <p className="mt-0.5 text-xs text-amber-700">
+                <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
                   Изменения после согласования. До отправки смежным отделам не
                   передаются.
                 </p>
@@ -206,7 +206,7 @@ export function VersionHistoryDrawer({
                         >
                           {v.changeType}
                         </Badge>
-                        <span className="text-xs font-medium text-gray-500">
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                           в. {v.version}
                         </span>
                       </span>
@@ -239,14 +239,14 @@ export function VersionHistoryDrawer({
                     key={row.lineId}
                     className={cn(
                       "rounded-lg border bg-card p-3",
-                      row.removed && "border-red-200 bg-red-50/60"
+                      row.removed && "border-red-200 dark:border-red-500/30 bg-red-50/60 dark:bg-red-500/10"
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span
                         className={cn(
-                          "text-sm font-medium text-gray-900",
-                          row.removed && "text-red-700 line-through"
+                          "text-sm font-medium text-gray-900 dark:text-gray-100",
+                          row.removed && "text-red-700 dark:text-red-300 line-through"
                         )}
                       >
                         {row.nomenclature}
@@ -263,9 +263,9 @@ export function VersionHistoryDrawer({
                           </dt>
                           <dd
                             className={cn(
-                              "text-sm tabular-nums text-gray-800",
+                              "text-sm tabular-nums text-gray-800 dark:text-gray-200",
                               f.value === "не заполнено" &&
-                                "font-medium text-red-500"
+                                "font-medium text-red-500 dark:text-red-400"
                             )}
                           >
                             {f.value}
@@ -285,9 +285,9 @@ export function VersionHistoryDrawer({
             className="m-0 flex-1 space-y-3 overflow-y-auto p-4"
           >
             {overdueDays > 0 && (
-              <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
-                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-600" />
-                <p className="text-sm text-red-700">
+              <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/15 p-3">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-600 dark:text-red-400" />
+                <p className="text-sm text-red-700 dark:text-red-300">
                   Просрочка проверки: +{overdueDays}{" "}
                   {overdueDays === 1 ? "рабочий день" : "раб. дн."}. Не блокирует
                   отправку — зафиксировано в истории.
@@ -300,33 +300,33 @@ export function VersionHistoryDrawer({
                 className={cn(
                   "rounded-lg border p-3",
                   deadlineChange.status === "approved"
-                    ? "border-emerald-200 bg-emerald-50"
-                    : "border-amber-200 bg-amber-50"
+                    ? "border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/15"
+                    : "border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15"
                 )}
               >
                 <h3
                   className={cn(
                     "flex items-center gap-1.5 text-sm font-semibold",
                     deadlineChange.status === "approved"
-                      ? "text-emerald-800"
-                      : "text-amber-800"
+                      ? "text-emerald-800 dark:text-emerald-300"
+                      : "text-amber-800 dark:text-amber-300"
                   )}
                 >
                   <CalendarClock className="size-4" />
                   Изменение дедлайна заполнения
-                  <span className="ml-auto rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-medium">
+                  <span className="ml-auto rounded-full bg-white/70 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium">
                     {deadlineChange.status === "approved"
                       ? "утверждено"
                       : "на утверждении"}
                   </span>
                 </h3>
-                <p className="mt-1.5 text-sm tabular-nums text-gray-800">
+                <p className="mt-1.5 text-sm tabular-nums text-gray-800 dark:text-gray-200">
                   {deadlineChange.oldDeadline.toLocaleDateString("ru-RU")} →{" "}
                   <span className="font-semibold">
                     {deadlineChange.newDeadline.toLocaleDateString("ru-RU")}
                   </span>
                 </p>
-                <p className="mt-0.5 text-xs text-gray-600">
+                <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-300">
                   Причина: {deadlineChange.reason}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -340,7 +340,7 @@ export function VersionHistoryDrawer({
 
             {reviewComments && reviewComments.length > 0 && (
               <div className="rounded-lg border bg-card p-3">
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100">
                   <MessageSquare className="size-4 text-muted-foreground" />
                   Комментарии проверки
                 </h3>
@@ -349,22 +349,22 @@ export function VersionHistoryDrawer({
                     <li
                       key={i}
                       className={cn(
-                        "rounded-md border-l-2 bg-gray-50 px-2.5 py-1.5",
-                        c.lineIds ? "border-l-red-300" : "border-l-gray-300"
+                        "rounded-md border-l-2 bg-gray-50 dark:bg-muted/40 px-2.5 py-1.5",
+                        c.lineIds ? "border-l-red-300 dark:border-l-red-500/50" : "border-l-gray-300 dark:border-l-gray-600"
                       )}
                     >
                       <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                        <span className="font-medium text-gray-700">
+                        <span className="font-medium text-gray-700 dark:text-gray-200">
                           {c.author}
                         </span>
                         <RuDate value={new Date(c.at)} withTime />
                         {c.lineIds && (
-                          <span className="rounded bg-red-100 px-1 text-[11px] font-medium text-red-700">
+                          <span className="rounded bg-red-100 dark:bg-red-500/20 px-1 text-[11px] font-medium text-red-700 dark:text-red-300">
                             строк: {c.lineIds.length}
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 text-sm text-gray-800">{c.text}</p>
+                      <p className="mt-0.5 text-sm text-gray-800 dark:text-gray-200">{c.text}</p>
                     </li>
                   ))}
                 </ul>
@@ -473,7 +473,7 @@ function ViewTab({ value, label }: { value: ViewKey; label: string }) {
   return (
     <TabsTrigger
       value={value}
-      className="flex-none whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-2 py-2.5 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-[#FFD60A] data-[state=active]:bg-transparent data-[state=active]:text-gray-900 data-[state=active]:shadow-none"
+      className="flex-none whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-2 py-2.5 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-gray-900 dark:data-[state=active]:text-gray-100 data-[state=active]:shadow-none"
     >
       {label}
     </TabsTrigger>
@@ -490,10 +490,10 @@ function DiffRow({ change }: { change: VersionFieldChange }) {
   const Icon =
     change.kind === "added" ? Plus : change.kind === "removed" ? Minus : ArrowRight;
   return (
-    <li className="rounded-md bg-gray-50 px-2.5 py-1.5 text-sm">
+    <li className="rounded-md bg-gray-50 dark:bg-muted/40 px-2.5 py-1.5 text-sm">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Icon className={cn("size-3", tint)} />
-        <span className="truncate font-medium text-gray-700">
+        <span className="truncate font-medium text-gray-700 dark:text-gray-200">
           {change.scope}
         </span>
         <span>·</span>
@@ -501,7 +501,7 @@ function DiffRow({ change }: { change: VersionFieldChange }) {
       </div>
       <div className="mt-0.5 flex flex-wrap items-center gap-1.5 tabular-nums">
         {change.from != null && (
-          <span className="text-gray-400 line-through">{change.from}</span>
+          <span className="text-gray-400 dark:text-gray-500 line-through">{change.from}</span>
         )}
         {change.from != null && change.to != null && (
           <ArrowRight className="size-3 text-muted-foreground" />

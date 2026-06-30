@@ -59,13 +59,13 @@ export function ApprovalDetailPage() {
       <div className="space-y-4">
         <Link
           to="/approvals"
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
+          className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
         >
           ← Согласование
         </Link>
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card py-20 text-center">
           <FileX2 className="size-12 text-muted-foreground/60" />
-          <h2 className="mt-4 text-lg font-semibold text-gray-900">
+          <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
             Заявка не найдена
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -199,12 +199,12 @@ export function ApprovalDetailPage() {
               {campaign.planned ? "Плановая" : "Внеплановая"}
             </Badge>
             {isNonPart && (
-              <Badge className="border-0 bg-gray-100 text-gray-700">
+              <Badge className="border-0 bg-gray-100 dark:bg-muted text-gray-700 dark:text-gray-200">
                 Заявка «Не участвует»
               </Badge>
             )}
             {autoEscalated && (
-              <Badge className="border-0 bg-amber-100 text-amber-800">
+              <Badge className="border-0 bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300">
                 <Zap className="mr-1 size-3" />
                 Авто-передано КД
               </Badge>
@@ -242,7 +242,7 @@ export function ApprovalDetailPage() {
                   </span>
                 </span>
               ) : (
-                <span className="flex items-center gap-1.5 text-sm tabular-nums text-gray-700">
+                <span className="flex items-center gap-1.5 text-sm tabular-nums text-gray-700 dark:text-gray-200">
                   <Clock className="size-3.5 text-muted-foreground" />
                   осталось {sla.remaining} раб. дн.
                 </span>
@@ -254,9 +254,9 @@ export function ApprovalDetailPage() {
 
       {/* Non-blocking просрочка note (spec §4.5.2): record, never hard-stop. */}
       {sla.overdue > 0 && (
-        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-600" />
-          <p className="text-sm text-red-700">
+        <div className="flex items-start gap-2 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/15 px-4 py-3">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-600 dark:text-red-400" />
+          <p className="text-sm text-red-700 dark:text-red-300">
             Просрочка проверки: +{sla.overdue} раб. дн. сверх срока. Это{" "}
             <span className="font-medium">не блокирует</span> завершение —
             зафиксировано в истории и может быть согласовано позже.
@@ -268,7 +268,7 @@ export function ApprovalDetailPage() {
         <Card>
           <CardHeader className="flex-row items-start justify-between gap-2 pb-2">
             <div>
-              <h2 className="text-sm font-semibold text-gray-900">
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {isNonPart ? "Заявка на неучастие" : "Отправленные строки КМ"}
               </h2>
               <p className="text-xs text-muted-foreground">
@@ -293,13 +293,13 @@ export function ApprovalDetailPage() {
           </CardHeader>
           <CardContent>
             {isNonPart ? (
-              <div className="rounded-lg border bg-gray-50 p-4">
-                <p className="text-xs font-medium text-gray-600">
+              <div className="rounded-lg border bg-gray-50 dark:bg-muted/40 p-4">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
                   {item.nonParticipationByKd
                     ? "Причина (установлено КД)"
                     : "Причина неучастия (КМ)"}
                 </p>
-                <p className="mt-1 text-sm text-gray-800">
+                <p className="mt-1 text-sm text-gray-800 dark:text-gray-100">
                   {item.nonParticipationReason ?? "Причина не указана."}
                 </p>
               </div>

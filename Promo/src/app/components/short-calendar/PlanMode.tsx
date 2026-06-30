@@ -95,7 +95,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       {/* ── Approval chain stepper ──────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-0">
-          <h2 className="text-sm font-semibold text-gray-900">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             Согласование плана акций
           </h2>
         </CardHeader>
@@ -111,7 +111,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
             <div className="flex flex-wrap items-center gap-2">
               {currentActor && !canAct && (
                 <span className="text-xs text-muted-foreground">
-                  Сейчас действует: <b className="text-gray-700">{currentActor}</b>
+                  Сейчас действует: <b className="text-gray-700 dark:text-gray-200">{currentActor}</b>
                 </span>
               )}
 
@@ -173,7 +173,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
               )}
 
               {isApproved && (
-                <span className="inline-flex items-center gap-1.5 text-sm text-emerald-700">
+                <span className="inline-flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-300">
                   <Check className="size-4" />
                   План утверждён — поля переведены в режим только чтения
                 </span>
@@ -198,7 +198,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       {/* ── Plan rows ───────────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-          <h2 className="text-sm font-semibold text-gray-900">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             Строки плана
             <span className="ml-2 font-normal text-muted-foreground">
               {rows.length}
@@ -272,8 +272,8 @@ function PlanStepper({
               className={cn(
                 "flex items-center gap-2 rounded-lg border px-3 py-2",
                 active && "border-primary bg-primary/10",
-                done && "border-emerald-200 bg-emerald-50",
-                rejectedHere && "border-red-200 bg-red-50",
+                done && "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/15",
+                rejectedHere && "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15",
                 !active && !done && !rejectedHere && "border-border bg-muted/40"
               )}
             >
@@ -286,7 +286,7 @@ function PlanStepper({
                   !active &&
                     !done &&
                     !rejectedHere &&
-                    "bg-gray-200 text-gray-600"
+                    "bg-gray-200 text-gray-600 dark:bg-muted dark:text-gray-300"
                 )}
               >
                 {done ? <Check className="size-3.5" /> : i + 1}
@@ -294,7 +294,7 @@ function PlanStepper({
               <span
                 className={cn(
                   "text-xs font-medium",
-                  active ? "text-gray-900" : "text-gray-600"
+                  active ? "text-gray-900 dark:text-gray-100" : "text-gray-600 dark:text-gray-300"
                 )}
               >
                 {role}

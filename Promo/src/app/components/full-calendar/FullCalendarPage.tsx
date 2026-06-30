@@ -1018,7 +1018,7 @@ export function FullCalendarPage() {
             resultCount={filtered.length}
             className="bg-transparent px-0"
           >
-            <label className="flex h-9 items-center gap-2 rounded-md border bg-white px-3">
+            <label className="flex h-9 items-center gap-2 rounded-md border bg-white dark:bg-card px-3">
               <Switch
                 id="hide-cancelled"
                 checked={hideCancelled}
@@ -1040,8 +1040,8 @@ export function FullCalendarPage() {
           {focusPromo && (
             // Deep-link banner (§10) — arrived from the short calendar's КМ-status cell.
             <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
-              <Link2 className="size-4 shrink-0 text-gray-500" />
-              <span className="text-sm text-gray-700">
+              <Link2 className="size-4 shrink-0 text-gray-500 dark:text-gray-400" />
+              <span className="text-sm text-gray-700 dark:text-gray-200">
                 Показана акция по ссылке из календаря готовности:{" "}
                 <span className="font-medium">
                   № {formatPromoNo(focusPromo)}
@@ -1053,7 +1053,7 @@ export function FullCalendarPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="ml-auto h-8 text-xs text-gray-500"
+                className="ml-auto h-8 text-xs text-gray-500 dark:text-gray-400"
                 onClick={() => setSearchParams({})}
               >
                 <X className="mr-1 size-3" />
@@ -1064,8 +1064,8 @@ export function FullCalendarPage() {
 
           {/* Bulk-select strip — appears once rows are selected (editor roles only). */}
           {editorMode && selectedIds.size > 0 && (
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-[#FFD60A]/10 px-3 py-2 text-sm">
-              <span className="font-medium text-gray-900">
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-primary/10 px-3 py-2 text-sm">
+              <span className="font-medium text-gray-900 dark:text-gray-100">
                 Выбрано {selectedIds.size} {pluralLines(selectedIds.size)}
               </span>
               <span className="text-muted-foreground">·</span>
@@ -1336,7 +1336,7 @@ export function FullCalendarPage() {
                   хотите добавить дубль?
                 </p>
                 {pendingDup && (
-                  <div className="rounded-md bg-amber-50 px-3 py-2 text-amber-900">
+                  <div className="rounded-md bg-amber-50 dark:bg-amber-500/15 px-3 py-2 text-amber-900 dark:text-amber-200">
                     {pendingDup.hit.samePromo ? (
                       <span>Уже добавлена в эту акцию ({pendingDup.campaignId}).</span>
                     ) : (
@@ -1373,16 +1373,16 @@ export function FullCalendarPage() {
 
       {/* Sticky bottom action bar (fixed footer) — full-bleed past the main padding;
           on sm+ its height (h-14 + border) matches the sidebar collapse-button block. */}
-      <div className="-mx-3 -mb-3 shrink-0 border-t bg-white px-3 py-3 sm:h-14 sm:py-0 md:-mx-4 md:-mb-4 md:px-4">
+      <div className="-mx-3 -mb-3 shrink-0 border-t bg-white dark:bg-card px-3 py-3 sm:h-14 sm:py-0 md:-mx-4 md:-mb-4 md:px-4">
         <div className="flex h-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             {invalidLines > 0 ? (
-              <span className="text-red-600">
+              <span className="text-red-600 dark:text-red-400">
                 {invalidLines} {pluralLines(invalidLines)}: не заполнены
                 обязательные поля
               </span>
             ) : pending1CCount > 0 ? (
-              <span className="text-amber-700">
+              <span className="text-amber-700 dark:text-amber-300">
                 {pending1CCount} {pluralLines(pending1CCount)} ожидают проверки 1С
               </span>
             ) : (
@@ -1554,9 +1554,9 @@ function DeadlineChangeDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-1">
-          <div className="rounded-md bg-gray-50 px-3 py-2 text-sm text-muted-foreground">
+          <div className="rounded-md bg-gray-50 dark:bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
             Текущий дедлайн:{" "}
-            <span className="font-medium text-gray-900 tabular-nums">
+            <span className="font-medium text-gray-900 dark:text-gray-100 tabular-nums">
               {current ? current.toLocaleDateString("ru-RU") : "—"}
             </span>{" "}
             <span className="text-xs">(календарные дни)</span>
@@ -1636,12 +1636,12 @@ function SubmitButton({
 function AccessDenied({ note }: { note: string }) {
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold leading-tight text-gray-900 md:text-[32px]">
+      <h1 className="text-2xl font-bold leading-tight text-gray-900 dark:text-gray-100 md:text-[32px]">
         Полный промо-календарь
       </h1>
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card py-20 text-center">
         <Ban className="size-12 text-muted-foreground/60" />
-        <h2 className="mt-4 text-lg font-semibold text-gray-900">
+        <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
           Нет доступа
         </h2>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">{note}</p>

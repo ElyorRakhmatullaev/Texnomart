@@ -31,13 +31,13 @@ export function ShortCalendarDetailPage() {
       <div className="space-y-4">
         <Link
           to="/short-calendar"
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
+          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
         >
           ← Краткий промо-календарь
         </Link>
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card py-20 text-center">
           <CalendarX2 className="size-12 text-muted-foreground/60" />
-          <h2 className="mt-4 text-lg font-semibold text-gray-900">
+          <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
             Акция не найдена
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -70,7 +70,7 @@ export function ShortCalendarDetailPage() {
               {campaign.planned ? "Плановая" : "Внеплановая"}
             </Badge>
             {campaign.cancelled && (
-              <Badge variant="outline" className="border-red-200 text-red-700">
+              <Badge variant="outline" className="border-red-200 text-red-700 dark:border-red-500/30 dark:text-red-300">
                 Отменена
               </Badge>
             )}
@@ -122,7 +122,7 @@ export function ShortCalendarDetailPage() {
       {/* Aggregated readiness */}
       <Card>
         <CardHeader className="pb-2">
-          <h2 className="text-sm font-semibold text-gray-900">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             Готовность по КМ
           </h2>
         </CardHeader>
@@ -134,7 +134,7 @@ export function ShortCalendarDetailPage() {
       {/* Per-KM breakdown */}
       <Card>
         <CardHeader className="pb-2">
-          <h2 className="text-sm font-semibold text-gray-900">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             Детализация по категорийным менеджерам
           </h2>
         </CardHeader>
@@ -149,7 +149,7 @@ export function ShortCalendarDetailPage() {
                   className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {km?.name ?? id}
                       {km?.senior && (
                         <span className="ml-2 text-xs font-normal text-muted-foreground">
@@ -178,7 +178,7 @@ export function ShortCalendarDetailPage() {
       {/* Deadlines */}
       <Card className={cn(campaign.cancelled && "opacity-80")}>
         <CardHeader className="pb-2">
-          <h2 className="text-sm font-semibold text-gray-900">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             Календарные дедлайны
           </h2>
         </CardHeader>

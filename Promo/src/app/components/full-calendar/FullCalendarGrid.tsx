@@ -259,7 +259,7 @@ function CellValue({
         // Read-only roles: show the name, or the required marker when empty.
         if (gift) return <span className="truncate">{gift.name}</span>;
         return required ? (
-          <span className="text-xs font-medium text-red-500">не заполнено</span>
+          <span className="text-xs font-medium text-red-500 dark:text-red-400">не заполнено</span>
         ) : (
           <Dash />
         );
@@ -269,8 +269,8 @@ function CellValue({
           type="button"
           onClick={() => ctx.onGiftPick(line.id)}
           className={cn(
-            "flex h-7 w-full items-center gap-1 truncate rounded px-1 text-left text-sm hover:bg-gray-100",
-            gift ? "text-gray-900" : "text-muted-foreground"
+            "flex h-7 w-full items-center gap-1 truncate rounded px-1 text-left text-sm hover:bg-gray-100 dark:hover:bg-accent",
+            gift ? "text-gray-900 dark:text-gray-100" : "text-muted-foreground"
           )}
         >
           {gift ? (
@@ -279,7 +279,7 @@ function CellValue({
             <span
               className={cn(
                 "inline-flex items-center gap-1",
-                required && "font-medium text-red-500"
+                required && "font-medium text-red-500 dark:text-red-400"
               )}
             >
               <Gift className="size-3.5" />
@@ -452,10 +452,10 @@ export function FullCalendarGrid({
     <Card className="overflow-hidden p-0">
       <div className="flex">
         {/* ── Frozen identity pane (select · № промо · ФИО КМ · Номенклатура) ── */}
-        <div className="shrink-0 border-r bg-white">
+        <div className="shrink-0 border-r bg-white dark:bg-card">
           <div
             className={cn(
-              "flex items-center border-b bg-gray-50 text-xs font-medium text-gray-600",
+              "flex items-center border-b bg-gray-50 dark:bg-muted/40 text-xs font-medium text-gray-600 dark:text-gray-300",
               HEADER_H
             )}
           >
@@ -481,9 +481,9 @@ export function FullCalendarGrid({
                 {/* group band (frozen side) */}
                 <div
                   className={cn(
-                    "flex items-center gap-2 border-b bg-gray-100/70 px-3 text-xs font-semibold text-gray-700",
+                    "flex items-center gap-2 border-b bg-gray-100/70 dark:bg-muted px-3 text-xs font-semibold text-gray-700 dark:text-gray-200",
                     BAND_H,
-                    campaign.cancelled && "bg-red-50"
+                    campaign.cancelled && "bg-red-50 dark:bg-red-500/15"
                   )}
                 >
                   {editorMode && (
@@ -501,7 +501,7 @@ export function FullCalendarGrid({
                     <button
                       type="button"
                       onClick={() => onAddRequest(campaign.id)}
-                      className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
+                      className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
                     >
                       <Plus className="size-3" />
                       Добавить номенклатуру
@@ -516,13 +516,13 @@ export function FullCalendarGrid({
                     <div
                       key={line.id}
                       className={cn(
-                        "group/row flex items-center border-b transition-colors hover:bg-gray-50",
+                        "group/row flex items-center border-b transition-colors hover:bg-gray-50 dark:hover:bg-accent",
                         ROW_H,
-                        selectedIds.has(line.id) && "bg-[#FFD60A]/5",
-                        line.pending1CCheck && "bg-amber-50/50",
-                        line.rejected && "bg-red-50/70 hover:bg-red-50",
-                        line.removalPending && "bg-orange-50/60",
-                        line.removed && "bg-red-50/70 opacity-70 hover:bg-red-50"
+                        selectedIds.has(line.id) && "bg-primary/5 dark:bg-primary/10",
+                        line.pending1CCheck && "bg-amber-50/50 dark:bg-amber-500/10",
+                        line.rejected && "bg-red-50/70 dark:bg-red-500/10 hover:bg-red-50 dark:hover:bg-red-500/15",
+                        line.removalPending && "bg-orange-50/60 dark:bg-orange-500/10",
+                        line.removed && "bg-red-50/70 dark:bg-red-500/10 opacity-70 hover:bg-red-50 dark:hover:bg-red-500/15"
                       )}
                     >
                       {editorMode && (
@@ -550,7 +550,7 @@ export function FullCalendarGrid({
                       >
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+                            <span className="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
                               {nom?.name ?? line.nomenclatureId}
                             </span>
                           </TooltipTrigger>
@@ -574,7 +574,7 @@ export function FullCalendarGrid({
                               type="button"
                               onClick={() => onLineTap(line.id)}
                               aria-label="Редактировать строку"
-                              className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 hover:text-gray-900 md:hidden"
+                              className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100 md:hidden"
                             >
                               <ChevronRight className="size-4" />
                             </button>
@@ -605,7 +605,7 @@ export function FullCalendarGrid({
             {/* header */}
             <div
               className={cn(
-                "flex items-center border-b bg-gray-50 text-xs font-medium text-gray-600",
+                "flex items-center border-b bg-gray-50 dark:bg-muted/40 text-xs font-medium text-gray-600 dark:text-gray-300",
                 HEADER_H
               )}
             >
@@ -621,7 +621,7 @@ export function FullCalendarGrid({
                   style={colStyle(col.width)}
                 >
                   <span className="truncate">{col.label}</span>
-                  {col.required && <span className="text-red-500">*</span>}
+                  {col.required && <span className="text-red-500 dark:text-red-400">*</span>}
                   {isLocked(col.source) && (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -643,17 +643,17 @@ export function FullCalendarGrid({
                   {/* group band (scroll side) — campaign context */}
                   <div
                     className={cn(
-                      "flex w-full items-center gap-3 border-b bg-gray-100/70 px-3 text-xs",
+                      "flex w-full items-center gap-3 border-b bg-gray-100/70 dark:bg-muted px-3 text-xs",
                       BAND_H,
-                      campaign.cancelled && "bg-red-50"
+                      campaign.cancelled && "bg-red-50 dark:bg-red-500/15"
                     )}
                   >
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[11px] font-medium",
                         campaign.planned
-                          ? "bg-blue-50 text-blue-700"
-                          : "bg-purple-50 text-purple-700"
+                          ? "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300"
+                          : "bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300"
                       )}
                     >
                       {campaign.planned ? "Плановая" : "Внеплановая"}
@@ -661,8 +661,8 @@ export function FullCalendarGrid({
                     <span className="text-muted-foreground">{campaign.type}</span>
                     <span
                       className={cn(
-                        "font-semibold text-gray-900",
-                        campaign.cancelled && "text-red-700 line-through"
+                        "font-semibold text-gray-900 dark:text-gray-100",
+                        campaign.cancelled && "text-red-700 dark:text-red-300 line-through"
                       )}
                     >
                       {campaign.name}
@@ -671,7 +671,7 @@ export function FullCalendarGrid({
                       className={cn(
                         "inline-flex items-center gap-1 tabular-nums",
                         campaign.periodChanged
-                          ? "font-bold text-gray-900"
+                          ? "font-bold text-gray-900 dark:text-gray-100"
                           : "text-muted-foreground"
                       )}
                     >
@@ -680,7 +680,7 @@ export function FullCalendarGrid({
                       {campaign.periodChanged && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Pencil className="size-3 text-amber-600" />
+                            <Pencil className="size-3 text-amber-600 dark:text-amber-400" />
                           </TooltipTrigger>
                           <TooltipContent>
                             Период изменён после согласования (§11.5)
@@ -699,7 +699,7 @@ export function FullCalendarGrid({
                           <button
                             type="button"
                             onClick={() => onApproveDeadline(campaign.id)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                            className="inline-flex shrink-0 items-center gap-1 rounded bg-emerald-50 dark:bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/25"
                           >
                             <CalendarCheck className="size-3" />
                             Утвердить дедлайн
@@ -711,7 +711,7 @@ export function FullCalendarGrid({
                           <button
                             type="button"
                             onClick={() => onEditPeriod(campaign.id)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
+                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
                           >
                             <CalendarClock className="size-3" />
                             Изменить период
@@ -724,7 +724,7 @@ export function FullCalendarGrid({
                           <button
                             type="button"
                             onClick={() => onEditDeadline(campaign.id)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
+                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
                           >
                             <CalendarClock className="size-3" />
                             Изменить дедлайн
@@ -738,7 +738,7 @@ export function FullCalendarGrid({
                           <button
                             type="button"
                             onClick={() => onEditCampaign(campaign.id)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
+                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
                           >
                             <Pencil className="size-3" />
                             Изменить
@@ -748,7 +748,7 @@ export function FullCalendarGrid({
                         <button
                           type="button"
                           onClick={() => onHistory(campaign.id)}
-                          className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-white hover:text-gray-900"
+                          className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
                         >
                           <History className="size-3" />
                           История
@@ -759,14 +759,14 @@ export function FullCalendarGrid({
                         <button
                           type="button"
                           onClick={() => onCancelCampaign(campaign.id)}
-                          className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 hover:text-red-700"
+                          className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
                         >
                           <Ban className="size-3" />
                           Отменить акцию
                         </button>
                       )}
                       {campaign.cancelled && (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded bg-red-100 dark:bg-red-500/20 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
                           <Ban className="size-3" />
                           Отменена
                         </span>
@@ -781,26 +781,26 @@ export function FullCalendarGrid({
                       <div
                         key={line.id}
                         className={cn(
-                          "flex items-center border-b text-sm transition-colors hover:bg-gray-50",
+                          "flex items-center border-b text-sm transition-colors hover:bg-gray-50 dark:hover:bg-accent",
                           ROW_H,
-                          selectedIds.has(line.id) && "bg-[#FFD60A]/5",
-                          line.pending1CCheck && "bg-amber-50/50",
-                          line.rejected && "bg-red-50/70 hover:bg-red-50",
-                          line.removalPending && "bg-orange-50/60",
-                          line.removed && "bg-red-50/70 opacity-70 hover:bg-red-50"
+                          selectedIds.has(line.id) && "bg-primary/5 dark:bg-primary/10",
+                          line.pending1CCheck && "bg-amber-50/50 dark:bg-amber-500/10",
+                          line.rejected && "bg-red-50/70 dark:bg-red-500/10 hover:bg-red-50 dark:hover:bg-red-500/15",
+                          line.removalPending && "bg-orange-50/60 dark:bg-orange-500/10",
+                          line.removed && "bg-red-50/70 dark:bg-red-500/10 opacity-70 hover:bg-red-50 dark:hover:bg-red-500/15"
                         )}
                       >
                         {cols.map((col) => (
                           <div
                             key={col.id}
                             className={cn(
-                              "flex items-center px-3 text-gray-800",
+                              "flex items-center px-3 text-gray-800 dark:text-gray-100",
                               alignClass(col) === "text-right"
                                 ? "justify-end tabular-nums"
                                 : "justify-start",
-                              isLocked(col.source) && "text-gray-500",
+                              isLocked(col.source) && "text-gray-500 dark:text-gray-400",
                               changedCells?.has(`${line.id}:${col.id}`) &&
-                                "bg-amber-50 ring-1 ring-inset ring-amber-300"
+                                "bg-amber-50 dark:bg-amber-500/15 ring-1 ring-inset ring-amber-300 dark:ring-amber-500/40"
                             )}
                             style={colStyle(col.width)}
                           >
@@ -845,7 +845,7 @@ function KmCell({ kmId, width }: { kmId: string; width: number }) {
       {km ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="truncate text-xs text-gray-700">
+            <span className="truncate text-xs text-gray-700 dark:text-gray-200">
               {lastName(km.name)}
             </span>
           </TooltipTrigger>
@@ -869,14 +869,14 @@ function ChangeBadge({
 }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+      <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
         <Pencil className="size-2.5" />
         {info.count} изм. после согл.
       </span>
       {info.awaitingMarketing && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-800">
+            <span className="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-500/20 px-2 py-0.5 text-[10px] font-medium text-orange-800 dark:text-orange-300">
               Ожидает маркетинга
             </span>
           </TooltipTrigger>
@@ -897,7 +897,7 @@ function LineMarkers({ line }: { line: PromoLine }) {
       {line.duplicate && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-800">
+            <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 dark:bg-amber-500/20 px-1 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
               <Copy className="size-2.5" />
               дубль
             </span>
@@ -928,7 +928,7 @@ function LineMarkers({ line }: { line: PromoLine }) {
       {line.pending1CCheck && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Clock className="size-3.5 text-orange-500" />
+            <Clock className="size-3.5 text-orange-500 dark:text-orange-400" />
           </TooltipTrigger>
           <TooltipContent>Ожидает проверки 1С</TooltipContent>
         </Tooltip>
@@ -936,7 +936,7 @@ function LineMarkers({ line }: { line: PromoLine }) {
       {line.rejected && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <AlertCircle className="size-3.5 text-red-500" />
+            <AlertCircle className="size-3.5 text-red-500 dark:text-red-400" />
           </TooltipTrigger>
           <TooltipContent className="max-w-[260px]">
             {line.rejectComment ?? "Строка отклонена проверяющим"}
@@ -946,7 +946,7 @@ function LineMarkers({ line }: { line: PromoLine }) {
       {line.removalPending && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="inline-flex items-center gap-0.5 rounded bg-orange-100 px-1 py-0.5 text-[10px] font-medium text-orange-800">
+            <span className="inline-flex items-center gap-0.5 rounded bg-orange-100 dark:bg-orange-500/20 px-1 py-0.5 text-[10px] font-medium text-orange-800 dark:text-orange-300">
               <Ban className="size-2.5" />
               ожидает исключения
             </span>
@@ -961,7 +961,7 @@ function LineMarkers({ line }: { line: PromoLine }) {
       {line.removed && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[10px] font-medium text-red-700">
+            <span className="inline-flex items-center gap-0.5 rounded bg-red-100 dark:bg-red-500/20 px-1 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-300">
               <Ban className="size-2.5" />
               исключена
             </span>
@@ -1008,7 +1008,7 @@ function LineRowActions({
                 type="button"
                 onClick={() => onApproveRemoval(line.id)}
                 aria-label="Подтвердить исключение"
-                className="inline-flex size-7 items-center justify-center rounded text-emerald-600 hover:bg-emerald-50"
+                className="inline-flex size-7 items-center justify-center rounded text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/15"
               >
                 <Check className="size-4" />
               </button>
@@ -1023,7 +1023,7 @@ function LineRowActions({
                 type="button"
                 onClick={() => onRejectRemoval(line.id)}
                 aria-label="Отклонить исключение"
-                className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 hover:text-gray-900"
+                className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
               >
                 <X className="size-4" />
               </button>
@@ -1044,7 +1044,7 @@ function LineRowActions({
             type="button"
             onClick={() => onRequestRemoval(line.id)}
             aria-label="Исключить из акции"
-            className="hidden size-7 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover/row:opacity-100 md:inline-flex"
+            className="hidden size-7 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 group-hover/row:opacity-100 md:inline-flex"
           >
             <Ban className="size-4" />
           </button>
@@ -1071,7 +1071,7 @@ function DeadlineChip({ campaign }: { campaign: PromoCampaign }) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
             <CalendarClock className="size-2.5" />
             дедлайн: {fmt(dc.oldDeadline)} → {fmt(dc.newDeadline)} · на утверждении
           </span>
@@ -1092,8 +1092,8 @@ function DeadlineChip({ campaign }: { campaign: PromoCampaign }) {
           className={cn(
             "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
             campaign.fillDeadlineOverride
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-gray-100 text-gray-600"
+              ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+              : "bg-gray-100 dark:bg-muted text-gray-600 dark:text-gray-300"
           )}
         >
           {campaign.fillDeadlineOverride ? (

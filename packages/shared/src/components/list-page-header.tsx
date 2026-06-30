@@ -35,17 +35,17 @@ export function ListPageHeader({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0">
       <div>
-        <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-gray-900">
+        <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-gray-900 dark:text-gray-100">
           {title}
         </h1>
         {counts && (
-          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">{counts}</p>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">{counts}</p>
         )}
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         {onSearchChange && (
           <div className="relative w-full sm:w-[320px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
             <Input
               placeholder={searchPlaceholder}
               value={searchValue}

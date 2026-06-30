@@ -28,13 +28,13 @@ function ItemTags({ item }: { item: ReviewItem }) {
   return (
     <>
       {item.kind === "non-participation" && (
-        <span className="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-700">
+        <span className="inline-flex items-center gap-0.5 rounded bg-gray-100 dark:bg-muted px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200">
           <UserMinus className="size-3" />
           Не участвует
         </span>
       )}
       {isAutoEscalated(item) && (
-        <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
+        <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 dark:bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300">
           <Zap className="size-3" />
           Авто-передано
         </span>
@@ -58,7 +58,7 @@ function SlaTimer({ submittedAt }: { submittedAt: string }) {
     <span
       className={cn(
         "inline-flex items-center gap-1 text-sm tabular-nums",
-        sla.remaining <= 0 ? "text-red-700" : "text-gray-700"
+        sla.remaining <= 0 ? "text-red-700 dark:text-red-300" : "text-gray-700 dark:text-gray-200"
       )}
       title="Рабочие дни (Пн–Пт) до истечения 2-рабочедневного срока"
     >
@@ -88,7 +88,7 @@ export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
       <Card className="hidden overflow-hidden p-0 md:block">
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader className="sticky top-0 z-10 bg-gray-50">
+            <TableHeader className="sticky top-0 z-10 bg-gray-50 dark:bg-muted/40">
               <TableRow>
                 <TableHead className="w-[120px]">№ промо</TableHead>
                 <TableHead className="w-[140px]">Тип</TableHead>
@@ -113,16 +113,16 @@ export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
                     <TableCell className="font-medium tabular-nums">
                       {it.campaignId}
                     </TableCell>
-                    <TableCell className="text-sm text-gray-700">
+                    <TableCell className="text-sm text-gray-700 dark:text-gray-200">
                       {c?.type ?? "—"}
                     </TableCell>
                     <TableCell className="max-w-[280px]">
                       <span className="block truncate">{c?.name ?? "—"}</span>
                     </TableCell>
-                    <TableCell className="text-sm text-gray-700">
+                    <TableCell className="text-sm text-gray-700 dark:text-gray-200">
                       {km?.name ?? it.kmId}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-gray-700">
+                    <TableCell className="whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                       <RuDate value={new Date(it.submittedAt)} withTime />
                     </TableCell>
                     <TableCell>

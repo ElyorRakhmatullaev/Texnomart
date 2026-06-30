@@ -6,6 +6,20 @@
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>Texnomart Promo</title>
       <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+      <!-- Apply the saved theme BEFORE React paints, so a dark-mode reload /
+           deep-link doesn't flash light first (FOUC). Mirrors ThemeProvider. -->
+      <script>
+        (function () {
+          try {
+            var t = localStorage.getItem("promo:pref-theme");
+            var dark =
+              t === "dark" ||
+              (t === "system" &&
+                window.matchMedia("(prefers-color-scheme: dark)").matches);
+            if (dark) document.documentElement.classList.add("dark");
+          } catch (e) {}
+        })();
+      </script>
       <!-- GitHub Pages SPA deep-link restore: the root 404.html stashes the
            requested path here, then redirects to this app root. Restore it
            into the URL before React Router boots. No-op for local dev. -->

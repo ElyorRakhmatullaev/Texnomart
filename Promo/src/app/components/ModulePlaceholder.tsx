@@ -55,7 +55,7 @@ export function ModulePlaceholder({
   return (
     <div className="space-y-4 pb-6">
       <div className="space-y-1">
-        <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-gray-900">
+        <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-gray-900 dark:text-gray-100">
           {title}
         </h1>
         {description && <p className="text-muted-foreground">{description}</p>}
@@ -92,7 +92,7 @@ export function ModulePlaceholder({
       {children ?? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card py-20 text-center">
           <Construction className="size-12 text-muted-foreground/60" />
-          <h2 className="mt-4 text-lg font-semibold text-gray-900">
+          <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
             Раздел в разработке
           </h2>
           <p className="mt-1 max-w-md text-sm text-muted-foreground">

@@ -78,13 +78,13 @@ export function PageHeader({
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 h-auto sm:min-h-14 pt-3 pb-6">
       <div>
-        <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-gray-900">
+        <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-gray-900 dark:text-gray-100">
           {title}
         </h1>
         {subtitle ? (
-          <div className="text-sm text-gray-600 mt-1">{subtitle}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">{subtitle}</div>
         ) : lastUpdated ? (
-          <p className="text-sm text-gray-600 flex items-center gap-2 mt-1">
+          <p className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2 mt-1">
             <span className="relative flex size-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
               <span className="relative inline-flex size-2 rounded-full bg-green-500" />

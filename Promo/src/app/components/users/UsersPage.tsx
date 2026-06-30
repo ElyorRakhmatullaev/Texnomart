@@ -116,10 +116,10 @@ export function UsersPage() {
     return (
       <div className="flex flex-col">
         <PageHeader title="Управление пользователями" />
-        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-gray-200 bg-white py-16 text-center">
-          <ShieldAlert className="size-12 text-gray-300" />
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center">
+          <ShieldAlert className="size-12 text-gray-300 dark:text-gray-500" />
           <div>
-            <p className="font-medium text-gray-900">Доступ только для администраторов</p>
+            <p className="font-medium text-gray-900 dark:text-gray-100">Доступ только для администраторов</p>
             <p className="text-sm text-muted-foreground">
               Переключитесь на роль «Администратор», чтобы управлять учётными записями.
             </p>

@@ -76,7 +76,7 @@ export function AddNomenclatureDialog({
                     onSelect={() => handlePick(item.id)}
                   >
                     <span className="flex w-full items-center justify-between gap-3">
-                      <span className="min-w-0 truncate text-sm text-gray-900">
+                      <span className="min-w-0 truncate text-sm text-gray-900 dark:text-gray-100">
                         {item.name}
                       </span>
                       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">

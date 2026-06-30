@@ -18,9 +18,9 @@ const STATUS_STYLES: Record<
   TimelineStep["status"],
   { dot: string; line: string }
 > = {
-  completed: { dot: "bg-green-600", line: "bg-green-200" },
-  "in-progress": { dot: "bg-amber-500", line: "bg-gray-200" },
-  pending: { dot: "bg-gray-200", line: "bg-gray-200" },
+  completed: { dot: "bg-green-600", line: "bg-green-200 dark:bg-green-900" },
+  "in-progress": { dot: "bg-amber-500", line: "bg-gray-200 dark:bg-gray-700" },
+  pending: { dot: "bg-gray-200 dark:bg-gray-700", line: "bg-gray-200 dark:bg-gray-700" },
 };
 
 export function Timeline({ steps }: TimelineProps) {
@@ -41,18 +41,18 @@ export function Timeline({ steps }: TimelineProps) {
             </div>
             <div className="flex-1 min-w-0 -mt-0.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-gray-900">
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   {step.title}
                 </span>
-                <span className="text-xs text-gray-500 shrink-0">
+                <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
                   {step.time}
                 </span>
               </div>
               {step.duration && (
-                <p className="text-xs text-gray-500 mt-0.5">{step.duration}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{step.duration}</p>
               )}
               {step.note && (
-                <p className="text-xs text-gray-400 mt-0.5">{step.note}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{step.note}</p>
               )}
             </div>
           </div>

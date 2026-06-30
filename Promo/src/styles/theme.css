@@ -56,25 +56,32 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
+  /* Layered neutral surfaces: --background is the darkest (main content area),
+     --card / --popover / --sidebar sit a step lighter so cards read against it
+     (the inverse of the light theme's white-cards-on-gray-50 relationship). */
+  --background: oklch(0.16 0 0);
+  --foreground: oklch(0.97 0 0);
+  --card: oklch(0.215 0 0);
+  --card-foreground: oklch(0.97 0 0);
+  --popover: oklch(0.215 0 0);
+  --popover-foreground: oklch(0.97 0 0);
+  /* Brand: Texnomart yellow stays the primary in dark mode (accent only, dark
+     text on yellow) — never shadcn's default near-white primary. */
+  --primary: #FFD60A;
+  --primary-foreground: #000000;
+  --secondary: oklch(0.27 0 0);
+  --secondary-foreground: oklch(0.97 0 0);
+  --muted: oklch(0.27 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --accent: oklch(0.3 0 0);
+  --accent-foreground: oklch(0.97 0 0);
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --input-background: oklch(0.24 0 0);
+  --switch-background: oklch(0.42 0 0);
+  --ring: oklch(0.55 0 0);
   --font-weight-medium: 500;
   --font-weight-normal: 400;
   --chart-1: oklch(0.488 0.243 264.376);
@@ -82,14 +89,28 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+
+  /* Status colors — same hues as light, lifted for legibility on dark surfaces. */
+  --status-new: #60A5FA;
+  --status-pending: #FBBF24;
+  --status-in-progress: #A78BFA;
+  --status-approved: #34D399;
+  --status-rejected: #F87171;
+  --status-cancelled: #9CA3AF;
+  --status-completed: #34D399;
+  --status-on-hold: #FB923C;
+  --status-returned: #F472B6;
+  --status-expired: #F87171;
+  --status-archived: #9CA3AF;
+
+  --sidebar: oklch(0.215 0 0);
+  --sidebar-foreground: oklch(0.97 0 0);
+  --sidebar-primary: #FFD60A;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: oklch(0.3 0 0);
+  --sidebar-accent-foreground: oklch(0.97 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.55 0 0);
 }
 
 @theme inline {

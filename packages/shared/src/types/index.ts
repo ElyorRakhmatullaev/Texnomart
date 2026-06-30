@@ -72,3 +72,15 @@ export interface RoleSwitcherConfig {
   /** Called when the user picks a different role. */
   onChange: (role: string) => void;
 }
+
+/**
+ * Optional controlled theme toggle for the header. When provided to <AppShell>,
+ * the header's theme button reflects `value` and calls `onCycle` (light → dark →
+ * system) instead of using the shell's internal, non-persistent local state.
+ * Lets an app own theme persistence (e.g. Promo's ThemeProvider). When omitted,
+ * the header keeps its previous self-contained behavior (Dashboard unchanged).
+ */
+export interface ThemeController {
+  value: "light" | "dark" | "system";
+  onCycle: () => void;
+}

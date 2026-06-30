@@ -56,7 +56,7 @@ export function SubmittedLinesPanel({
 }: SubmittedLinesPanelProps) {
   if (lines.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed bg-white py-12 text-center text-sm text-muted-foreground">
+      <div className="rounded-lg border border-dashed bg-white dark:bg-card py-12 text-center text-sm text-muted-foreground">
         КМ ещё не добавил номенклатуру.
       </div>
     );
@@ -73,10 +73,10 @@ export function SubmittedLinesPanel({
       : false;
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-white">
+    <div className="overflow-hidden rounded-lg border bg-white dark:bg-card">
       <div className="overflow-x-auto">
         <Table>
-          <TableHeader className="bg-gray-50">
+          <TableHeader className="bg-gray-50 dark:bg-muted/40">
             <TableRow>
               {selectable && (
                 <TableHead className="w-[44px]">
@@ -104,7 +104,7 @@ export function SubmittedLinesPanel({
               return (
                 <TableRow
                   key={line.id}
-                  className={rejected ? "bg-red-50/70" : undefined}
+                  className={rejected ? "bg-red-50/70 dark:bg-red-500/10" : undefined}
                 >
                   {selectable && (
                     <TableCell>
@@ -118,7 +118,7 @@ export function SubmittedLinesPanel({
                   <TableCell>
                     <div className="flex items-start gap-1.5">
                       <span className="min-w-0">
-                        <span className="block font-medium text-gray-900">
+                        <span className="block font-medium text-gray-900 dark:text-gray-100">
                           {nom?.name ?? line.nomenclatureId}
                         </span>
                         <span className="block text-xs tabular-nums text-muted-foreground">
@@ -128,7 +128,7 @@ export function SubmittedLinesPanel({
                       {line.duplicate && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[11px] font-medium text-amber-800">
+                            <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 dark:bg-amber-500/20 px-1 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300">
                               <Copy className="size-3" />
                               дубль
                             </span>
@@ -143,7 +143,7 @@ export function SubmittedLinesPanel({
                       {rejected && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[11px] font-medium text-red-700">
+                            <span className="inline-flex items-center gap-0.5 rounded bg-red-100 dark:bg-red-500/20 px-1 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
                               <AlertTriangle className="size-3" />
                               отклонено
                             </span>
@@ -168,7 +168,7 @@ export function SubmittedLinesPanel({
                     {line.salesForecast != null ? (
                       line.salesForecast.toLocaleString("ru-RU")
                     ) : (
-                      <span className="text-xs font-medium text-red-600">
+                      <span className="text-xs font-medium text-red-600 dark:text-red-400">
                         не заполнено
                       </span>
                     )}
@@ -183,7 +183,7 @@ export function SubmittedLinesPanel({
                               onClick={() => onRejectLine?.(line.id)}
                               className={cn(
                                 "inline-flex size-7 items-center justify-center rounded-md",
-                                "text-muted-foreground hover:bg-red-50 hover:text-red-700"
+                                "text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
                               )}
                               aria-label="Отклонить строку"
                             >

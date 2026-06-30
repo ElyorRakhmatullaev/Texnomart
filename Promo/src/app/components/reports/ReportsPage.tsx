@@ -130,10 +130,10 @@ export function ReportsPage() {
       />
 
       {sentCampaigns.length === 0 || !campaign ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-gray-200 bg-white py-16 text-center">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center">
           <Inbox className="size-12 text-muted-foreground" />
           <div>
-            <p className="font-medium text-gray-900">Отчётов пока нет</p>
+            <p className="font-medium text-gray-900 dark:text-gray-100">Отчётов пока нет</p>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
               Отчёты формируются автоматически, когда акция переходит в статус
               «Согласовано и отправлено смежным отделам».
@@ -161,7 +161,7 @@ export function ReportsPage() {
                         <TabsTrigger
                           key={dep}
                           value={dep}
-                          className="flex-none whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-[#FFD60A] data-[state=active]:bg-transparent data-[state=active]:text-gray-900 data-[state=active]:shadow-none"
+                          className="flex-none whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-gray-900 dark:data-[state=active]:text-gray-100 data-[state=active]:shadow-none"
                         >
                           {DEPARTMENT_SHORT[dep]}
                         </TabsTrigger>
@@ -187,7 +187,7 @@ export function ReportsPage() {
                   </div>
                 </>
               ) : (
-                <span className="inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700">
+                <span className="inline-flex items-center rounded-md bg-gray-100 dark:bg-muted px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200">
                   {DEPARTMENT_SHORT[department]}
                 </span>
               )}

@@ -64,6 +64,7 @@ import type {
   BreadcrumbItem,
   AppShellConfig,
   RoleSwitcherConfig,
+  ThemeController,
 } from "../types";
 import { useAuth } from "../auth/auth-context";
 
@@ -180,6 +181,7 @@ interface AppHeaderProps {
   roleSwitcher?: RoleSwitcherConfig;
   activeRole: string;
   notificationsHref?: string;
+  theme?: ThemeController;
 }
 
 function AppHeader({
@@ -189,24 +191,27 @@ function AppHeader({
   roleSwitcher,
   activeRole,
   notificationsHref,
+  theme: themeController,
 }: AppHeaderProps) {
   const [notifOpen, setNotifOpen] = React.useState(false);
   const navigate = useNavigate();
   const { logout } = useAuth();
   const { toggleSidebar } = useSidebar();
-  const [theme, setTheme] = React.useState<"light" | "dark" | "system">(
-    "light"
-  );
+  // Fallback local state for apps that don't supply a controlled `theme` prop
+  // (e.g. Dashboard) — preserves the shell's previous self-contained behavior.
+  const [localTheme, setLocalTheme] = React.useState<
+    "light" | "dark" | "system"
+  >("light");
 
-  const cycleTheme = () => {
+  const cycleLocalTheme = () => {
     const themes: Array<"light" | "dark" | "system"> = [
       "light",
       "dark",
       "system",
     ];
-    const currentIndex = themes.indexOf(theme);
+    const currentIndex = themes.indexOf(localTheme);
     const nextTheme = themes[(currentIndex + 1) % themes.length];
-    setTheme(nextTheme);
+    setLocalTheme(nextTheme);
     if (nextTheme === "dark") {
       document.documentElement.classList.add("dark");
     } else if (nextTheme === "light") {
@@ -219,6 +224,8 @@ function AppHeader({
     }
   };
 
+  const theme = themeController?.value ?? localTheme;
+  const onThemeToggle = themeController?.onCycle ?? cycleLocalTheme;
   const ThemeIcon =
     theme === "light" ? Sun : theme === "dark" ? Moon : Monitor;
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -259,7 +266,8 @@ function AppHeader({
         </DropdownMenu>
 
         <button
-          onClick={cycleTheme}
+          onClick={onThemeToggle}
+          aria-label="Переключить тему"
           className="inline-flex items-center justify-center rounded-md transition-all size-9 hover:bg-accent hover:text-accent-foreground"
         >
           <ThemeIcon className="size-5" />
@@ -496,6 +504,8 @@ interface AppShellProps {
   maxWidth?: string;
   /** Where the bell popover's «Показать все» navigates; omit to keep it inert. */
   notificationsHref?: string;
+  /** Optional controlled theme toggle; omit to keep the shell's local behavior. */
+  theme?: ThemeController;
 }
 
 export function AppShell({
@@ -506,6 +516,7 @@ export function AppShell({
   roleSwitcher,
   maxWidth = "1400px",
   notificationsHref,
+  theme,
 }: AppShellProps) {
   const location = useLocation();
   const activeRole = roleSwitcher?.current ?? config.user.role;
@@ -528,6 +539,7 @@ export function AppShell({
             roleSwitcher={roleSwitcher}
             activeRole={activeRole}
             notificationsHref={notificationsHref}
+            theme={theme}
           />
           <AppBreadcrumbs items={breadcrumbs} />
           <main className="flex-1 p-3 md:p-4 overflow-auto min-h-0 bg-gray-50 dark:bg-background">

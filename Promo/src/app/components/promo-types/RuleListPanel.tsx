@@ -57,9 +57,9 @@ export function RuleListPanel({
   };
 
   return (
-    <div className="flex h-full min-h-[320px] flex-col rounded-xl border border-gray-200 bg-white">
+    <div className="flex h-full min-h-[320px] flex-col rounded-xl border border-gray-200 dark:border-border bg-white dark:bg-card">
       {/* Header: search + create */}
-      <div className="space-y-2 border-b border-gray-100 p-3">
+      <div className="space-y-2 border-b border-gray-100 dark:border-border p-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -88,7 +88,7 @@ export function RuleListPanel({
             Правила не найдены.
           </p>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-gray-100 dark:divide-border">
             {filtered.map((rule) => {
               const tint = PROMO_TYPE_RULE_STATUS_TINT[rule.status];
               const types = promoTypeNamesFor(rule.promoTypeIds);
@@ -106,12 +106,12 @@ export function RuleListPanel({
                       }
                     }}
                     className={cn(
-                      "group flex w-full cursor-pointer flex-col gap-1.5 px-3 py-3 text-left transition-colors hover:bg-gray-50",
-                      active && "bg-amber-50/60 hover:bg-amber-50/60"
+                      "group flex w-full cursor-pointer flex-col gap-1.5 px-3 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-accent",
+                      active && "bg-amber-50/60 dark:bg-amber-500/10 hover:bg-amber-50/60 dark:hover:bg-amber-500/10"
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <span className="line-clamp-1 font-medium text-gray-900">
+                      <span className="line-clamp-1 font-medium text-gray-900 dark:text-gray-100">
                         {rule.name}
                       </span>
                       <span
@@ -132,7 +132,7 @@ export function RuleListPanel({
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs text-muted-foreground">
                         Обязательных полей:{" "}
-                        <span className="font-medium text-gray-700 tabular-nums">
+                        <span className="font-medium text-gray-700 dark:text-gray-200 tabular-nums">
                           {rule.requiredFieldIds.length}
                         </span>
                       </span>
@@ -140,7 +140,7 @@ export function RuleListPanel({
                         <button
                           type="button"
                           onClick={(e) => onCopy(e, rule.id)}
-                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-gray-100 hover:text-gray-700 focus:opacity-100 group-hover:opacity-100"
+                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-gray-100 dark:hover:bg-accent hover:text-gray-700 dark:hover:text-gray-200 focus:opacity-100 group-hover:opacity-100"
                           title="Копировать правило"
                         >
                           <Copy className="size-3.5" />

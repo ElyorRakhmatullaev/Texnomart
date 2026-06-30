@@ -74,7 +74,7 @@ export function ReadinessCell({
     <div className={cn("flex w-full flex-col gap-1.5", className)}>
       {/* Summary row + collapse/expand toggle (§3) */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium tabular-nums text-gray-700">
+        <span className="text-xs font-medium tabular-nums text-gray-700 dark:text-gray-200">
           {r.total > 0 ? (
             <>
               {r.done} из {r.total} КМ согласовано
@@ -91,7 +91,7 @@ export function ReadinessCell({
           }}
           aria-label={expanded ? "Свернуть блок" : "Развернуть блок"}
           aria-expanded={expanded}
-          className="flex size-5 shrink-0 items-center justify-center rounded border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50"
+          className="flex size-5 shrink-0 items-center justify-center rounded border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 dark:border-border dark:bg-card dark:text-gray-400 dark:hover:bg-accent"
         >
           {expanded ? (
             <ChevronUp className="size-3.5" />
@@ -102,7 +102,7 @@ export function ReadinessCell({
       </div>
 
       {/* Continuous 5-segment bar */}
-      <div className="flex h-2 w-full overflow-hidden rounded-full bg-gray-100">
+      <div className="flex h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-muted">
         {barTotal > 0
           ? SEGMENTS.map((s) => (
               <Tooltip key={s.key}>
@@ -137,11 +137,11 @@ export function ReadinessCell({
             >
               <span className="flex items-center gap-1 leading-tight">
                 <span className={cn("size-1.5 shrink-0 rounded-full", s.dot)} />
-                <span className="text-[10px] leading-[1.1] text-gray-600">
+                <span className="text-[10px] leading-[1.1] text-gray-600 dark:text-gray-300">
                   {s.label}
                 </span>
               </span>
-              <span className="mt-0.5 text-[11px] font-semibold tabular-nums text-gray-800">
+              <span className="mt-0.5 text-[11px] font-semibold tabular-nums text-gray-800 dark:text-gray-100">
                 {r[s.key]}
               </span>
             </div>
@@ -153,7 +153,7 @@ export function ReadinessCell({
                   className="flex items-center justify-center gap-1"
                 >
                   <span className={cn("size-1.5 shrink-0 rounded-full", s.dot)} />
-                  <span className="text-[11px] font-semibold tabular-nums text-gray-700">
+                  <span className="text-[11px] font-semibold tabular-nums text-gray-700 dark:text-gray-200">
                     {r[s.key]}
                   </span>
                 </div>

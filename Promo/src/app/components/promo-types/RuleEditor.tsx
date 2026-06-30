@@ -106,7 +106,7 @@ export function RuleEditor({ rule, access, role }: RuleEditorProps) {
         <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="truncate text-lg font-semibold text-gray-900">
+              <h2 className="truncate text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {rule.name}
               </h2>
               <span
@@ -138,7 +138,7 @@ export function RuleEditor({ rule, access, role }: RuleEditorProps) {
       </Card>
 
       {needsReconfirm && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300">
           <Info className="mt-0.5 size-4 shrink-0" />
           <span>
             Правило изменено после утверждения и требует повторного утверждения
@@ -177,8 +177,8 @@ export function RuleEditor({ rule, access, role }: RuleEditorProps) {
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60",
                       checked
-                        ? "border-amber-300 bg-amber-50 text-amber-900"
-                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                        ? "border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 text-amber-900 dark:text-amber-300"
+                        : "border-gray-200 dark:border-border bg-white dark:bg-card text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-accent"
                     )}
                   >
                     {checked && <CheckCircle2 className="size-3.5" />}
@@ -228,7 +228,7 @@ export function RuleEditor({ rule, access, role }: RuleEditorProps) {
                       />
                       <Label
                         htmlFor={`grp-${group.key}`}
-                        className="text-sm font-semibold text-gray-800"
+                        className="text-sm font-semibold text-gray-800 dark:text-gray-100"
                       >
                         {group.label}
                       </Label>
@@ -243,7 +243,7 @@ export function RuleEditor({ rule, access, role }: RuleEditorProps) {
                           <label
                             key={f.id}
                             className={cn(
-                              "flex cursor-pointer items-center gap-2 text-sm text-gray-700",
+                              "flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-200",
                               readOnly && "cursor-not-allowed opacity-70"
                             )}
                           >
@@ -266,7 +266,7 @@ export function RuleEditor({ rule, access, role }: RuleEditorProps) {
       </Card>
 
       {/* ── effect preview (§9.3) ── */}
-      <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-900">
+      <div className="flex items-start gap-2 rounded-lg border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/15 px-3 py-2.5 text-sm text-blue-900 dark:text-blue-300">
         <Info className="mt-0.5 size-4 shrink-0" />
         <div className="space-y-1">
           <p className="font-medium">
@@ -274,7 +274,7 @@ export function RuleEditor({ rule, access, role }: RuleEditorProps) {
               ? `Для типа${typeNames.length > 1 ? "ов" : ""} «${typeNames.join("», «")}» станут обязательными ${fieldIds.length} ${fieldIds.length === 1 ? "поле" : "полей"}.`
               : "Правило ни на что не влияет: выберите типы промо и обязательные поля."}
           </p>
-          <p className="text-blue-800">
+          <p className="text-blue-800 dark:text-blue-300/90">
             После утверждения коммерческим директором эти поля подсвечиваются и
             становятся обязательными в полном промо-календаре, блокируя «отправить
             на согласование», если они не заполнены. Пока правило не задано,
@@ -324,7 +324,7 @@ export function RuleEditor({ rule, access, role }: RuleEditorProps) {
             onClick={onArchive}
             className={cn(
               buttonVariants({ variant: "ghost", size: "sm" }),
-              "text-muted-foreground hover:text-red-700"
+              "text-muted-foreground hover:text-red-700 dark:hover:text-red-400"
             )}
           >
             <Archive className="size-4" />
@@ -344,7 +344,7 @@ export function RuleEditor({ rule, access, role }: RuleEditorProps) {
         <CardContent className="p-4">
           <div className="mb-3 flex items-center gap-2">
             <History className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold text-gray-800">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
               История изменений
             </h3>
           </div>
@@ -354,7 +354,7 @@ export function RuleEditor({ rule, access, role }: RuleEditorProps) {
                 <li key={i} className="flex gap-3 text-sm">
                   <div className="mt-1 size-2 shrink-0 rounded-full bg-amber-300" />
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-900">{h.action}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{h.action}</p>
                     {h.note && (
                       <p className="text-muted-foreground">{h.note}</p>
                     )}

@@ -219,7 +219,7 @@ export function CreateCampaignDialog({
                       </SelectContent>
                     </Select>
                   ) : (
-                    <p className="rounded-md border border-dashed bg-gray-50 px-3 py-4 text-center text-sm text-muted-foreground">
+                    <p className="rounded-md border border-dashed bg-gray-50 dark:bg-muted/40 px-3 py-4 text-center text-sm text-muted-foreground">
                       Нет доступных плановых акций.
                     </p>
                   )}
@@ -308,7 +308,7 @@ function UnplannedForm({
           placeholder="Например: Срочная скидка на холодильники"
           aria-invalid={Boolean(errors.name)}
         />
-        {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
+        {errors.name && <p className="text-xs text-red-600 dark:text-red-400">{errors.name}</p>}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -323,7 +323,7 @@ function UnplannedForm({
             aria-invalid={Boolean(errors.startDate)}
           />
           {errors.startDate && (
-            <p className="text-xs text-red-600">{errors.startDate}</p>
+            <p className="text-xs text-red-600 dark:text-red-400">{errors.startDate}</p>
           )}
         </div>
         <div className="space-y-1.5">
@@ -337,13 +337,13 @@ function UnplannedForm({
             aria-invalid={Boolean(errors.endDate)}
           />
           {errors.endDate && (
-            <p className="text-xs text-red-600">{errors.endDate}</p>
+            <p className="text-xs text-red-600 dark:text-red-400">{errors.endDate}</p>
           )}
         </div>
       </div>
 
       {minStart && (
-        <p className="rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-800">
+        <p className="rounded-md bg-blue-50 dark:bg-blue-500/15 px-3 py-2 text-xs text-blue-800 dark:text-blue-300">
           Срок подачи внеплановой акции — не менее {MIN_UNPLANNED_LEAD_DAYS}{" "}
           календарных дней до старта. № промо присвоится системой автоматически.
         </p>

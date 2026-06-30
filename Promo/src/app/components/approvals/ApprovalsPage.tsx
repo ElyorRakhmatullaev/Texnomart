@@ -130,14 +130,14 @@ export function ApprovalsPage() {
         <>
           {/* Deep-link banner (§10) — shows what the link filtered to + a clear action. */}
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
-            <Link2 className="size-4 shrink-0 text-gray-500" />
-            <span className="text-sm text-gray-700">
+            <Link2 className="size-4 shrink-0 text-gray-500 dark:text-gray-400" />
+            <span className="text-sm text-gray-700 dark:text-gray-200">
               Показано по ссылке: <span className="font-medium">{deepLinkLabel}</span>
             </span>
             <Button
               variant="ghost"
               size="sm"
-              className="ml-auto h-8 text-xs text-gray-500"
+              className="ml-auto h-8 text-xs text-gray-500 dark:text-gray-400"
               onClick={() => setSearchParams({})}
             >
               <X className="mr-1 size-3" />
@@ -151,10 +151,10 @@ export function ApprovalsPage() {
               onOpen={(id) => navigate(`/approvals/${encodeURIComponent(id)}`)}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-gray-200 bg-white py-16 text-center">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center">
               <ShieldCheck className="size-12 text-muted-foreground" />
               <div>
-                <p className="font-medium text-gray-900">
+                <p className="font-medium text-gray-900 dark:text-gray-100">
                   Элемент согласования не найден
                 </p>
                 <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
@@ -200,10 +200,10 @@ export function ApprovalsPage() {
       ) : isKm ? (
         <MyParticipationsPanel />
       ) : (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-gray-200 bg-white py-16 text-center">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center">
           <ShieldCheck className="size-12 text-muted-foreground" />
           <div>
-            <p className="font-medium text-gray-900">
+            <p className="font-medium text-gray-900 dark:text-gray-100">
               В роли «{currentRole}» нет элементов на согласование
             </p>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">

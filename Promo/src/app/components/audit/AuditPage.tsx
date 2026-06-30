@@ -7,7 +7,7 @@ import { AuditLogTable } from "./AuditLogTable";
 import { ControlEventsTimeline } from "./ControlEventsTimeline";
 
 const TAB_TRIGGER =
-  "flex-none whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-[#FFD60A] data-[state=active]:bg-transparent data-[state=active]:text-gray-900 data-[state=active]:shadow-none";
+  "flex-none whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-gray-900 dark:data-[state=active]:text-gray-100 data-[state=active]:shadow-none";
 
 export function AuditPage() {
   const [tab, setTab] = React.useState("log");

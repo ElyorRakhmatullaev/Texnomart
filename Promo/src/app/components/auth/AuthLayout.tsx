@@ -63,7 +63,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
       </div>
 
       {/* Form Panel - Right 40% */}
-      <div className="flex-1 lg:w-[40%] bg-white flex flex-col">
+      <div className="flex-1 lg:w-[40%] bg-white dark:bg-card flex flex-col">
         {/* Language selector top-right */}
         <div className="flex justify-end p-6">
           <DropdownMenu>

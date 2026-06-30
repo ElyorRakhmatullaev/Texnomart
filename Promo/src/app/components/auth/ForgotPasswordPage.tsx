@@ -34,16 +34,16 @@ export function ForgotPasswordPage() {
     return (
       <AuthLayout>
         <div className="space-y-6 text-center">
-          <CheckCircle2 className="size-12 text-green-600 mx-auto" />
+          <CheckCircle2 className="size-12 text-green-600 dark:text-green-400 mx-auto" />
           <div className="space-y-2">
             <h2 className="text-2xl font-semibold">Письмо отправлено</h2>
-            <p className="text-base text-gray-700">
+            <p className="text-base text-gray-700 dark:text-gray-200">
               Проверьте вашу почту. Ссылка действительна 30 минут.
             </p>
           </div>
 
           <div className="text-center pt-4">
-            <Link to="/login" className="text-sm text-gray-700 hover:text-gray-900">
+            <Link to="/login" className="text-sm text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-gray-100">
               ← Вернуться к входу
             </Link>
           </div>
@@ -57,7 +57,7 @@ export function ForgotPasswordPage() {
       <div className="space-y-6">
         <div className="space-y-2">
           <h2 className="text-2xl font-semibold">Восстановление пароля</h2>
-          <p className="text-base text-gray-700">
+          <p className="text-base text-gray-700 dark:text-gray-200">
             Введите {method === "email" ? "email" : "номер телефона"} и мы пришлём{" "}
             {method === "email" ? "ссылку для сброса" : "код подтверждения"}
           </p>
@@ -82,7 +82,7 @@ export function ForgotPasswordPage() {
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500 dark:text-gray-400" />
                   <Input
                     id="email"
                     type="email"
@@ -107,7 +107,7 @@ export function ForgotPasswordPage() {
               <div className="space-y-2">
                 <Label htmlFor="phone">Номер телефона</Label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500 dark:text-gray-400" />
                   <Input
                     id="phone"
                     type="tel"
@@ -129,7 +129,7 @@ export function ForgotPasswordPage() {
         </Tabs>
 
         <div className="text-center pt-2">
-          <Link to="/login" className="text-sm text-gray-700 hover:text-gray-900">
+          <Link to="/login" className="text-sm text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-gray-100">
             ← Вернуться к входу
           </Link>
         </div>

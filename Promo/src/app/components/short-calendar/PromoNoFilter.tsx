@@ -66,7 +66,7 @@ export function PromoNoFilter({
           aria-label="Фильтр по № промо"
           className={cn(
             buttonVariants({ variant: "outline", size: "sm" }),
-            "h-8 justify-between bg-white font-normal",
+            "h-8 justify-between bg-white font-normal dark:bg-card",
             width
           )}
         >
@@ -101,12 +101,12 @@ export function PromoNoFilter({
                         "flex size-4 shrink-0 items-center justify-center rounded border",
                         checked
                           ? "border-primary bg-primary text-primary-foreground"
-                          : "border-gray-300"
+                          : "border-gray-300 dark:border-gray-600"
                       )}
                     >
                       {checked && <Check className="size-3" />}
                     </span>
-                    <span className="w-[44px] shrink-0 text-xs font-semibold tabular-nums text-gray-700">
+                    <span className="w-[44px] shrink-0 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-200">
                       {o.no}
                     </span>
                     <span className="truncate text-sm text-muted-foreground">
