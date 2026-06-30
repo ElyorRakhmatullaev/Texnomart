@@ -13,6 +13,8 @@ export interface PromoUser {
   mustChangePassword: boolean;
   /** ISO-строка. */
   createdAt: string;
+  /** ISO-строка последней смены пароля (добровольной или принудительной). */
+  lastPasswordChangeAt?: string;
 }
 
 export interface NewUserInput {
@@ -137,10 +139,22 @@ export function updatePassword(id: string, newPassword: string): void {
   write(
     read().map((u) =>
       u.id === id
-        ? { ...u, password: newPassword, status: "active", mustChangePassword: false }
+        ? {
+            ...u,
+            password: newPassword,
+            status: "active",
+            mustChangePassword: false,
+            lastPasswordChangeAt: new Date().toISOString(),
+          }
         : u
     )
   );
+}
+
+/** Самостоятельное изменение ФИО (экран «Профиль»). */
+export function updateUserName(id: string, fullName: string): void {
+  const trimmed = fullName.trim();
+  write(read().map((u) => (u.id === id ? { ...u, fullName: trimmed } : u)));
 }
 
 /** Администраторы, способные войти (роль «Администратор» и не заблокированы). */

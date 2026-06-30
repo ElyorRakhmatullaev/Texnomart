@@ -3089,7 +3089,9 @@ export type AuditActionType =
   | "назначение прав"
   | "отзыв прав"
   | "блокировка"
-  | "разблокировка";
+  | "разблокировка"
+  | "смена пароля"
+  | "изменение профиля";
 
 /** What an action acted on. */
 export type AuditObjectType = "акция" | "строка" | "отчёт" | "план" | "пользователь";
@@ -3112,6 +3114,8 @@ export const AUDIT_ACTION_META: Record<
   "отзыв прав": { bg: "bg-orange-50", text: "text-orange-700" },
   "блокировка": { bg: "bg-rose-100", text: "text-rose-800" },
   "разблокировка": { bg: "bg-green-50", text: "text-green-700" },
+  "смена пароля": { bg: "bg-cyan-50", text: "text-cyan-700" },
+  "изменение профиля": { bg: "bg-slate-100", text: "text-slate-700" },
 };
 
 export const AUDIT_OBJECT_LABEL: Record<AuditObjectType, string> = {
