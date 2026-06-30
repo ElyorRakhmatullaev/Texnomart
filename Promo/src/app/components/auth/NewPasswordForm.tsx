@@ -12,9 +12,27 @@ interface NewPasswordFormProps {
   description: string;
   submitLabel: string;
   onSubmit: (password: string) => void | Promise<void>;
+  /**
+   * When provided, renders a «Текущий пароль» field above the new-password
+   * fields and verifies it before submit (used by the voluntary change in the
+   * Профиль screen). Omitted by the forced first-login flow, which has no
+   * current password to confirm — keeps that caller unchanged.
+   */
+  verifyCurrentPassword?: (current: string) => boolean;
+  currentPasswordLabel?: string;
 }
 
-export function NewPasswordForm({ title, description, submitLabel, onSubmit }: NewPasswordFormProps) {
+export function NewPasswordForm({
+  title,
+  description,
+  submitLabel,
+  onSubmit,
+  verifyCurrentPassword,
+  currentPasswordLabel = "Текущий пароль",
+}: NewPasswordFormProps) {
+  const [currentPassword, setCurrentPassword] = React.useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = React.useState(false);
+  const [currentError, setCurrentError] = React.useState(false);
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
@@ -40,11 +58,16 @@ export function NewPasswordForm({ title, description, submitLabel, onSubmit }: N
   }, [strength]);
 
   const passwordsMatch = password && confirmPassword && password === confirmPassword;
-  const isValid = Object.values(criteria).every(Boolean) && passwordsMatch;
+  const currentFilled = !verifyCurrentPassword || currentPassword.length > 0;
+  const isValid = Object.values(criteria).every(Boolean) && passwordsMatch && currentFilled;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid) return;
+    if (verifyCurrentPassword && !verifyCurrentPassword(currentPassword)) {
+      setCurrentError(true);
+      return;
+    }
     setLoading(true);
     await onSubmit(password);
     setLoading(false);
@@ -58,6 +81,38 @@ export function NewPasswordForm({ title, description, submitLabel, onSubmit }: N
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {verifyCurrentPassword && (
+          <div className="space-y-2">
+            <Label htmlFor="currentPassword">{currentPasswordLabel}</Label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+              <Input
+                id="currentPassword"
+                type={showCurrentPassword ? "text" : "password"}
+                placeholder="••••••••••"
+                value={currentPassword}
+                onChange={(e) => {
+                  setCurrentPassword(e.target.value);
+                  setCurrentError(false);
+                }}
+                disabled={loading}
+                className="pl-10 pr-10"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+              >
+                {showCurrentPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+            {currentError && (
+              <p className="text-sm text-red-600">Текущий пароль неверён</p>
+            )}
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor="password">Новый пароль</Label>
           <div className="relative">
