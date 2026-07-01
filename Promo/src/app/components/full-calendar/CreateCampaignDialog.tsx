@@ -83,7 +83,8 @@ export function CreateCampaignDialog({
   const isEdit = Boolean(editCampaign);
   const minStart = React.useMemo(() => minUnplannedStartDate(), []);
 
-  const [mode, setMode] = React.useState<Mode>("new");
+  // §14: selecting a planned promo (auto-pull тип/название/период) is the primary path.
+  const [mode, setMode] = React.useState<Mode>("integrate");
   const [type, setType] = React.useState(PROMO_TYPES[0].name);
   const [name, setName] = React.useState("");
   const [start, setStart] = React.useState("");
@@ -100,7 +101,8 @@ export function CreateCampaignDialog({
       setStart(toInputDate(editCampaign.startDate));
       setEnd(toInputDate(editCampaign.endDate));
     } else {
-      setMode("new");
+      // §14: default to picking a planned promo when any exist.
+      setMode(plannedCampaigns.length > 0 ? "integrate" : "new");
       setType(PROMO_TYPES[0].name);
       setName("");
       setStart("");
@@ -127,6 +129,8 @@ export function CreateCampaignDialog({
     }
     onOpenChange(false);
   };
+
+  const selectedPlanned = plannedCampaigns.find((c) => c.id === integrateId);
 
   const submitIntegrate = () => {
     if (!integrateId) return;
@@ -171,44 +175,30 @@ export function CreateCampaignDialog({
           >
             <div className="px-5 pt-4">
               <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="integrate">
+                  <Link2 className="size-4" />
+                  Выбрать плановое промо
+                </TabsTrigger>
                 <TabsTrigger value="new">
                   <CalendarPlus className="size-4" />
                   Новая внеплановая
                 </TabsTrigger>
-                <TabsTrigger value="integrate">
-                  <Link2 className="size-4" />
-                  Встроить в плановую
-                </TabsTrigger>
               </TabsList>
             </div>
-
-            <TabsContent value="new" className="overflow-y-auto px-5 py-4">
-              <UnplannedForm
-                type={type}
-                setType={setType}
-                name={name}
-                setName={setName}
-                start={start}
-                setStart={setStart}
-                end={end}
-                setEnd={setEnd}
-                minStart={minStart}
-                errors={validation.errors}
-              />
-            </TabsContent>
 
             <TabsContent value="integrate" className="overflow-y-auto px-5 py-4">
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Номенклатура добавится в выбранную плановую акцию с её № промо;
-                  признак остаётся «Плановая».
+                  Выберите № планового промо из краткого календаря — тип, название,
+                  период и другие параметры подтянутся автоматически. Номенклатуру
+                  вы добавите уже к выбранной акции (признак остаётся «Плановая»).
                 </p>
                 <div className="space-y-1.5">
-                  <Label>Плановая акция</Label>
+                  <Label>Плановое промо</Label>
                   {plannedCampaigns.length > 0 ? (
                     <Select value={integrateId} onValueChange={setIntegrateId}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Выберите акцию" />
+                        <SelectValue placeholder="Выберите № промо" />
                       </SelectTrigger>
                       <SelectContent>
                         {plannedCampaigns.map((c) => (
@@ -224,7 +214,43 @@ export function CreateCampaignDialog({
                     </p>
                   )}
                 </div>
+                {selectedPlanned && (
+                  // §14: preview the auto-pulled параметры of the chosen planned promo.
+                  <div className="space-y-1 rounded-md border bg-gray-50 dark:bg-muted/40 px-3 py-2 text-xs">
+                    <p className="font-medium text-gray-700 dark:text-gray-200">
+                      Данные подтянутся из краткого календаря:
+                    </p>
+                    <p className="text-muted-foreground">
+                      Тип:{" "}
+                      <span className="text-gray-800 dark:text-gray-100">
+                        {selectedPlanned.type}
+                      </span>
+                    </p>
+                    <p className="text-muted-foreground">
+                      Период:{" "}
+                      <span className="tabular-nums text-gray-800 dark:text-gray-100">
+                        {selectedPlanned.startDate.toLocaleDateString("ru-RU")} —{" "}
+                        {selectedPlanned.endDate.toLocaleDateString("ru-RU")}
+                      </span>
+                    </p>
+                  </div>
+                )}
               </div>
+            </TabsContent>
+
+            <TabsContent value="new" className="overflow-y-auto px-5 py-4">
+              <UnplannedForm
+                type={type}
+                setType={setType}
+                name={name}
+                setName={setName}
+                start={start}
+                setStart={setStart}
+                end={end}
+                setEnd={setEnd}
+                minStart={minStart}
+                errors={validation.errors}
+              />
             </TabsContent>
           </Tabs>
         )}
@@ -245,7 +271,7 @@ export function CreateCampaignDialog({
           ) : (
             <Button onClick={submitIntegrate} disabled={!integrateId}>
               <Link2 className="size-4" />
-              Встроить и добавить номенклатуру
+              Выбрать и добавить номенклатуру
             </Button>
           )}
         </DialogFooter>

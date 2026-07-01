@@ -124,7 +124,10 @@ const GIFT_NOMENCLATURE: ReportField = {
   label: "Номенклатура по подаркам",
   kind: "text",
   group: "Товар",
-  value: (l) => nomName(l.giftNomenclatureId),
+  value: (l) =>
+    l.gifts && l.gifts.length
+      ? l.gifts.map((g) => nomName(g.nomenclatureId)).join(", ")
+      : DASH,
 };
 
 // ── marketing-only fields ────────────────────────────────────────────────────────
@@ -169,7 +172,9 @@ const GIFT_STOCK: ReportField = {
   label: "Остаток подарка",
   kind: "number",
   group: "Подарки",
-  value: (l) => num(l.giftStock),
+  // Остаток подарка загружается из 1С по подарочной номенклатуре (feedback §8).
+  value: (l) =>
+    num(getNomenclatureItem(l.gifts?.[0]?.nomenclatureId ?? "")?.stock),
 };
 const UTP: ReportField = {
   id: "utp",

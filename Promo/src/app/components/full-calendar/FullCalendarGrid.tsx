@@ -8,10 +8,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import {
   AlertCircle,
   Ban,
-  CalendarCheck,
   CalendarClock,
   Check,
-  ChevronRight,
   Clock,
   Copy,
   Gift,
@@ -19,19 +17,22 @@ import {
   Lock,
   Pencil,
   Plus,
+  Trash2,
   X,
 } from "lucide-react";
 import { Money } from "../../../components/Money";
 import { RuDate } from "../../../components/RuDate";
 import {
-  effectiveFillDeadline,
   getCategoryManager,
   getNomenclatureItem,
   installmentTerm,
   isApprovedCampaign,
+  isCampaignFreshEditable,
+  isGiftChoiceType,
   isGiftType,
   programMonthly,
   type FullCalendarAccess,
+  type GiftItem,
   type NomenclatureItem,
   type PromoCampaign,
   type PromoLine,
@@ -45,19 +46,53 @@ import {
 } from "./gridFields";
 import { EditableCell } from "./EditableCell";
 import { WarehousePopover } from "./WarehousePopover";
+import { StoreAvailabilityCell } from "./StoreAvailabilityCell";
 
 // Fixed heights keep the frozen pane and the scrolling pane aligned row-for-row
 // (Pattern F: two synced divs, never position:sticky on a cell — see tasks/lessons.md).
+// A «Подарок на выбор» line grows to one sub-row per gift (+ an «Добавить подарок»
+// row); the SAME computed height is applied to BOTH panes so they never desync.
 const HEADER_H = "h-11";
 const BAND_H = "h-11";
-const ROW_H = "h-14";
+const ROW_H = "h-14"; // empty-line placeholder rows
+const ROW_H_PX = 56; // default line height (matches h-14)
+const GIFT_SUBROW_H = 44; // per gift sub-row for «подарок на выбор»
+
+function isGift1Col(id: string): boolean {
+  return id.startsWith("gift1");
+}
+function isGift2Col(id: string): boolean {
+  return id.startsWith("gift2");
+}
+function isGiftCol(id: string): boolean {
+  return isGift1Col(id) || isGift2Col(id);
+}
+type GiftField = "nom" | "avail" | "stock";
+function giftField(id: string): GiftField {
+  if (id.endsWith("Nomenclature")) return "nom";
+  if (id.endsWith("Availability")) return "avail";
+  return "stock";
+}
+
+/** Height of one line (choice lines grow to fit their gift sub-rows + add row). */
+function lineHeightPx(line: PromoLine, isChoice: boolean, editable: boolean): number {
+  if (!isChoice) return ROW_H_PX;
+  const giftCount = line.gifts?.length ?? 0;
+  const contentRows = Math.max(giftCount, 1);
+  const addRow = editable ? 1 : 0;
+  return Math.max(ROW_H_PX, (contentRows + addRow) * GIFT_SUBROW_H);
+}
+
+// Unified styling with the short calendar (feedback §9): a darker-gray, bold header
+// over lighter bands over white rows, plus vertical column dividers on the cells.
+const CELL = "border-r border-gray-100 dark:border-border";
 
 // The 3 spec-frozen columns (§6, §8) — always visible in the frozen pane.
 const FROZEN = {
   select: 40,
-  promo: 96,
+  promo: 108,
   km: 150,
-  nomenclature: 230,
+  nomenclature: 240,
 };
 
 function colStyle(width: number): React.CSSProperties {
@@ -70,19 +105,28 @@ function lastName(name: string): string {
 
 const Dash = () => <span className="text-muted-foreground">—</span>;
 
-function alignClass(col: ColumnDef): string {
-  return col.kind === "money" ||
-    col.kind === "number" ||
-    col.kind === "percent"
-    ? "text-right tabular-nums"
-    : "text-left";
+/**
+ * Unified alignment (feedback §12): descriptive text columns (тип, название, УТП,
+ * бренд…) align left; everything else — numbers, money, %, dates, checkboxes,
+ * badges — is centered for a compact, uniform table. Money is never bold/enlarged.
+ */
+function isLeftAligned(col: ColumnDef): boolean {
+  return col.kind === "text";
+}
+function cellJustify(col: ColumnDef): string {
+  return isLeftAligned(col) ? "justify-start" : "justify-center";
+}
+function isNumericKind(col: ColumnDef): boolean {
+  return col.kind === "money" || col.kind === "number" || col.kind === "percent";
 }
 
-/** Whether the current role may edit this column on a line (Phase 2 gating). */
-function cellEditable(col: ColumnDef, access: FullCalendarAccess): boolean {
-  // «В рекламу (выбрано маркетингом)» — Сотрудник маркетинга only.
-  if (col.id === "advSelectedMarketing") return access.marketingFlagOnly;
-  if (!access.canEditOwnLines) return false;
+/** Whether the current role may edit this column on a line (§3 + Phase 2 gating). */
+function cellEditable(col: ColumnDef, ctx: CellCtx): boolean {
+  // «В рекламу (выбрано маркетингом)» — Сотрудник маркетинга only (any status).
+  if (col.id === "advSelectedMarketing") return ctx.access.marketingFlagOnly;
+  if (!ctx.access.canEditOwnLines) return false;
+  // §3: editing only before submit (fresh draft) or as an approved-campaign correction.
+  if (!ctx.lineEditable) return false;
   // Only genuine КМ-entry fields are editable; auto / 1С / calc stay locked.
   return col.source === "km";
 }
@@ -97,9 +141,15 @@ function isRequiredFor(colId: string, gift: boolean): boolean {
 interface CellCtx {
   access: FullCalendarAccess;
   onEdit: (lineId: string, patch: Partial<PromoLine>) => void;
-  /** Open the 1С picker to (re)select this line's gift nomenclature (§8.2.1 / §8.8). */
-  onGiftPick: (lineId: string) => void;
+  /** Open the 1С picker for a gift slot/index on this line (§8.2.1 / §8.8 / §8). */
+  onGiftPick: (lineId: string, slot: number) => void;
+  /** Remove a «подарок на выбор» option by index (§8). */
+  onRemoveGift?: (lineId: string, index: number) => void;
   gift: boolean;
+  /** «Подарок на выбор» campaign — gifts render as sub-rows (§8). */
+  giftChoice: boolean;
+  /** КМ inline editing allowed for THIS campaign (fresh draft or approved correction). */
+  lineEditable: boolean;
 }
 
 /** Heterogeneous per-field renderer — editable inputs for КМ fields, read-only for the rest. */
@@ -118,31 +168,71 @@ function CellValue({
 }) {
   if (col.giftOnly && !ctx.gift) return <Dash />;
   const old = nom?.oldRetailPrice ?? 0;
-  const editable = cellEditable(col, ctx.access);
+  const editable = cellEditable(col, ctx);
   const required = isRequiredFor(col.id, ctx.gift);
   const edit = (patch: Partial<PromoLine>) => ctx.onEdit(line.id, patch);
 
   switch (col.id) {
-    // ── Идентификация / calendar (auto, read-only) ──
+    // ── Идентификация / calendar (auto, read-only) — shown as columns (§4) ──
     case "priznak":
-      return <span>{campaign.planned ? "Плановая" : "Внеплановая"}</span>;
+      return (
+        <span
+          className={cn(
+            "rounded-full px-2 py-0.5 text-[11px] font-medium",
+            campaign.planned
+              ? "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300"
+              : "bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300"
+          )}
+        >
+          {campaign.planned ? "Плановая" : "Внеплановая"}
+        </span>
+      );
     case "type":
       return <span className="truncate">{campaign.type}</span>;
     case "name":
       return <span className="truncate">{campaign.name}</span>;
-    case "start":
-      return <RuDate value={campaign.startDate} />;
-    case "end":
-      return <RuDate value={campaign.endDate} />;
+    case "period":
+      return (
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 tabular-nums",
+            campaign.periodChanged &&
+              "font-bold text-gray-900 dark:text-gray-100"
+          )}
+        >
+          <RuDate value={campaign.startDate} /> —{" "}
+          <RuDate value={campaign.endDate} />
+          {campaign.periodChanged && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Pencil className="size-3 text-amber-600 dark:text-amber-400" />
+              </TooltipTrigger>
+              <TooltipContent>
+                Период изменён после согласования (§11.5)
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </span>
+      );
 
     // ── Товар ──
+    case "brand":
+      // Бренд из 1С (§6) — read-only, подтягивается по номенклатуре.
+      return nom?.brand ? (
+        <span className="truncate">{nom.brand}</span>
+      ) : (
+        <Dash />
+      );
+    case "storeAvailability":
+      // Наличие в магазинах, % (§5) — из 1С, read-only.
+      return <StoreAvailabilityCell nomenclatureId={line.nomenclatureId} />;
     case "stock":
       return (
-        <span className="inline-flex w-full items-center justify-end gap-1">
+        <span className="inline-flex w-full items-center justify-center gap-1">
           <EditableCell
             value={line.stock}
             kind="number"
-            align="right"
+            align="center"
             editable={editable}
             manualEdited={line.stockManual}
             manualHint="Значение изменено вручную, автообновление остановлено"
@@ -164,7 +254,7 @@ function CellValue({
         <EditableCell
           value={line.newPrice}
           kind="money"
-          align="right"
+          align="center"
           editable={editable}
           onCommit={(v) => edit({ newPrice: typeof v === "number" ? v : 0 })}
         />
@@ -174,7 +264,7 @@ function CellValue({
         <EditableCell
           value={line.discountPct}
           kind="percent"
-          align="right"
+          align="center"
           editable={editable}
           onCommit={(v) => edit({ discountPct: typeof v === "number" ? v : 0 })}
         />
@@ -184,7 +274,7 @@ function CellValue({
         <EditableCell
           value={line.regularSales}
           kind="number"
-          align="right"
+          align="center"
           editable={editable}
           onCommit={(v) =>
             edit({ regularSales: typeof v === "number" ? v : undefined })
@@ -196,7 +286,7 @@ function CellValue({
         <EditableCell
           value={line.salesForecast}
           kind="number"
-          align="right"
+          align="center"
           editable={editable}
           required={required}
           onCommit={(v) =>
@@ -209,7 +299,7 @@ function CellValue({
         <EditableCell
           value={line.cashDiscountPct}
           kind="percent"
-          align="right"
+          align="center"
           editable={editable}
           onCommit={(v) =>
             edit({ cashDiscountPct: typeof v === "number" ? v : undefined })
@@ -249,65 +339,13 @@ function CellValue({
     case "t36full":
       return <Money value={installmentTerm(line, old, 36).newFullPrice} />;
 
-    // ── Маркетинг ──
-    case "giftNomenclature": {
-      // КМ selects gift nomenclature from the 1С reference (no free-text, §8.2.1).
-      const gift = line.giftNomenclatureId
-        ? getNomenclatureItem(line.giftNomenclatureId)
-        : undefined;
-      if (!editable) {
-        // Read-only roles: show the name, or the required marker when empty.
-        if (gift) return <span className="truncate">{gift.name}</span>;
-        return required ? (
-          <span className="text-xs font-medium text-red-500 dark:text-red-400">не заполнено</span>
-        ) : (
-          <Dash />
-        );
-      }
-      return (
-        <button
-          type="button"
-          onClick={() => ctx.onGiftPick(line.id)}
-          className={cn(
-            "flex h-7 w-full items-center gap-1 truncate rounded px-1 text-left text-sm hover:bg-gray-100 dark:hover:bg-accent",
-            gift ? "text-gray-900 dark:text-gray-100" : "text-muted-foreground"
-          )}
-        >
-          {gift ? (
-            <span className="truncate">{gift.name}</span>
-          ) : (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1",
-                required && "font-medium text-red-500 dark:text-red-400"
-              )}
-            >
-              <Gift className="size-3.5" />
-              {required ? "не заполнено" : "выбрать"}
-            </span>
-          )}
-        </button>
-      );
-    }
-    case "giftStock":
-      return (
-        <EditableCell
-          value={line.giftStock}
-          kind="number"
-          align="right"
-          editable={editable}
-          required={required}
-          onCommit={(v) =>
-            edit({ giftStock: typeof v === "number" ? v : undefined })
-          }
-        />
-      );
+    // ── Маркетинг ── (gift columns are rendered by GiftCell, not here) ──
     case "supplierCompensation":
       return (
         <EditableCell
           value={line.supplierCompensation}
           kind="money"
-          align="right"
+          align="center"
           editable={editable}
           onCommit={(v) =>
             edit({ supplierCompensation: typeof v === "number" ? v : undefined })
@@ -319,7 +357,7 @@ function CellValue({
         <EditableCell
           value={line.compensationLimit}
           kind="number"
-          align="right"
+          align="center"
           editable={editable}
           onCommit={(v) =>
             edit({ compensationLimit: typeof v === "number" ? v : undefined })
@@ -332,9 +370,7 @@ function CellValue({
           value={line.utp}
           kind="text"
           editable={editable}
-          onCommit={(v) =>
-            edit({ utp: typeof v === "string" ? v : undefined })
-          }
+          onCommit={(v) => edit({ utp: typeof v === "string" ? v : undefined })}
         />
       );
     case "advRecommendedKm":
@@ -369,10 +405,14 @@ interface FullCalendarGridProps {
   onEdit: (lineId: string, patch: Partial<PromoLine>) => void;
   /** Open the 1С picker to add a line to a campaign (§8.2.1; editor roles only). */
   onAddRequest: (campaignId: string) => void;
-  /** Open the 1С picker to (re)select a line's gift nomenclature. */
-  onGiftPick: (lineId: string) => void;
-  /** Mobile: open the full-screen per-line edit Sheet (Phase 5). */
+  /** Open the 1С picker for a gift slot/index on a line (§8). */
+  onGiftPick: (lineId: string, slot: number) => void;
+  /** Remove a «подарок на выбор» option by index (§8). */
+  onRemoveGift?: (lineId: string, index: number) => void;
+  /** Open the full per-line edit Sheet — «Изменить» (§3, all sizes) + mobile tap. */
   onLineTap?: (lineId: string) => void;
+  /** Hard-delete a draft line before submit (§3; fresh-editable campaigns only). */
+  onDeleteLine?: (lineId: string) => void;
   /** Edit an unplanned, not-yet-sent campaign's тип/период (§10; editor roles only). */
   onEditCampaign?: (campaignId: string) => void;
   /** Open the version-history & changes drawer for a campaign (§5.1; all roles). */
@@ -381,10 +421,6 @@ interface FullCalendarGridProps {
   onEditPeriod?: (campaignId: string) => void;
   /** Cancel the whole campaign (§5.3; provided only for КД). */
   onCancelCampaign?: (campaignId: string) => void;
-  /** Request a deadline change (§4.7; provided only for КД). */
-  onEditDeadline?: (campaignId: string) => void;
-  /** Approve a pending deadline change (§4.7; provided only for Операционный директор). */
-  onApproveDeadline?: (campaignId: string) => void;
   /** Request exclusion of a line (§5.3; provided only for КМ). */
   onRequestRemoval?: (lineId: string) => void;
   /** Approve/reject a pending line exclusion (§5.3; provided only for КД). */
@@ -408,13 +444,13 @@ export function FullCalendarGrid({
   onEdit,
   onAddRequest,
   onGiftPick,
+  onRemoveGift,
   onLineTap,
+  onDeleteLine,
   onEditCampaign,
   onHistory,
   onEditPeriod,
   onCancelCampaign,
-  onEditDeadline,
-  onApproveDeadline,
   onRequestRemoval,
   onApproveRemoval,
   onRejectRemoval,
@@ -438,6 +474,46 @@ export function FullCalendarGrid({
     [campaigns, linesFor]
   );
 
+  // Sticky header + synced horizontal scroll (feedback §1/§2). A horizontal-overflow
+  // container traps `position:sticky`, so — like the short calendar — the table is a
+  // non-scrolling STICKY header band over a BODY band, with three horizontal scrollers
+  // (a synced TOP scrollbar + the header + the body's bottom scrollbar) kept in sync.
+  const headRef = React.useRef<HTMLDivElement>(null);
+  const bodyRef = React.useRef<HTMLDivElement>(null);
+  const topScrollRef = React.useRef<HTMLDivElement>(null);
+  const frozenHeadRef = React.useRef<HTMLDivElement>(null);
+  const [frozenW, setFrozenW] = React.useState(0);
+  const [scrollW, setScrollW] = React.useState(0);
+
+  React.useLayoutEffect(() => {
+    function measure() {
+      if (frozenHeadRef.current) setFrozenW(frozenHeadRef.current.offsetWidth);
+      if (bodyRef.current) setScrollW(bodyRef.current.scrollWidth);
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (bodyRef.current) ro.observe(bodyRef.current);
+    if (frozenHeadRef.current) ro.observe(frozenHeadRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [campaigns, cols, editorMode]);
+
+  // Mirror one scroller's scrollLeft onto the other two. Idempotent writes → the
+  // resulting scroll events self-terminate (no re-entrancy flag needed).
+  const syncScroll = React.useCallback((from: "top" | "body") => {
+    const src = from === "top" ? topScrollRef.current : bodyRef.current;
+    const x = src?.scrollLeft ?? 0;
+    if (headRef.current && headRef.current.scrollLeft !== x)
+      headRef.current.scrollLeft = x;
+    if (from !== "top" && topScrollRef.current && topScrollRef.current.scrollLeft !== x)
+      topScrollRef.current.scrollLeft = x;
+    if (from !== "body" && bodyRef.current && bodyRef.current.scrollLeft !== x)
+      bodyRef.current.scrollLeft = x;
+  }, []);
+
   if (groups.length === 0) {
     return (
       <Card className="p-0">
@@ -449,18 +525,37 @@ export function FullCalendarGrid({
   }
 
   return (
-    <Card className="overflow-hidden p-0">
-      <div className="flex">
-        {/* ── Frozen identity pane (select · № промо · ФИО КМ · Номенклатура) ── */}
-        <div className="shrink-0 border-r bg-white dark:bg-card">
+    // `overflow-clip` rounds the corners without becoming a scroll container, so it
+    // does NOT trap the page-sticky header (feedback §2).
+    <Card className="overflow-clip p-0">
+      {/* ── STICKY header band — pinned to the page scroll (§1/§2). Stacks a synced
+            TOP horizontal scrollbar over the darker-gray, bold column-title row. ── */}
+      <div className="sticky top-0 z-30 border-b bg-gray-100 dark:bg-muted">
+        {/* Top scrollbar — synced with the body's bottom scrollbar (§1). A spacer the
+            width of the frozen pane aligns it with the scroll area; the inner track
+            width = the scroll content width so the thumb matches the bottom one. */}
+        <div className="flex">
+          <div className="shrink-0" style={{ width: frozenW }} />
           <div
+            ref={topScrollRef}
+            onScroll={() => syncScroll("top")}
+            className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+          >
+            <div style={{ width: scrollW, height: 1 }} />
+          </div>
+        </div>
+
+        {/* Column-title row */}
+        <div className="flex">
+          <div
+            ref={frozenHeadRef}
             className={cn(
-              "flex items-center border-b bg-gray-50 dark:bg-muted/40 text-xs font-medium text-gray-600 dark:text-gray-300",
+              "flex shrink-0 items-center border-r text-xs font-semibold text-gray-700 dark:text-gray-200",
               HEADER_H
             )}
           >
             {editorMode && <span style={colStyle(FROZEN.select)} />}
-            <span className="px-3" style={colStyle(FROZEN.promo)}>
+            <span className="px-3 text-center" style={colStyle(FROZEN.promo)}>
               № промо
             </span>
             <span className="px-3" style={colStyle(FROZEN.km)}>
@@ -470,18 +565,65 @@ export function FullCalendarGrid({
               Номенклатура
             </span>
           </div>
+          <div ref={headRef} className="min-w-0 flex-1 overflow-hidden">
+            <div
+              className={cn(
+                "flex min-w-max items-center text-xs font-semibold text-gray-700 dark:text-gray-200",
+                HEADER_H
+              )}
+            >
+              {cols.map((col) => (
+                <span
+                  key={col.id}
+                  className={cn("flex items-center gap-1 px-3", CELL, cellJustify(col))}
+                  style={colStyle(col.width)}
+                >
+                  <span className="truncate">{col.label}</span>
+                  {col.required && (
+                    <span className="text-red-500 dark:text-red-400">*</span>
+                  )}
+                  {isLocked(col.source) && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Lock className="size-3 shrink-0 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>{lockHint(col.source)}</TooltipContent>
+                    </Tooltip>
+                  )}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
+      {/* ── BODY band ─────────────────────────────────────────────────────────── */}
+      <div className="flex">
+        {/* Frozen identity pane (select · № промо · ФИО КМ · Номенклатура) */}
+        <div className="shrink-0 border-r bg-white dark:bg-card">
           {groups.map(({ campaign, lines }) => {
             const ids = lines.map((l) => l.id);
             const selCount = ids.filter((id) => selectedIds.has(id)).length;
             const groupChecked: boolean | "indeterminate" =
-              selCount === 0 ? false : selCount === ids.length ? true : "indeterminate";
+              selCount === 0
+                ? false
+                : selCount === ids.length
+                  ? true
+                  : "indeterminate";
+            // §3: hard add/delete only before submit (fresh draft); «Изменить»
+            // (the per-line Sheet) also serves approved-campaign corrections.
+            const freshEditable =
+              access.canEditOwnLines && isCampaignFreshEditable(campaign);
+            const lineEditable =
+              access.canEditOwnLines &&
+              (isCampaignFreshEditable(campaign) || isApprovedCampaign(campaign));
+            const choice = isGiftChoiceType(campaign.type);
             return (
               <div key={campaign.id}>
-                {/* group band (frozen side) */}
+                {/* group band (frozen side) — № промо once + count (§13) */}
                 <div
                   className={cn(
-                    "flex items-center gap-2 border-b bg-gray-100/70 dark:bg-muted px-3 text-xs font-semibold text-gray-700 dark:text-gray-200",
+                    "flex items-center gap-2 border-b bg-gray-50 dark:bg-muted/40 px-3 text-xs font-semibold text-gray-700 dark:text-gray-200",
                     BAND_H,
                     campaign.cancelled && "bg-red-50 dark:bg-red-500/15"
                   )}
@@ -495,7 +637,7 @@ export function FullCalendarGrid({
                   )}
                   <span className="tabular-nums">{campaign.id}</span>
                   <span className="font-normal text-muted-foreground">
-                    · {lines.length} стр.
+                    · {lines.length} {pluralPositions(lines.length)}
                   </span>
                   {access.canEditOwnLines && !campaign.cancelled && (
                     <button
@@ -509,20 +651,26 @@ export function FullCalendarGrid({
                   )}
                 </div>
 
-                {/* lines */}
+                {/* lines (frozen) */}
                 {lines.map((line) => {
                   const nom = getNomenclatureItem(line.nomenclatureId);
+                  // Merged height for a «подарок на выбор» line — the main nomenclature
+                  // shows once, centered, spanning all its gift sub-rows (§8).
+                  const h = lineHeightPx(line, choice, lineEditable);
                   return (
                     <div
                       key={line.id}
+                      style={{ height: h }}
                       className={cn(
-                        "group/row flex items-center border-b transition-colors hover:bg-gray-50 dark:hover:bg-accent",
-                        ROW_H,
-                        selectedIds.has(line.id) && "bg-primary/5 dark:bg-primary/10",
+                        "group/row flex items-stretch border-b transition-colors hover:bg-gray-50 dark:hover:bg-accent",
+                        selectedIds.has(line.id) &&
+                          "bg-primary/5 dark:bg-primary/10",
                         line.pending1CCheck && "bg-amber-50/50 dark:bg-amber-500/10",
-                        line.rejected && "bg-red-50/70 dark:bg-red-500/10 hover:bg-red-50 dark:hover:bg-red-500/15",
+                        line.rejected &&
+                          "bg-red-50/70 dark:bg-red-500/10 hover:bg-red-50 dark:hover:bg-red-500/15",
                         line.removalPending && "bg-orange-50/60 dark:bg-orange-500/10",
-                        line.removed && "bg-red-50/70 dark:bg-red-500/10 opacity-70 hover:bg-red-50 dark:hover:bg-red-500/15"
+                        line.removed &&
+                          "bg-red-50/70 dark:bg-red-500/10 opacity-70 hover:bg-red-50 dark:hover:bg-red-500/15"
                       )}
                     >
                       {editorMode && (
@@ -538,7 +686,7 @@ export function FullCalendarGrid({
                         </span>
                       )}
                       <span
-                        className="px-3 text-xs tabular-nums text-muted-foreground"
+                        className="flex items-center justify-center px-3 text-xs tabular-nums text-muted-foreground"
                         style={colStyle(FROZEN.promo)}
                       >
                         {campaign.id}
@@ -569,15 +717,38 @@ export function FullCalendarGrid({
                             onApproveRemoval={onApproveRemoval}
                             onRejectRemoval={onRejectRemoval}
                           />
-                          {onLineTap && (
-                            <button
-                              type="button"
-                              onClick={() => onLineTap(line.id)}
-                              aria-label="Редактировать строку"
-                              className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100 md:hidden"
-                            >
-                              <ChevronRight className="size-4" />
-                            </button>
+                          {/* §3: «Изменить» + «Удалить» — near the row, no scroll.
+                              Изменить = the per-line Sheet (fresh draft or approved
+                              correction); Удалить = hard delete, drafts only. */}
+                          {lineEditable && !line.removed && onLineTap && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() => onLineTap(line.id)}
+                                  aria-label="Изменить строку"
+                                  className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
+                                >
+                                  <Pencil className="size-4" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Изменить номенклатуру</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {freshEditable && !line.removed && onDeleteLine && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteLine(line.id)}
+                                  aria-label="Удалить строку"
+                                  className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400"
+                                >
+                                  <Trash2 className="size-4" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Удалить номенклатуру</TooltipContent>
+                            </Tooltip>
                           )}
                         </span>
                       </div>
@@ -599,112 +770,45 @@ export function FullCalendarGrid({
           })}
         </div>
 
-        {/* ── Scrolling pane ─────────────────────────────────────────────── */}
-        <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-gutter:stable]">
+        {/* Scrolling pane — the BOTTOM scrollbar; drives the header + top scrollbar. */}
+        <div
+          ref={bodyRef}
+          onScroll={() => syncScroll("body")}
+          className="min-w-0 flex-1 overflow-x-auto"
+        >
           <div className="min-w-max">
-            {/* header */}
-            <div
-              className={cn(
-                "flex items-center border-b bg-gray-50 dark:bg-muted/40 text-xs font-medium text-gray-600 dark:text-gray-300",
-                HEADER_H
-              )}
-            >
-              {cols.map((col) => (
-                <span
-                  key={col.id}
-                  className={cn(
-                    "flex items-center gap-1 px-3",
-                    alignClass(col) === "text-right"
-                      ? "justify-end"
-                      : "justify-start"
-                  )}
-                  style={colStyle(col.width)}
-                >
-                  <span className="truncate">{col.label}</span>
-                  {col.required && <span className="text-red-500 dark:text-red-400">*</span>}
-                  {isLocked(col.source) && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Lock className="size-3 shrink-0 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>{lockHint(col.source)}</TooltipContent>
-                    </Tooltip>
-                  )}
-                </span>
-              ))}
-            </div>
-
             {/* groups */}
             {groups.map(({ campaign, lines }) => {
               const gift = isGiftType(campaign.type);
-              const ctx: CellCtx = { access, onEdit, onGiftPick, gift };
+              const choice = isGiftChoiceType(campaign.type);
+              const lineEditable =
+                access.canEditOwnLines &&
+                (isCampaignFreshEditable(campaign) ||
+                  isApprovedCampaign(campaign));
+              const ctx: CellCtx = {
+                access,
+                onEdit,
+                onGiftPick,
+                onRemoveGift,
+                gift,
+                giftChoice: choice,
+                lineEditable,
+              };
               return (
                 <div key={campaign.id}>
-                  {/* group band (scroll side) — campaign context */}
+                  {/* group band (scroll side) — actions only; тип/название/период are
+                      now columns (§4), the дедлайн chip/buttons are removed (§4). */}
                   <div
                     className={cn(
-                      "flex w-full items-center gap-3 border-b bg-gray-100/70 dark:bg-muted px-3 text-xs",
+                      "flex w-full items-center gap-3 border-b bg-gray-50 dark:bg-muted/40 px-3 text-xs",
                       BAND_H,
                       campaign.cancelled && "bg-red-50 dark:bg-red-500/15"
                     )}
                   >
-                    <span
-                      className={cn(
-                        "rounded-full px-2 py-0.5 text-[11px] font-medium",
-                        campaign.planned
-                          ? "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300"
-                          : "bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300"
-                      )}
-                    >
-                      {campaign.planned ? "Плановая" : "Внеплановая"}
-                    </span>
-                    <span className="text-muted-foreground">{campaign.type}</span>
-                    <span
-                      className={cn(
-                        "font-semibold text-gray-900 dark:text-gray-100",
-                        campaign.cancelled && "text-red-700 dark:text-red-300 line-through"
-                      )}
-                    >
-                      {campaign.name}
-                    </span>
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 tabular-nums",
-                        campaign.periodChanged
-                          ? "font-bold text-gray-900 dark:text-gray-100"
-                          : "text-muted-foreground"
-                      )}
-                    >
-                      <RuDate value={campaign.startDate} /> —{" "}
-                      <RuDate value={campaign.endDate} />
-                      {campaign.periodChanged && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Pencil className="size-3 text-amber-600 dark:text-amber-400" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Период изменён после согласования (§11.5)
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                    </span>
-                    {campaign.planned && <DeadlineChip campaign={campaign} />}
                     {changeBadges?.get(campaign.id) && (
                       <ChangeBadge info={changeBadges.get(campaign.id)!} />
                     )}
                     <div className="ml-auto flex shrink-0 items-center gap-1">
-                      {/* Операционный директор: approve a pending deadline change (§4.7). */}
-                      {onApproveDeadline &&
-                        campaign.deadlineChange?.status === "pending" && (
-                          <button
-                            type="button"
-                            onClick={() => onApproveDeadline(campaign.id)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded bg-emerald-50 dark:bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/25"
-                          >
-                            <CalendarCheck className="size-3" />
-                            Утвердить дедлайн
-                          </button>
-                        )}
                       {onEditPeriod &&
                         campaign.planned &&
                         isApprovedCampaign(campaign) && (
@@ -715,19 +819,6 @@ export function FullCalendarGrid({
                           >
                             <CalendarClock className="size-3" />
                             Изменить период
-                          </button>
-                        )}
-                      {/* КД: request a deadline change (planned, not cancelled, §4.7). */}
-                      {onEditDeadline &&
-                        campaign.planned &&
-                        !campaign.cancelled && (
-                          <button
-                            type="button"
-                            onClick={() => onEditDeadline(campaign.id)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
-                          >
-                            <CalendarClock className="size-3" />
-                            Изменить дедлайн
                           </button>
                         )}
                       {onEditCampaign &&
@@ -741,7 +832,7 @@ export function FullCalendarGrid({
                             className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
                           >
                             <Pencil className="size-3" />
-                            Изменить
+                            Изменить акцию
                           </button>
                         )}
                       {onHistory && (
@@ -774,45 +865,63 @@ export function FullCalendarGrid({
                     </div>
                   </div>
 
-                  {/* lines */}
+                  {/* lines (scroll) */}
                   {lines.map((line) => {
                     const nom = getNomenclatureItem(line.nomenclatureId);
+                    const h = lineHeightPx(line, choice, lineEditable);
                     return (
                       <div
                         key={line.id}
+                        style={{ height: h }}
                         className={cn(
-                          "flex items-center border-b text-sm transition-colors hover:bg-gray-50 dark:hover:bg-accent",
-                          ROW_H,
-                          selectedIds.has(line.id) && "bg-primary/5 dark:bg-primary/10",
-                          line.pending1CCheck && "bg-amber-50/50 dark:bg-amber-500/10",
-                          line.rejected && "bg-red-50/70 dark:bg-red-500/10 hover:bg-red-50 dark:hover:bg-red-500/15",
-                          line.removalPending && "bg-orange-50/60 dark:bg-orange-500/10",
-                          line.removed && "bg-red-50/70 dark:bg-red-500/10 opacity-70 hover:bg-red-50 dark:hover:bg-red-500/15"
+                          "flex items-stretch border-b text-sm transition-colors hover:bg-gray-50 dark:hover:bg-accent",
+                          selectedIds.has(line.id) &&
+                            "bg-primary/5 dark:bg-primary/10",
+                          line.pending1CCheck &&
+                            "bg-amber-50/50 dark:bg-amber-500/10",
+                          line.rejected &&
+                            "bg-red-50/70 dark:bg-red-500/10 hover:bg-red-50 dark:hover:bg-red-500/15",
+                          line.removalPending &&
+                            "bg-orange-50/60 dark:bg-orange-500/10",
+                          line.removed &&
+                            "bg-red-50/70 dark:bg-red-500/10 opacity-70 hover:bg-red-50 dark:hover:bg-red-500/15"
                         )}
                       >
-                        {cols.map((col) => (
-                          <div
-                            key={col.id}
-                            className={cn(
-                              "flex items-center px-3 text-gray-800 dark:text-gray-100",
-                              alignClass(col) === "text-right"
-                                ? "justify-end tabular-nums"
-                                : "justify-start",
-                              isLocked(col.source) && "text-gray-500 dark:text-gray-400",
-                              changedCells?.has(`${line.id}:${col.id}`) &&
-                                "bg-amber-50 dark:bg-amber-500/15 ring-1 ring-inset ring-amber-300 dark:ring-amber-500/40"
-                            )}
-                            style={colStyle(col.width)}
-                          >
-                            <CellValue
+                        {cols.map((col) =>
+                          isGiftCol(col.id) ? (
+                            // Gift columns (§8) — fixed №1/№2 or «подарок на выбор» sub-rows.
+                            <GiftCell
+                              key={col.id}
                               col={col}
                               line={line}
-                              nom={nom}
-                              campaign={campaign}
                               ctx={ctx}
+                              editable={ctx.lineEditable}
                             />
-                          </div>
-                        ))}
+                          ) : (
+                            <div
+                              key={col.id}
+                              className={cn(
+                                "flex items-center px-3 text-gray-800 dark:text-gray-100",
+                                CELL,
+                                cellJustify(col),
+                                isNumericKind(col) && "tabular-nums",
+                                isLocked(col.source) &&
+                                  "text-gray-500 dark:text-gray-400",
+                                changedCells?.has(`${line.id}:${col.id}`) &&
+                                  "bg-amber-50 dark:bg-amber-500/15 ring-1 ring-inset ring-amber-300 dark:ring-amber-500/40"
+                              )}
+                              style={colStyle(col.width)}
+                            >
+                              <CellValue
+                                col={col}
+                                line={line}
+                                nom={nom}
+                                campaign={campaign}
+                                ctx={ctx}
+                              />
+                            </div>
+                          )
+                        )}
                       </div>
                     );
                   })}
@@ -838,10 +947,211 @@ export function FullCalendarGrid({
   );
 }
 
+/**
+ * Gift columns (feedback §8). Renders a «Подарок №1/№2» cell for a line:
+ *  • non-gift campaign → «—» (giftOnly).
+ *  • fixed gift type («Товар в подарок» / «1+1») → gifts[slot] {номенклатура/наличие/остаток}.
+ *  • «Подарок на выбор» → «Подарок №1» stacks one gift per sub-row (with a remove
+ *    control + «+ Добавить подарок»); «Подарок №2» is unused («—»).
+ */
+function GiftCell({
+  col,
+  line,
+  ctx,
+  editable,
+}: {
+  col: ColumnDef;
+  line: PromoLine;
+  ctx: CellCtx;
+  editable: boolean;
+}) {
+  const width = col.width;
+  const slot = isGift1Col(col.id) ? 0 : 1;
+  const field = giftField(col.id);
+
+  // Non-gift campaign → placeholder.
+  if (!ctx.gift) {
+    return (
+      <div
+        className={cn("flex items-center justify-center px-3", CELL)}
+        style={colStyle(width)}
+      >
+        <Dash />
+      </div>
+    );
+  }
+
+  // «Подарок на выбор» → only «Подарок №1» carries the per-gift sub-rows.
+  if (ctx.giftChoice) {
+    if (slot === 1) {
+      return (
+        <div
+          className={cn("flex items-center justify-center px-3", CELL)}
+          style={colStyle(width)}
+        >
+          <Dash />
+        </div>
+      );
+    }
+    const gifts = line.gifts ?? [];
+    const rows: (GiftItem | null)[] = gifts.length > 0 ? gifts : [null];
+    return (
+      <div className={cn("flex flex-col", CELL)} style={colStyle(width)}>
+        {rows.map((g, i) => (
+          <div
+            key={i}
+            style={{ height: GIFT_SUBROW_H }}
+            className={cn(
+              "flex items-center gap-1 border-b border-gray-100 px-3 last:border-b-0 dark:border-border",
+              field === "nom" ? "justify-start" : "justify-center tabular-nums"
+            )}
+          >
+            <GiftSubCell
+              g={g}
+              field={field}
+              index={i}
+              lineId={line.id}
+              ctx={ctx}
+              editable={editable}
+              required={field === "nom" && i === 0}
+            />
+          </div>
+        ))}
+        {editable && (
+          <div
+            style={{ height: GIFT_SUBROW_H }}
+            className="flex items-center px-3"
+          >
+            {field === "nom" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => ctx.onGiftPick(line.id, gifts.length)}
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-accent dark:hover:text-gray-100"
+                  >
+                    <Plus className="size-3" />
+                    Добавить подарок
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Добавить подарок на выбор</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Fixed gift → gifts[slot].
+  const gift = line.gifts?.[slot];
+  return (
+    <div
+      className={cn(
+        "flex items-center px-3",
+        CELL,
+        field === "nom" ? "justify-start" : "justify-center tabular-nums",
+        isLocked(col.source) && "text-gray-500 dark:text-gray-400"
+      )}
+      style={colStyle(width)}
+    >
+      <GiftSubCell
+        g={gift ?? null}
+        field={field}
+        index={slot}
+        lineId={line.id}
+        ctx={ctx}
+        editable={editable}
+        required={slot === 0 && field === "nom"}
+      />
+    </div>
+  );
+}
+
+/** One gift value — nomenclature (pickable), наличие в магазинах %, or остаток (1С). */
+function GiftSubCell({
+  g,
+  field,
+  index,
+  lineId,
+  ctx,
+  editable,
+  required,
+}: {
+  g: GiftItem | null;
+  field: GiftField;
+  index: number;
+  lineId: string;
+  ctx: CellCtx;
+  editable: boolean;
+  required: boolean;
+}) {
+  if (field === "avail") {
+    return g ? (
+      <StoreAvailabilityCell nomenclatureId={g.nomenclatureId} />
+    ) : (
+      <Dash />
+    );
+  }
+  if (field === "stock") {
+    if (!g) return <Dash />;
+    const stock = getNomenclatureItem(g.nomenclatureId)?.stock ?? 0;
+    return <span className="tabular-nums">{stock.toLocaleString("ru-RU")}</span>;
+  }
+  // field === "nom"
+  const nom = g ? getNomenclatureItem(g.nomenclatureId) : undefined;
+  if (!editable) {
+    if (nom) return <span className="truncate">{nom.name}</span>;
+    return required ? (
+      <span className="text-xs font-medium text-red-500 dark:text-red-400">
+        не заполнено
+      </span>
+    ) : (
+      <Dash />
+    );
+  }
+  return (
+    <span className="flex w-full items-center gap-1">
+      <button
+        type="button"
+        onClick={() => ctx.onGiftPick(lineId, index)}
+        className={cn(
+          "min-w-0 flex-1 truncate rounded px-1 text-left text-sm hover:bg-gray-100 dark:hover:bg-accent",
+          nom ? "text-gray-900 dark:text-gray-100" : "text-muted-foreground"
+        )}
+      >
+        {nom ? (
+          <span className="truncate">{nom.name}</span>
+        ) : (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1",
+              required && "font-medium text-red-500 dark:text-red-400"
+            )}
+          >
+            <Gift className="size-3.5" />
+            {required ? "не заполнено" : "выбрать"}
+          </span>
+        )}
+      </button>
+      {nom && ctx.onRemoveGift && (
+        <button
+          type="button"
+          onClick={() => ctx.onRemoveGift!(lineId, index)}
+          aria-label="Убрать подарок"
+          className="shrink-0 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+        >
+          <X className="size-3.5" />
+        </button>
+      )}
+    </span>
+  );
+}
+
 function KmCell({ kmId, width }: { kmId: string; width: number }) {
   const km = getCategoryManager(kmId);
   return (
-    <div className="px-3" style={colStyle(width)}>
+    <div className="flex items-center px-3" style={colStyle(width)}>
       {km ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -1057,59 +1367,11 @@ function LineRowActions({
   return null;
 }
 
-/**
- * Campaign band «заполнение КМ» deadline chip (§4.7). Shows the effective
- * calendar deadline; an approved override reads as the new date with a ✓, a
- * pending change reads amber as «old → new · на утверждении».
- */
-function DeadlineChip({ campaign }: { campaign: PromoCampaign }) {
-  const dc = campaign.deadlineChange;
-  const eff = effectiveFillDeadline(campaign);
-  const fmt = (d: Date) => d.toLocaleDateString("ru-RU");
-
-  if (dc?.status === "pending") {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
-            <CalendarClock className="size-2.5" />
-            дедлайн: {fmt(dc.oldDeadline)} → {fmt(dc.newDeadline)} · на утверждении
-          </span>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-[260px]">
-          Запрошено изменение дедлайна заполнения (инициатор: {dc.initiator}).
-          {dc.reason ? ` Причина: ${dc.reason}` : ""} Вступит в силу после
-          утверждения вышестоящим руководством (Операционный директор) (§4.7).
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
-            campaign.fillDeadlineOverride
-              ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-              : "bg-gray-100 dark:bg-muted text-gray-600 dark:text-gray-300"
-          )}
-        >
-          {campaign.fillDeadlineOverride ? (
-            <CalendarCheck className="size-2.5" />
-          ) : (
-            <CalendarClock className="size-2.5" />
-          )}
-          дедлайн: {fmt(eff)}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-[260px]">
-        Крайний срок заполнения КМ (календарные дни).
-        {campaign.fillDeadlineOverride
-          ? " Изменён и утверждён вышестоящим руководством (§4.7)."
-          : ""}
-      </TooltipContent>
-    </Tooltip>
-  );
+/** «N позиций» plural (feedback §13). */
+function pluralPositions(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "позиция";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "позиции";
+  return "позиций";
 }

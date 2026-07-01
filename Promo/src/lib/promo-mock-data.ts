@@ -48,6 +48,11 @@ export interface PromoTypeRef {
   name: string;
   /** Gift-bearing types require gift nomenclature fields (spec §8.8). */
   giftType?: boolean;
+  /**
+   * «Подарок на выбор» (feedback §8) — the gift is chosen from several options, each
+   * shown on its own sub-row with the main nomenclature merged across them.
+   */
+  giftChoice?: boolean;
 }
 
 export const PROMO_TYPES: PromoTypeRef[] = [
@@ -56,6 +61,7 @@ export const PROMO_TYPES: PromoTypeRef[] = [
   { id: "installment-0-0-6", name: "Рассрочка 0-0-6" },
   { id: "one-plus-one", name: "1+1", giftType: true },
   { id: "gift", name: "Товар в подарок", giftType: true },
+  { id: "gift-choice", name: "Подарок на выбор", giftType: true, giftChoice: true },
   { id: "cashback", name: "Cashback" },
   { id: "clearance", name: "Распродажа" },
 ];
@@ -82,6 +88,8 @@ export interface NomenclatureItem {
   id: string;
   name: string;
   category: string;
+  /** Бренд — подтягивается из 1С по номенклатуре, не редактируется (feedback §6). */
+  brand: string;
   /** Себестоимость (1С, locked). */
   cost: number;
   /** Розничная цена (старая), KM-only, locked. */
@@ -91,44 +99,48 @@ export interface NomenclatureItem {
 }
 
 // ~30 SKUs across the КМ categories, generated deterministically (no randomness).
-const NOMENCLATURE_SEED: Array<[string, string, number, number, number]> = [
-  ["Samsung QLED 55\" QE55Q60D", "Телевизоры и аудио", 6200000, 8990000, 42],
-  ["LG OLED 48\" OLED48C4", "Телевизоры и аудио", 8100000, 11490000, 18],
-  ["Saund-бар Samsung HW-B650", "Телевизоры и аудио", 2100000, 3290000, 60],
-  ["Artel ТВ 43\" 43H3401", "Телевизоры и аудио", 1900000, 2790000, 75],
-  ["Xiaomi TV A2 50\"", "Телевизоры и аудио", 3100000, 4490000, 33],
-  ["Холодильник Artel HD 455", "Холодильники и крупная БТ", 3900000, 5690000, 28],
-  ["Samsung RB37 No Frost", "Холодильники и крупная БТ", 5600000, 7990000, 15],
-  ["LG GC-B247 Side-by-Side", "Холодильники и крупная БТ", 9800000, 13990000, 9],
-  ["Стиральная машина Bosch WGG", "Холодильники и крупная БТ", 4700000, 6790000, 21],
-  ["Посудомоечная Midea MFD45", "Холодильники и крупная БТ", 3300000, 4790000, 17],
-  ["iPhone 15 128GB", "Смартфоны и гаджеты", 9900000, 12990000, 40],
-  ["Samsung Galaxy S24 256GB", "Смартфоны и гаджеты", 9100000, 11990000, 35],
-  ["Xiaomi Redmi Note 13 Pro", "Смартфоны и гаджеты", 2600000, 3590000, 88],
-  ["Realme 12 Pro 8/256", "Смартфоны и гаджеты", 2900000, 3990000, 52],
-  ["Наушники Apple AirPods Pro 2", "Смартфоны и гаджеты", 2300000, 3290000, 64],
-  ["Пылесос Dyson V12", "Мелкая бытовая техника", 4200000, 5990000, 12],
-  ["Кофемашина De'Longhi Magnifica", "Мелкая бытовая техника", 3600000, 5290000, 14],
-  ["Мультиварка Redmond RMC", "Мелкая бытовая техника", 620000, 990000, 130],
-  ["Утюг Philips Azur", "Мелкая бытовая техника", 480000, 749000, 110],
-  ["Блендер Bosch ErgoMixx", "Мелкая бытовая техника", 390000, 599000, 95],
-  ["Ноутбук ASUS Vivobook 15", "Ноутбуки и ПК", 5400000, 7490000, 22],
-  ["MacBook Air M3 13\"", "Ноутбуки и ПК", 13200000, 16990000, 7],
-  ["Lenovo IdeaPad Slim 3", "Ноутбуки и ПК", 4100000, 5790000, 30],
-  ["Монитор Samsung 27\" T35F", "Ноутбуки и ПК", 1600000, 2390000, 44],
-  ["ПК HP Pavilion Desktop", "Ноутбуки и ПК", 6800000, 9290000, 11],
-  ["Кондиционер Artel 12000 BTU", "Климатическая техника", 2700000, 3890000, 48],
-  ["Кондиционер Gree Bora 09", "Климатическая техника", 3100000, 4490000, 26],
-  ["Обогреватель Ballu BIH", "Климатическая техника", 540000, 849000, 140],
-  ["Увлажнитель Xiaomi Smart", "Климатическая техника", 720000, 1090000, 80],
-  ["Вентилятор Centek CT-5015", "Климатическая техника", 280000, 449000, 160],
+// Tuple: [name, category, brand, cost, oldRetailPrice, stock]. Brand comes from 1С
+// (feedback §6) — stored explicitly because the brand isn't always the first word
+// of the name (e.g. «Saund-бар Samsung …»).
+const NOMENCLATURE_SEED: Array<[string, string, string, number, number, number]> = [
+  ["Samsung QLED 55\" QE55Q60D", "Телевизоры и аудио", "Samsung", 6200000, 8990000, 42],
+  ["LG OLED 48\" OLED48C4", "Телевизоры и аудио", "LG", 8100000, 11490000, 18],
+  ["Saund-бар Samsung HW-B650", "Телевизоры и аудио", "Samsung", 2100000, 3290000, 60],
+  ["Artel ТВ 43\" 43H3401", "Телевизоры и аудио", "Artel", 1900000, 2790000, 75],
+  ["Xiaomi TV A2 50\"", "Телевизоры и аудио", "Xiaomi", 3100000, 4490000, 33],
+  ["Холодильник Artel HD 455", "Холодильники и крупная БТ", "Artel", 3900000, 5690000, 28],
+  ["Samsung RB37 No Frost", "Холодильники и крупная БТ", "Samsung", 5600000, 7990000, 15],
+  ["LG GC-B247 Side-by-Side", "Холодильники и крупная БТ", "LG", 9800000, 13990000, 9],
+  ["Стиральная машина Bosch WGG", "Холодильники и крупная БТ", "Bosch", 4700000, 6790000, 21],
+  ["Посудомоечная Midea MFD45", "Холодильники и крупная БТ", "Midea", 3300000, 4790000, 17],
+  ["iPhone 15 128GB", "Смартфоны и гаджеты", "Apple", 9900000, 12990000, 40],
+  ["Samsung Galaxy S24 256GB", "Смартфоны и гаджеты", "Samsung", 9100000, 11990000, 35],
+  ["Xiaomi Redmi Note 13 Pro", "Смартфоны и гаджеты", "Xiaomi", 2600000, 3590000, 88],
+  ["Realme 12 Pro 8/256", "Смартфоны и гаджеты", "Realme", 2900000, 3990000, 52],
+  ["Наушники Apple AirPods Pro 2", "Смартфоны и гаджеты", "Apple", 2300000, 3290000, 64],
+  ["Пылесос Dyson V12", "Мелкая бытовая техника", "Dyson", 4200000, 5990000, 12],
+  ["Кофемашина De'Longhi Magnifica", "Мелкая бытовая техника", "De'Longhi", 3600000, 5290000, 14],
+  ["Мультиварка Redmond RMC", "Мелкая бытовая техника", "Redmond", 620000, 990000, 130],
+  ["Утюг Philips Azur", "Мелкая бытовая техника", "Philips", 480000, 749000, 110],
+  ["Блендер Bosch ErgoMixx", "Мелкая бытовая техника", "Bosch", 390000, 599000, 95],
+  ["Ноутбук ASUS Vivobook 15", "Ноутбуки и ПК", "ASUS", 5400000, 7490000, 22],
+  ["MacBook Air M3 13\"", "Ноутбуки и ПК", "Apple", 13200000, 16990000, 7],
+  ["Lenovo IdeaPad Slim 3", "Ноутбуки и ПК", "Lenovo", 4100000, 5790000, 30],
+  ["Монитор Samsung 27\" T35F", "Ноутбуки и ПК", "Samsung", 1600000, 2390000, 44],
+  ["ПК HP Pavilion Desktop", "Ноутбуки и ПК", "HP", 6800000, 9290000, 11],
+  ["Кондиционер Artel 12000 BTU", "Климатическая техника", "Artel", 2700000, 3890000, 48],
+  ["Кондиционер Gree Bora 09", "Климатическая техника", "Gree", 3100000, 4490000, 26],
+  ["Обогреватель Ballu BIH", "Климатическая техника", "Ballu", 540000, 849000, 140],
+  ["Увлажнитель Xiaomi Smart", "Климатическая техника", "Xiaomi", 720000, 1090000, 80],
+  ["Вентилятор Centek CT-5015", "Климатическая техника", "Centek", 280000, 449000, 160],
 ];
 
 export const NOMENCLATURE: NomenclatureItem[] = NOMENCLATURE_SEED.map(
-  ([name, category, cost, oldRetailPrice, stock], i) => ({
+  ([name, category, brand, cost, oldRetailPrice, stock], i) => ({
     id: `1C-${String(10001 + i)}`,
     name,
     category,
+    brand,
     cost,
     oldRetailPrice,
     stock,
@@ -507,17 +519,19 @@ export const CAMPAIGNS: PromoCampaign[] = [
     planStatus: "Утверждён",
   },
   {
+    // §8 demo: «Подарок на выбор» — a fresh (Черновик) campaign so add/remove of
+    // choice gifts + the merged main-nomenclature sub-rows are demoable end-to-end.
     id: "PR-2026-014",
-    type: "Распродажа",
-    name: "Распродажа климатической техники",
+    type: "Подарок на выбор",
+    name: "Подарок на выбор к телевизорам",
     planned: true,
     cancelled: false,
     startDate: new Date(2026, 8, 1),
     endDate: new Date(2026, 8, 15),
     status: "Черновик",
-    participatingKmIds: ["km-6"],
+    participatingKmIds: ["km-1"],
     kmStatuses: {
-      "km-6": "Не заполнено",
+      "km-1": "Не заполнено",
     },
     planStatus: "Утверждён",
   },
@@ -825,6 +839,15 @@ export interface WarehouseStock {
   qty: number;
 }
 
+/**
+ * One gift attached to a line (feedback §8). The nomenclature is picked from the 1С
+ * reference; «Остаток» and «Наличие в магазинах, %» are derived from 1С by that
+ * nomenclature (see getNomenclatureItem / getStoreAvailability), so they aren't stored.
+ */
+export interface GiftItem {
+  nomenclatureId: string;
+}
+
 export interface PromoLine {
   id: string;
   campaignId: string;
@@ -847,9 +870,14 @@ export interface PromoLine {
   cashDiscountPct?: number;
   /** 12-мес «старый» ежемесячный платёж, field 19 (manual base; rest computed). */
   oldMonthly12?: number;
-  /** Gift fields — only for типы «1+1» / «Товар в подарок» (fields 32–33). */
-  giftNomenclatureId?: string;
-  giftStock?: number;
+  /**
+   * Подарки (feedback §8) — only for gift типы. «Товар в подарок» / «1+1»: up to 2
+   * fixed gifts (Подарок №1 / №2). «Подарок на выбор»: a list of options, each shown
+   * on its own sub-row. Per-gift «Остаток» / «Наличие в магазинах» are loaded from 1С
+   * by the gift nomenclature (same logic as the main nomenclature). КМ picks the
+   * nomenclature from the 1С reference; the numbers are read-only.
+   */
+  gifts?: GiftItem[];
   /** Компенсация от поставщика / лимит (fields 34–35). */
   supplierCompensation?: number;
   compensationLimit?: number;
@@ -918,7 +946,10 @@ type LineSeed = {
   removalPending?: boolean;
   removed?: boolean;
   removalReason?: string;
+  /** Single gift nomenclature id (fixed «Подарок №1»). */
   gift?: string;
+  /** Multiple gift nomenclature ids — fixed №1/№2 or «подарок на выбор» options (§8). */
+  gifts?: string[];
   utp?: string;
   advKm?: boolean;
   advMkt?: boolean;
@@ -944,7 +975,7 @@ const LINE_SEED: LineSeed[] = [
   // as edit-after-approval corrections (§5.1) — the values match Phase-1 версии.
   // Enriched (УТП / компенсация / advMkt) so the S5 department reports (M/P/A
   // field subsets) render populated cells rather than «—».
-  { id: "L-0015", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10017", off: 0.16, forecast: 40, regular: 14, gift: "1C-10018", utp: "Гарантия 3 года", advKm: true, advMkt: true, supplierCompensation: 400000, compensationLimit: 50 },
+  { id: "L-0015", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10017", off: 0.16, forecast: 40, regular: 14, gifts: ["1C-10018", "1C-10019"], utp: "Гарантия 3 года", advKm: true, advMkt: true, supplierCompensation: 400000, compensationLimit: 50 },
   { id: "L-0016", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10016", off: 0.14, forecast: 25, gift: "1C-10018", advKm: true, supplierCompensation: 250000, compensationLimit: 30 },
 
   // PR-2026-005 «Cashback на смартфоны» (Переотправлено на корректировку) — km-3
@@ -952,6 +983,11 @@ const LINE_SEED: LineSeed[] = [
 
   // UN-2026-014 «Подарок к ноутбукам (внеплановая)» (Товар в подарок) — km-5
   { id: "L-0009", campaignId: "UN-2026-014", kmId: "km-5", nomenclatureId: "1C-10022", off: 0.05, forecast: 15, gift: "1C-10018", utp: "Мультиварка в подарок к каждому MacBook" },
+
+  // PR-2026-014 «Подарок на выбор к телевизорам» (§8, giftChoice) — km-1, Черновик.
+  // One line with several choice gifts → the gift column shows one gift per sub-row
+  // and the main nomenclature is merged across them.
+  { id: "L-0030", campaignId: "PR-2026-014", kmId: "km-1", nomenclatureId: "1C-10001", off: 0.12, forecast: 30, gifts: ["1C-10003", "1C-10015", "1C-10018", "1C-10019"], utp: "Подарок на выбор к каждому телевизору", advKm: true },
 
   // Review-queue coverage (S3): a line set for every (Promo + КМ) pair that is
   // pending a reviewer, so the согласование snapshot is never empty.
@@ -987,7 +1023,7 @@ export const PROMO_LINES: PromoLine[] = LINE_SEED.map((s) => {
   const oldPrice = nom?.oldRetailPrice ?? 0;
   const newPrice = roundTo(oldPrice * (1 - s.off), 10_000);
   const discountPct = oldPrice ? Math.round((1 - newPrice / oldPrice) * 100) : 0;
-  const giftNom = s.gift ? NOMENCLATURE.find((n) => n.id === s.gift) : undefined;
+  const giftIds = s.gifts ?? (s.gift ? [s.gift] : undefined);
   return {
     id: s.id,
     campaignId: s.campaignId,
@@ -1001,8 +1037,7 @@ export const PROMO_LINES: PromoLine[] = LINE_SEED.map((s) => {
     salesForecast: s.forecast,
     cashDiscountPct: s.cash,
     oldMonthly12: roundTo(oldPrice / 12, 1_000),
-    giftNomenclatureId: s.gift,
-    giftStock: giftNom ? giftNom.stock : undefined,
+    gifts: giftIds?.map((id) => ({ nomenclatureId: id })),
     supplierCompensation: s.supplierCompensation,
     compensationLimit: s.compensationLimit,
     utp: s.utp,
@@ -1316,6 +1351,11 @@ export function isGiftType(typeName: string): boolean {
   return Boolean(PROMO_TYPES.find((t) => t.name === typeName)?.giftType);
 }
 
+/** Whether a campaign's тип is «Подарок на выбор» (multi-gift sub-rows, feedback §8). */
+export function isGiftChoiceType(typeName: string): boolean {
+  return Boolean(PROMO_TYPES.find((t) => t.name === typeName)?.giftChoice);
+}
+
 /** Required-field IDs missing on a line (drives the red marker + send gating, §8.6/§8.8). */
 export function missingRequiredFields(
   line: PromoLine,
@@ -1324,10 +1364,11 @@ export function missingRequiredFields(
   const missing: string[] = [];
   // Прогноз продаж — always required (spec §8.6).
   if (line.salesForecast == null) missing.push("salesForecast");
-  // Gift fields — required only for gift типы (spec §8.8).
+  // Gift fields — required only for gift типы (§8.8 / feedback §8): at least the
+  // first gift's nomenclature must be chosen (остаток/наличие are derived from 1С).
   if (isGiftType(campaign.type)) {
-    if (!line.giftNomenclatureId) missing.push("giftNomenclature");
-    if (line.giftStock == null) missing.push("giftStock");
+    if (!line.gifts || line.gifts.length === 0 || !line.gifts[0].nomenclatureId)
+      missing.push("gift1Nomenclature");
   }
   return missing;
 }
@@ -1409,6 +1450,56 @@ export function getWarehouseBreakdown(nomenclatureId: string): WarehouseStock[] 
   const assigned = rows.reduce((s, r) => s + r.qty, 0);
   if (rows.length) rows[0].qty += total - assigned;
   return rows;
+}
+
+// ── Наличие в магазинах (feedback §5) ───────────────────────────────────────────
+// % покрытия номенклатуры по АКТИВНЫМ магазинам (торговым точкам). Формула:
+//   Наличие, % = (кол-во активных магазинов, где остаток > 0) / (всего активных
+//                магазинов) × 100%.
+// Учитываются только торговые точки из справочника активных магазинов; остатки по
+// центральным складам (в т.ч. «Ташкент — Центральный») в расчёт НЕ включаются.
+// Остаток 0 / пустой / отрицательный = отсутствие товара в магазине.
+
+/** Всего активных магазинов (торговых точек) в справочнике. */
+export const ACTIVE_STORE_COUNT = 39;
+
+/** Центральные склады — исключаются из расчёта «Наличие в магазинах» (§5). */
+export const CENTRAL_WAREHOUSES = ["Ташкент — Центральный"];
+
+export interface StoreAvailability {
+  /** Всего активных магазинов. */
+  activeStores: number;
+  /** Магазины, где остаток товара > 0. */
+  inStock: number;
+  /** Процент покрытия (0–100). */
+  pct: number;
+}
+
+/**
+ * Наличие товара по активным магазинам (§5) — рассчитывается «из 1С», read-only.
+ * Детерминированный mock: число магазинов «в наличии» выводится из остатка и id
+ * (без рандома), так что разные SKU дают разное покрытие в реалистичном диапазоне.
+ * Остаток ≤ 0 → 0 магазинов (товара нет ни в одной точке).
+ */
+export function getStoreAvailability(nomenclatureId: string): StoreAvailability {
+  const item = NOMENCLATURE.find((n) => n.id === nomenclatureId);
+  if (!item || item.stock <= 0) {
+    return { activeStores: ACTIVE_STORE_COUNT, inStock: 0, pct: 0 };
+  }
+  const seed = parseInt(nomenclatureId.replace(/\D/g, ""), 10) || 0;
+  // 0..11 магазинов без товара — покрытие в диапазоне ~72–100% (как в примере ТЗ).
+  const missing = (seed * 7 + item.stock) % 12;
+  const inStock = Math.max(0, ACTIVE_STORE_COUNT - missing);
+  const pct = (inStock / ACTIVE_STORE_COUNT) * 100;
+  return { activeStores: ACTIVE_STORE_COUNT, inStock, pct };
+}
+
+/** Формат «94,87%» (2 знака, запятая — ru), как заполняют в гугл-таблице (§5). */
+export function formatAvailabilityPct(pct: number): string {
+  return `${pct.toLocaleString("ru-RU", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`;
 }
 
 // ── Full-calendar access (Appendix D) ──────────────────────────────────────────
@@ -2244,6 +2335,20 @@ export function isApprovedCampaign(c: PromoCampaign): boolean {
   return c.status === APPROVED_CAMPAIGN_STATUS && !c.cancelled;
 }
 
+/**
+ * «До отправки на согласование» (feedback §3) — the campaign hasn't been submitted
+ * for approval yet (draft) or was returned to the КМ for correction, so the КМ may
+ * freely ADD / EDIT / DELETE its nomenclature. Under review («На согласовании …»)
+ * or already sent to departments, that is no longer allowed here (approved
+ * campaigns are edited only as tracked corrections — see isApprovedCampaign).
+ */
+export function isCampaignFreshEditable(c: PromoCampaign): boolean {
+  if (c.cancelled) return false;
+  if (c.status === "Черновик" || c.status === REJECTED_KM_STATUS) return true;
+  // An unplanned campaign that hasn't been sent for approval yet is still a draft.
+  return !c.planned && !c.firstSendDone;
+}
+
 /** КМ-editable fields tracked for the edit-after-approval diff. */
 const TRACKED_FIELDS: {
   field: keyof PromoLine;
@@ -2256,7 +2361,6 @@ const TRACKED_FIELDS: {
   { field: "salesForecast", label: "Прогноз продаж", kind: "number" },
   { field: "regularSales", label: "Регулярные продажи", kind: "number" },
   { field: "cashDiscountPct", label: "Скидка за Cash", kind: "percent" },
-  { field: "giftStock", label: "Остаток подарка", kind: "number" },
   { field: "supplierCompensation", label: "Компенсация поставщика", kind: "money" },
   { field: "compensationLimit", label: "Лимит компенс. кол-ва", kind: "number" },
   { field: "utp", label: "УТП", kind: "text" },
@@ -2965,13 +3069,12 @@ export const PROMO_TYPE_RULES: PromoTypeRule[] = [
   {
     id: "rule-gift",
     name: "Товар в подарок",
-    promoTypeIds: ["one-plus-one", "gift"],
+    promoTypeIds: ["one-plus-one", "gift", "gift-choice"],
     requiredFieldIds: [
       "nomenclature",
       "stock",
       "salesForecast",
-      "giftNomenclature",
-      "giftStock",
+      "gift1Nomenclature",
       "supplierCompensation",
     ],
     status: "draft",

@@ -19,8 +19,11 @@ import { RuDate } from "../../../components/RuDate";
 import { EditableCell, type EditableKind } from "./EditableCell";
 import { WarehousePopover } from "./WarehousePopover";
 import {
+  formatAvailabilityPct,
   getNomenclatureItem,
+  getStoreAvailability,
   isApprovedCampaign,
+  isGiftChoiceType,
   isGiftType,
   type FullCalendarAccess,
   type PromoCampaign,
@@ -45,6 +48,7 @@ export function LineEditSheet({
   access,
   onEdit,
   onGiftPick,
+  onRemoveGift,
   onRequestRemoval,
   onApproveRemoval,
   onRejectRemoval,
@@ -55,7 +59,10 @@ export function LineEditSheet({
   campaign: PromoCampaign | undefined;
   access: FullCalendarAccess;
   onEdit: (lineId: string, patch: Partial<PromoLine>) => void;
-  onGiftPick: (lineId: string) => void;
+  /** Open the 1С gift picker for a slot/index on this line (§8). */
+  onGiftPick: (lineId: string, slot: number) => void;
+  /** Remove a gift option by index (§8). */
+  onRemoveGift?: (lineId: string, index: number) => void;
   /** КМ requests exclusion of this line (§5.3; approved campaigns only). */
   onRequestRemoval?: (lineId: string) => void;
   /** КД confirms/rejects a pending exclusion (§5.3). */
@@ -64,6 +71,7 @@ export function LineEditSheet({
 }) {
   const nom = line ? getNomenclatureItem(line.nomenclatureId) : undefined;
   const gift = campaign ? isGiftType(campaign.type) : false;
+  const giftChoice = campaign ? isGiftChoiceType(campaign.type) : false;
   const kmEditable = access.canEditOwnLines;
   const mktEditable = access.marketingFlagOnly;
 
@@ -184,49 +192,13 @@ export function LineEditSheet({
             {/* ── Маркетинг ── */}
             <Section title="Маркетинг">
               {gift && (
-                <>
-                  <Field label="Номенклатура по подаркам" required>
-                    {kmEditable ? (
-                      <button
-                        type="button"
-                        onClick={() => onGiftPick(line.id)}
-                        className={cn(
-                          "flex h-9 w-full items-center gap-1.5 rounded-md border px-3 text-left text-sm hover:bg-gray-50 dark:hover:bg-accent",
-                          line.giftNomenclatureId
-                            ? "text-gray-900 dark:text-gray-100"
-                            : "text-red-600 dark:text-red-400"
-                        )}
-                      >
-                        <Gift className="size-4 shrink-0" />
-                        <span className="truncate">
-                          {line.giftNomenclatureId
-                            ? getNomenclatureItem(line.giftNomenclatureId)?.name ??
-                              line.giftNomenclatureId
-                            : "Выбрать подарок (не заполнено)"}
-                        </span>
-                      </button>
-                    ) : (
-                      <ReadOnlyText
-                        text={
-                          line.giftNomenclatureId
-                            ? getNomenclatureItem(line.giftNomenclatureId)?.name
-                            : undefined
-                        }
-                        required
-                      />
-                    )}
-                  </Field>
-                  <NumField
-                    label="Остаток подарка"
-                    required
-                    value={line.giftStock}
-                    kind="number"
-                    editable={kmEditable}
-                    onCommit={(v) =>
-                      edit({ giftStock: typeof v === "number" ? v : undefined })
-                    }
-                  />
-                </>
+                <GiftEditor
+                  line={line}
+                  choice={giftChoice}
+                  editable={kmEditable}
+                  onGiftPick={onGiftPick}
+                  onRemoveGift={onRemoveGift}
+                />
               )}
               <NumField
                 label="Компенсация поставщика"
@@ -358,6 +330,102 @@ export function LineEditSheet({
   );
 }
 
+/** Gift editor for the mobile Sheet (§8) — fixed №1/№2 or «подарок на выбор» list. */
+function GiftEditor({
+  line,
+  choice,
+  editable,
+  onGiftPick,
+  onRemoveGift,
+}: {
+  line: PromoLine;
+  choice: boolean;
+  editable: boolean;
+  onGiftPick: (lineId: string, slot: number) => void;
+  onRemoveGift?: (lineId: string, index: number) => void;
+}) {
+  const gifts = line.gifts ?? [];
+  const maxReached = !choice && gifts.length >= 2;
+  return (
+    <div className="space-y-2">
+      <Label>
+        {choice ? "Подарки на выбор" : "Подарки"}
+        <span className="ml-0.5 text-red-500 dark:text-red-400">*</span>
+      </Label>
+      {gifts.length === 0 && (
+        <p className="text-sm font-medium text-red-600 dark:text-red-400">
+          Не выбран ни один подарок (обязательно).
+        </p>
+      )}
+      {gifts.map((g, i) => {
+        const gnom = getNomenclatureItem(g.nomenclatureId);
+        const avail = getStoreAvailability(g.nomenclatureId);
+        return (
+          <div key={i} className="space-y-1.5 rounded-md border p-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">
+                {choice ? `Подарок ${i + 1}` : `Подарок №${i + 1}`}
+              </span>
+              {editable && onRemoveGift && (
+                <button
+                  type="button"
+                  onClick={() => onRemoveGift(line.id, i)}
+                  aria-label="Убрать подарок"
+                  className="ml-auto text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+            {editable ? (
+              <button
+                type="button"
+                onClick={() => onGiftPick(line.id, i)}
+                className="flex h-9 w-full items-center gap-1.5 rounded-md border px-3 text-left text-sm hover:bg-gray-50 dark:hover:bg-accent"
+              >
+                <Gift className="size-4 shrink-0" />
+                <span className="truncate">{gnom?.name ?? g.nomenclatureId}</span>
+              </button>
+            ) : (
+              <p className="text-sm text-gray-900 dark:text-gray-100">
+                {gnom?.name ?? g.nomenclatureId}
+              </p>
+            )}
+            <div className="flex gap-4 text-xs text-muted-foreground">
+              <span>
+                Наличие:{" "}
+                <span className="tabular-nums text-gray-800 dark:text-gray-100">
+                  {formatAvailabilityPct(avail.pct)}
+                </span>
+              </span>
+              <span>
+                Остаток:{" "}
+                <span className="tabular-nums text-gray-800 dark:text-gray-100">
+                  {(gnom?.stock ?? 0).toLocaleString("ru-RU")}
+                </span>
+              </span>
+            </div>
+          </div>
+        );
+      })}
+      {editable && !maxReached && (
+        <Button
+          variant="secondary"
+          className="min-h-11 w-full"
+          onClick={() => onGiftPick(line.id, gifts.length)}
+        >
+          <Gift className="size-4" />
+          {choice
+            ? "Добавить подарок"
+            : gifts.length === 0
+              ? "Выбрать подарок"
+              : "Добавить подарок №2"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function Section({
   title,
   children,
@@ -469,12 +537,3 @@ function Info({
   );
 }
 
-function ReadOnlyText({ text, required }: { text?: string; required?: boolean }) {
-  if (text)
-    return <p className="text-sm text-gray-900 dark:text-gray-100">{text}</p>;
-  return required ? (
-    <p className="text-sm font-medium text-red-600 dark:text-red-400">не заполнено</p>
-  ) : (
-    <p className="text-sm text-muted-foreground">—</p>
-  );
-}

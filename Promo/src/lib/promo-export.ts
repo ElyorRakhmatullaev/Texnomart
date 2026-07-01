@@ -6,13 +6,17 @@
 
 import {
   campaignReadiness,
+  formatAvailabilityPct,
   formatPromoNo,
   getCategoryManager,
   getFillDeadline,
+  getNomenclatureItem,
   getPlanApproval,
   getReportSendStatus,
+  getStoreAvailability,
   type PlanStageStatus,
   type PromoCampaign,
+  type PromoLine,
 } from "./promo-mock-data";
 
 function csvCell(v: string): string {
@@ -111,6 +115,103 @@ export function buildCalendarCsv(campaigns: PromoCampaign[]): string {
       dist,
     ];
   });
+  return toCsv([header, ...rows]);
+}
+
+/**
+ * Полный промо-календарь → FLAT export (feedback §13): one row per НОМЕНКЛАТУРА
+ * with the № промо repeated on every row, so the file sorts/filters/analyses cleanly
+ * in Excel. Reflects the current filters (the caller passes the filtered campaigns +
+ * a linesFor accessor returning the visible lines). № промо keeps the PR-/UN- format.
+ */
+export function buildFullCalendarCsv(
+  campaigns: PromoCampaign[],
+  linesFor: (campaignId: string) => PromoLine[]
+): string {
+  const header = [
+    "№ промо",
+    "Признак",
+    "Тип промо",
+    "Название акции",
+    "Период (начало)",
+    "Период (окончание)",
+    "ФИО КМ",
+    "Номенклатура",
+    "Код 1С",
+    "Бренд",
+    "Наличие в магазинах, %",
+    "Остаток",
+    "Себестоимость",
+    "Розничная цена (старая)",
+    "Новая цена (розничная)",
+    "Скидка, %",
+    "Скидка, % за Cash",
+    "Регулярные продажи",
+    "Прогноз продаж",
+    "Компенсация поставщика",
+    "Лимит компенс. кол-ва",
+    "УТП",
+    "Подарки (номенклатура)",
+    "Остаток подарков",
+    "В рекламу (КМ)",
+    "В рекламу (маркетинг)",
+    "Статус строки",
+  ];
+  const num = (v: number | undefined): string =>
+    v == null ? "" : v.toLocaleString("ru-RU");
+  const yn = (v: boolean | undefined): string => (v ? "Да" : "—");
+  const lineStatus = (l: PromoLine): string => {
+    const parts: string[] = [];
+    if (l.removed) parts.push("Исключена из акции");
+    else if (l.removalPending) parts.push("Ожидает исключения");
+    if (l.rejected) parts.push("Отклонена");
+    if (l.pending1CCheck) parts.push("Ожидает проверки 1С");
+    if (l.duplicate) parts.push("Дубль");
+    return parts.join("; ");
+  };
+
+  const rows: string[][] = [];
+  for (const c of campaigns) {
+    for (const l of linesFor(c.id)) {
+      const nom = getNomenclatureItem(l.nomenclatureId);
+      const avail = getStoreAvailability(l.nomenclatureId);
+      const giftNames = (l.gifts ?? [])
+        .map((g) => getNomenclatureItem(g.nomenclatureId)?.name ?? g.nomenclatureId)
+        .join(", ");
+      const giftStocks = (l.gifts ?? [])
+        .map((g) => (getNomenclatureItem(g.nomenclatureId)?.stock ?? 0).toString())
+        .join(", ");
+      rows.push([
+        c.id, // № промо repeated on every line (§13 flat format)
+        c.planned ? "Плановая" : "Внеплановая",
+        c.type,
+        c.name,
+        fmtDate(c.startDate),
+        fmtDate(c.endDate),
+        getCategoryManager(l.kmId)?.name ?? l.kmId,
+        nom?.name ?? l.nomenclatureId,
+        l.nomenclatureId,
+        nom?.brand ?? "",
+        formatAvailabilityPct(avail.pct),
+        num(l.stock),
+        num(nom?.cost),
+        num(nom?.oldRetailPrice),
+        num(l.newPrice),
+        num(l.discountPct),
+        num(l.cashDiscountPct),
+        num(l.regularSales),
+        num(l.salesForecast),
+        num(l.supplierCompensation),
+        num(l.compensationLimit),
+        l.utp ?? "",
+        giftNames,
+        giftStocks,
+        yn(l.advRecommendedKm),
+        yn(l.advSelectedMarketing),
+        lineStatus(l),
+      ]);
+    }
+  }
   return toCsv([header, ...rows]);
 }
 

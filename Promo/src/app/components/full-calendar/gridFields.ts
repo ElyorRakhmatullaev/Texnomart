@@ -26,11 +26,13 @@ export const COLUMN_GROUPS: ColumnGroupDef[] = [
   { key: "marketing", label: "Маркетинг" },
 ];
 
-// Identity columns duplicate the campaign group band, so they're OFF by default;
-// Рассрочка is wide (15 columns), also OFF. Товар / Цены / Маркетинг are ON.
+// Feedback §11: all column groups are selected/visible by default; the user can
+// deselect the ones they don't need. (Previously Идентификация + Рассрочка were OFF.)
 export const DEFAULT_VISIBLE_GROUPS: ColumnGroupKey[] = [
+  "identity",
   "product",
   "prices",
+  "installments",
   "marketing",
 ];
 
@@ -79,14 +81,19 @@ export function lockHint(source: FieldSource): string {
 
 /** Full ordered column list (excludes the 3 frozen identity columns). */
 export const COLUMNS: ColumnDef[] = [
-  // ── Идентификация (campaign-level, also shown in the group band) ──
+  // ── Идентификация (campaign-level) — Тип промо / Название / Период показываются
+  // отдельными столбцами (feedback §4), а не в верхней строке промо. Дедлайн в
+  // полном промо-календаре не отображается (§4).
   { id: "priznak", label: "Признак акции", width: 130, group: "identity", source: "auto", kind: "text" },
   { id: "type", label: "Тип промо", width: 150, group: "identity", source: "auto", kind: "text" },
   { id: "name", label: "Название акции", width: 220, group: "identity", source: "auto", kind: "text" },
-  { id: "start", label: "Дата начала", width: 120, group: "identity", source: "auto", kind: "date" },
-  { id: "end", label: "Дата окончания", width: 130, group: "identity", source: "auto", kind: "date" },
+  { id: "period", label: "Период акции", width: 210, group: "identity", source: "auto", kind: "date" },
 
   // ── Товар ──
+  // Бренд → Наличие в магазинах → Остаток (feedback §5, §6): бренд и наличие
+  // подтягиваются из 1С (read-only), стоят ПЕРЕД остатком.
+  { id: "brand", label: "Бренд", width: 130, group: "product", source: "1c", kind: "text" },
+  { id: "storeAvailability", label: "Наличие в магазинах", width: 160, group: "product", source: "1c", kind: "percent" },
   { id: "stock", label: "Остаток", width: 120, group: "product", source: "km", kind: "number" },
   { id: "cost", label: "Себестоимость", width: 150, group: "product", source: "1c", kind: "money" },
   { id: "oldPrice", label: "Розничная цена (старая)", width: 180, group: "product", source: "auto", kind: "money" },
@@ -119,8 +126,15 @@ export const COLUMNS: ColumnDef[] = [
   { id: "t36full", label: "36 мес: полная цена (новая)", width: 190, group: "installments", source: "calc", kind: "money" },
 
   // ── Маркетинг ──
-  { id: "giftNomenclature", label: "Номенклатура по подаркам", width: 220, group: "marketing", source: "km", kind: "text", giftOnly: true },
-  { id: "giftStock", label: "Остаток подарка", width: 140, group: "marketing", source: "km", kind: "number", giftOnly: true },
+  // Подарки (feedback §8): «Подарок №1» / «Подарок №2», каждый — номенклатура (КМ
+  // выбирает из 1С) + наличие в магазинах, % и остаток (из 1С, read-only). Для
+  // «Подарок на выбор» столбцы «Подарок №1» показывают по одному подарку на подстроку.
+  { id: "gift1Nomenclature", label: "Подарок №1", width: 220, group: "marketing", source: "km", kind: "text", giftOnly: true },
+  { id: "gift1Availability", label: "Подарок №1: наличие, %", width: 160, group: "marketing", source: "1c", kind: "percent", giftOnly: true },
+  { id: "gift1Stock", label: "Подарок №1: остаток", width: 150, group: "marketing", source: "1c", kind: "number", giftOnly: true },
+  { id: "gift2Nomenclature", label: "Подарок №2", width: 220, group: "marketing", source: "km", kind: "text", giftOnly: true },
+  { id: "gift2Availability", label: "Подарок №2: наличие, %", width: 160, group: "marketing", source: "1c", kind: "percent", giftOnly: true },
+  { id: "gift2Stock", label: "Подарок №2: остаток", width: 150, group: "marketing", source: "1c", kind: "number", giftOnly: true },
   { id: "supplierCompensation", label: "Компенсация поставщика", width: 180, group: "marketing", source: "km", kind: "money" },
   { id: "compensationLimit", label: "Лимит компенс. кол-ва", width: 170, group: "marketing", source: "km", kind: "number" },
   { id: "utp", label: "УТП", width: 200, group: "marketing", source: "km", kind: "text" },

@@ -22,7 +22,7 @@ interface EditableCellProps {
   manualHint?: string;
   /** Show a ✏️ pencil after the value (manual-override indicator, §8.2.2). */
   manualEdited?: boolean;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }
 
 const numberKinds: EditableKind[] = ["number", "money", "percent"];
@@ -124,7 +124,11 @@ export function EditableCell({
         inputMode={isNumeric ? "decimal" : "text"}
         className={cn(
           "h-7 w-full rounded border border-primary bg-white dark:bg-card px-1.5 text-sm outline-none ring-2 ring-primary/30",
-          align === "right" ? "text-right tabular-nums" : "text-left"
+          align === "right"
+            ? "text-right tabular-nums"
+            : align === "center"
+              ? "text-center tabular-nums"
+              : "text-left"
         )}
       />
     );
@@ -147,7 +151,8 @@ export function EditableCell({
       <span
         className={cn(
           "inline-flex items-center gap-1",
-          align === "right" && "justify-end"
+          align === "right" && "justify-end",
+          align === "center" && "justify-center"
         )}
       >
         <span className={cn(isNumeric && "tabular-nums")}>
@@ -165,7 +170,8 @@ export function EditableCell({
       onClick={startEdit}
       className={cn(
         "group/cell inline-flex min-h-7 w-full items-center gap-1 rounded px-1 text-left hover:bg-primary/10",
-        align === "right" && "justify-end text-right"
+        align === "right" && "justify-end text-right",
+        align === "center" && "justify-center text-center"
       )}
     >
       {isEmpty ? (

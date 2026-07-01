@@ -5,10 +5,10 @@ import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
   Ban,
-  CalendarClock,
   Check,
   Clock,
   Copy,
+  Download,
   Info,
   Link2,
   Plus,
@@ -29,6 +29,12 @@ import {
   TooltipTrigger,
 } from "@texnomart/ui/tooltip";
 import { ReasonDialog } from "../../../components/ReasonDialog";
+import {
+  buildFullCalendarCsv,
+  downloadCsv,
+  exportStamp,
+} from "../../../lib/promo-export";
+import { PromoNoFilter } from "../short-calendar/PromoNoFilter";
 import { useRole } from "../../role-context";
 import { FullCalendarGrid } from "./FullCalendarGrid";
 import { ColumnGroupToggle } from "./ColumnGroupToggle";
@@ -56,17 +62,14 @@ import {
   buildCancellationVersion,
   buildLineRemovalVersion,
   buildSentVersion,
-  canApproveDeadline,
   canApproveLineRemoval,
   canCancelCampaign,
-  canManageDeadline,
   canRequestLineRemoval,
   createImportedLine,
   createPromoLine,
   createUnplannedCampaign,
   detectDuplicate,
   diffCampaignChanges,
-  effectiveFillDeadline,
   formatPromoNo,
   getCampaignVersions,
   getCampaignsWithLines,
@@ -78,7 +81,6 @@ import {
   type CampaignChangeSet,
   type CampaignStatus,
   type CampaignVersion,
-  type DeadlineChangeRequest,
   type DuplicateHit,
   type ImportParseResult,
   type ParsedImportRow,
@@ -137,6 +139,8 @@ type LineAction =
   | { type: "edit"; id: string; patch: Partial<PromoLine> }
   | { type: "add"; line: PromoLine }
   | { type: "addMany"; lines: PromoLine[] }
+  // Hard-delete a draft line before submit (feedback §3).
+  | { type: "delete"; id: string }
   | { type: "recheck1C" }
   | { type: "bulkAdv"; ids: string[]; field: keyof PromoLine; value: boolean }
   // Line cancellation / removal (§5.3): КМ requests, КД approves/rejects.
@@ -161,6 +165,12 @@ function lineReducer(state: LineMap, action: LineAction): LineMap {
     case "addMany": {
       const next = new Map(state);
       for (const line of action.lines) next.set(line.id, line);
+      return next;
+    }
+    case "delete": {
+      if (!state.has(action.id)) return state;
+      const next = new Map(state);
+      next.delete(action.id);
       return next;
     }
     case "recheck1C": {
@@ -237,6 +247,18 @@ export function FullCalendarPage() {
     km: ALL,
     priznak: ALL,
   });
+  // §10: № промо multi-select + период date-range (mirrors the short calendar).
+  const [promoIds, setPromoIds] = React.useState<string[]>([]);
+  const [periodStart, setPeriodStart] = React.useState("");
+  const [periodEnd, setPeriodEnd] = React.useState("");
+
+  // §7: a plain КМ sees ONLY their own filled promos/lines. No per-person identity in
+  // the mock, so «свой КМ» = a representative КМ (the first one). Старший КМ /
+  // Коммерческий директор / Администратор keep the full view + the «КМ» filter.
+  const ownKmId =
+    currentRole === "Категорийный менеджер (КМ)"
+      ? CATEGORY_MANAGERS[0].id
+      : null;
   // Deep link from the short calendar's КМ-status cell (§10) — ?promo= focuses one
   // campaign; a banner offers to clear it back to the full list.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -245,7 +267,11 @@ export function FullCalendarPage() {
   // Nomenclature-entry state (§8.2.1): which campaign's add-picker is open, which
   // line's gift-picker is open, and a pending duplicate awaiting confirmation.
   const [addCampaignId, setAddCampaignId] = React.useState<string | null>(null);
-  const [giftLineId, setGiftLineId] = React.useState<string | null>(null);
+  // §8: which line + gift slot/index the 1С gift picker targets.
+  const [giftTarget, setGiftTarget] = React.useState<{
+    lineId: string;
+    slot: number;
+  } | null>(null);
   const [importOpen, setImportOpen] = React.useState(false);
   // Unplanned creation / per-line mobile editing (Phase 5).
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -273,16 +299,13 @@ export function FullCalendarPage() {
     new Set()
   );
   const [periodEditId, setPeriodEditId] = React.useState<string | null>(null);
-  // ── Cancellation + deadline change (S4 Phase 3, §5.3 / §4.7) ────────────────
+  // ── Cancellation + line removal (S4 Phase 3, §5.3) ──────────────────────────
   // «Скрыть отменённое» — ON by default; hides cancelled campaigns AND removed lines.
   const [hideCancelled, setHideCancelled] = React.useState(true);
-  // Page-hosted dialogs (deferred open): cancel-campaign reason, КМ line-removal
-  // reason, and the deadline-change request.
+  // Page-hosted dialogs (deferred open): cancel-campaign reason + КМ line-removal
+  // reason. (Deadline change was dropped from the full calendar per feedback §4.)
   const [cancelCampaignId, setCancelCampaignId] = React.useState<string | null>(null);
   const [removalLineId, setRemovalLineId] = React.useState<string | null>(null);
-  const [deadlineCampaignId, setDeadlineCampaignId] = React.useState<string | null>(
-    null
-  );
   const [pendingDup, setPendingDup] = React.useState<{
     campaignId: string;
     kmId: string;
@@ -325,11 +348,15 @@ export function FullCalendarPage() {
   // «Скрыть отменённое» is ON (§5.3). The full set (linesFor) still backs the
   // version report so excluded positions stay in history with a marker.
   const displayLinesFor = React.useCallback(
-    (campaignId: string) =>
-      hideCancelled
+    (campaignId: string) => {
+      let out = hideCancelled
         ? linesFor(campaignId).filter((l) => !l.removed)
-        : linesFor(campaignId),
-    [linesFor, hideCancelled]
+        : linesFor(campaignId);
+      // §7: a plain КМ only sees their own nomenclature within a shared campaign.
+      if (ownKmId) out = out.filter((l) => l.kmId === ownKmId);
+      return out;
+    },
+    [linesFor, hideCancelled, ownKmId]
   );
 
   // ── Edit-after-approval diff (§5.1) ──────────────────────────────────────────
@@ -373,25 +400,60 @@ export function FullCalendarPage() {
     [liveVersions]
   );
 
-  const filtered = React.useMemo(() => {
+  // Campaigns a plain КМ may see at all (§7): ones they participate in, plus fresh
+  // empty ones (just created/integrated). Also the option source for the № filter.
+  const kmVisibleCampaigns = React.useMemo(() => {
+    if (!ownKmId) return visibleCampaigns;
     return visibleCampaigns.filter((c) => {
+      const ls = linesFor(c.id);
+      return ls.length === 0 || ls.some((l) => l.kmId === ownKmId);
+    });
+  }, [visibleCampaigns, ownKmId, linesFor]);
+
+  // № промо filter options (§10) — full PR-/UN- format (§13), КМ-scoped (§7).
+  const promoNoOptions = React.useMemo(
+    () =>
+      kmVisibleCampaigns.map((c) => ({ id: c.id, no: c.id, name: c.name })),
+    [kmVisibleCampaigns]
+  );
+
+  const filtered = React.useMemo(() => {
+    const from = periodStart ? new Date(`${periodStart}T00:00:00`) : null;
+    const to = periodEnd ? new Date(`${periodEnd}T23:59:59`) : null;
+    return kmVisibleCampaigns.filter((c) => {
       // Deep-link focus (§10) — when ?promo= is set, show only that campaign
       // (overrides «Скрыть отменённое» so a cancelled campaign is still reachable).
       if (focusPromo) return c.id === focusPromo;
       // «Скрыть отменённое» (§5.3) — ON by default, hides cancelled campaigns.
       if (hideCancelled && c.cancelled) return false;
+      // §10: № промо multi-select.
+      if (promoIds.length > 0 && !promoIds.includes(c.id)) return false;
+      // §10: период date-range (overlap with the campaign period).
+      if (from && !Number.isNaN(from.getTime()) && c.endDate < from) return false;
+      if (to && !Number.isNaN(to.getTime()) && c.startDate > to) return false;
       if (values.type !== ALL && c.type !== values.type) return false;
       if (values.status !== ALL && c.status !== values.status) return false;
       if (values.priznak !== ALL) {
         if (values.priznak === "planned" && !c.planned) return false;
         if (values.priznak === "unplanned" && c.planned) return false;
       }
-      if (values.km !== ALL) {
+      // «КМ» filter — only for roles that see all КМ (ignored when ownKmId is set, §7).
+      if (!ownKmId && values.km !== ALL) {
         if (!linesFor(c.id).some((l) => l.kmId === values.km)) return false;
       }
       return true;
     });
-  }, [values, linesFor, visibleCampaigns, hideCancelled, focusPromo]);
+  }, [
+    values,
+    linesFor,
+    kmVisibleCampaigns,
+    hideCancelled,
+    focusPromo,
+    ownKmId,
+    promoIds,
+    periodStart,
+    periodEnd,
+  ]);
 
   const totalLines = React.useMemo(
     () => filtered.reduce((s, c) => s + displayLinesFor(c.id).length, 0),
@@ -403,20 +465,21 @@ export function FullCalendarPage() {
   const invalidLines = React.useMemo(() => {
     let n = 0;
     for (const c of filtered) {
-      for (const l of linesFor(c.id))
+      for (const l of displayLinesFor(c.id))
         if (!l.removed && !isLineValid(l, c)) n++;
     }
     return n;
-  }, [filtered, linesFor]);
+  }, [filtered, displayLinesFor]);
 
   // Lines saved as draft awaiting a 1С re-check (§8.3) — block send until cleared.
   const pending1CCount = React.useMemo(() => {
     let n = 0;
     for (const c of filtered) {
-      for (const l of linesFor(c.id)) if (!l.removed && l.pending1CCheck) n++;
+      for (const l of displayLinesFor(c.id))
+        if (!l.removed && l.pending1CCheck) n++;
     }
     return n;
-  }, [filtered, linesFor]);
+  }, [filtered, displayLinesFor]);
 
   // Campaigns the КМ can import into (visible + non-cancelled).
   const importTargets = React.useMemo(
@@ -453,6 +516,27 @@ export function FullCalendarPage() {
     (id: string, patch: Partial<PromoLine>) =>
       dispatch({ type: "edit", id, patch }),
     []
+  );
+
+  // §3: hard-delete a draft line before submit (autosave — no «Сохранить» needed).
+  const onDeleteLine = React.useCallback(
+    (id: string) => {
+      const line = lines.get(id);
+      dispatch({ type: "delete", id });
+      setSelectedIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      const name = line
+        ? getNomenclatureItem(line.nomenclatureId)?.name ?? line.nomenclatureId
+        : "";
+      toast.success(
+        `Номенклатура удалена${name ? `: ${name}` : ""}. Изменения сохранены автоматически.`
+      );
+    },
+    [lines]
   );
 
   const onToggleSelect = React.useCallback((id: string) => {
@@ -554,22 +638,41 @@ export function FullCalendarPage() {
     setTimeout(() => setAddCampaignId(campaignId), 0);
   }, []);
 
-  const onGiftPick = React.useCallback((lineId: string) => {
-    setTimeout(() => setGiftLineId(lineId), 0);
+  // §8: pick/replace/add a gift at a given slot (fixed №1/№2 or a choice option).
+  const onGiftPick = React.useCallback((lineId: string, slot: number) => {
+    setTimeout(() => setGiftTarget({ lineId, slot }), 0);
   }, []);
 
   const onPickForGift = React.useCallback(
     (nomenclatureId: string) => {
-      if (!giftLineId) return;
-      const nom = getNomenclatureItem(nomenclatureId);
+      if (!giftTarget) return;
+      const line = lines.get(giftTarget.lineId);
+      const gifts = [...(line?.gifts ?? [])];
+      gifts[giftTarget.slot] = { nomenclatureId };
       dispatch({
         type: "edit",
-        id: giftLineId,
-        patch: { giftNomenclatureId: nomenclatureId, giftStock: nom?.stock },
+        id: giftTarget.lineId,
+        // filter(Boolean) closes any gap if the slot was past the end.
+        patch: { gifts: gifts.filter(Boolean) },
       });
+      const nom = getNomenclatureItem(nomenclatureId);
       toast.success(`Подарок выбран: ${nom?.name ?? nomenclatureId}`);
     },
-    [giftLineId]
+    [giftTarget, lines]
+  );
+
+  // §8: remove a gift option (by index) from a line.
+  const onRemoveGift = React.useCallback(
+    (lineId: string, index: number) => {
+      const line = lines.get(lineId);
+      const gifts = (line?.gifts ?? []).filter((_, i) => i !== index);
+      dispatch({
+        type: "edit",
+        id: lineId,
+        patch: { gifts: gifts.length ? gifts : undefined },
+      });
+    },
+    [lines]
   );
 
   // ── Excel import + 1С availability (§8.2.1 / §8.3) ───────────────────────────
@@ -799,58 +902,6 @@ export function FullCalendarPage() {
     toast.success("Запрос на исключение отклонён — позиция остаётся в акции.");
   }, []);
 
-  // ── Deadline change (§4.7) — КД initiates, Операционный директор approves ────
-  const onDeadlineRequest = React.useCallback((campaignId: string) => {
-    setTimeout(() => setDeadlineCampaignId(campaignId), 0);
-  }, []);
-
-  const onDeadlineApply = React.useCallback(
-    (campaignId: string, newDeadline: Date, reason: string) => {
-      const c = campaignsById.get(campaignId);
-      if (!c) return;
-      const req: DeadlineChangeRequest = {
-        initiator: currentRole,
-        reason,
-        oldDeadline: effectiveFillDeadline(c),
-        newDeadline,
-        requestedAt: new Date().toISOString(),
-        status: "pending",
-      };
-      setVisibleCampaigns((prev) =>
-        prev.map((x) => (x.id === campaignId ? { ...x, deadlineChange: req } : x))
-      );
-      setDeadlineCampaignId(null);
-      toast.success(
-        "Запрос на изменение дедлайна отправлен на утверждение (Операционный директор)."
-      );
-    },
-    [campaignsById, currentRole]
-  );
-
-  const onApproveDeadline = React.useCallback(
-    (campaignId: string) => {
-      setVisibleCampaigns((prev) =>
-        prev.map((x) => {
-          if (x.id !== campaignId || !x.deadlineChange) return x;
-          return {
-            ...x,
-            fillDeadlineOverride: x.deadlineChange.newDeadline,
-            deadlineChange: {
-              ...x.deadlineChange,
-              status: "approved",
-              approvedBy: currentRole,
-              approvedAt: new Date().toISOString(),
-            },
-          };
-        })
-      );
-      toast.success(
-        "Изменение дедлайна утверждено и вступило в силу. Инициатор уведомлён."
-      );
-    },
-    [currentRole]
-  );
-
   const onCreateUnplanned = React.useCallback(
     (input: Omit<UnplannedCampaignInput, "kmId">) => {
       // No per-person КМ identity in the mock — attach the new campaign to a default КМ.
@@ -954,7 +1005,26 @@ export function FullCalendarPage() {
     setSelectedIds(new Set());
   };
 
-  const saveDraft = () => toast.success("Черновик сохранён");
+  // §10: hide the «КМ» filter for a plain КМ (they only see their own, §7).
+  const filters = React.useMemo(
+    () => (ownKmId ? FILTERS.filter((f) => f.key !== "km") : FILTERS),
+    [ownKmId]
+  );
+
+  // §13: flat CSV export of the currently-filtered lines (№ промо per line).
+  const onExport = React.useCallback(() => {
+    const csv = buildFullCalendarCsv(filtered, displayLinesFor);
+    downloadCsv(`Полный_промо-календарь_${exportStamp()}.csv`, csv);
+    toast.success("Экспорт в CSV сформирован (по текущим фильтрам).");
+  }, [filtered, displayLinesFor]);
+
+  const clearFilters = () => {
+    setValues({ type: ALL, status: ALL, km: ALL, priznak: ALL });
+    setPromoIds([]);
+    setPeriodStart("");
+    setPeriodEnd("");
+  };
+
   const submitForApproval = () => {
     // First send locks the тип/период of unplanned campaigns (§10).
     setVisibleCampaigns((prev) =>
@@ -978,8 +1048,8 @@ export function FullCalendarPage() {
             showExport={false}
             subtitle={
               <span className="flex items-center gap-2">
-                {filtered.length.toLocaleString("ru-RU")} акций ·{" "}
-                {totalLines.toLocaleString("ru-RU")} строк
+                Показано: {filtered.length.toLocaleString("ru-RU")} промо ·{" "}
+                {totalLines.toLocaleString("ru-RU")} {pluralPositions(totalLines)}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Info className="size-3.5 text-muted-foreground" />
@@ -991,33 +1061,63 @@ export function FullCalendarPage() {
               </span>
             }
             actions={
-              access.canEditOwnLines ? (
-                <div className="flex items-center gap-2">
-                  <Button variant="secondary" onClick={onImportRequest}>
-                    <Upload className="size-4" />
-                    Загрузить из Excel
-                  </Button>
-                  <Button onClick={onCreateRequest}>
-                    <Plus className="size-4" />
-                    Создать акцию
-                  </Button>
-                </div>
-              ) : undefined
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" onClick={onExport}>
+                  <Download className="size-4" />
+                  Экспорт
+                </Button>
+                {access.canEditOwnLines && (
+                  <>
+                    <Button variant="secondary" onClick={onImportRequest}>
+                      <Upload className="size-4" />
+                      Загрузить из Excel
+                    </Button>
+                    <Button onClick={onCreateRequest}>
+                      <Plus className="size-4" />
+                      Создать акцию
+                    </Button>
+                  </>
+                )}
+              </div>
             }
           />
 
           <FilterBar
-            filters={FILTERS}
+            filters={filters}
             values={values}
             onFilterChange={(key, value) =>
               setValues((prev) => ({ ...prev, [key]: value }))
             }
-            onClear={() =>
-              setValues({ type: ALL, status: ALL, km: ALL, priznak: ALL })
-            }
+            onClear={clearFilters}
             resultCount={filtered.length}
             className="bg-transparent px-0"
           >
+            {/* §10: № промо searchable multi-select (full PR-/UN- format). */}
+            <PromoNoFilter
+              options={promoNoOptions}
+              selected={promoIds}
+              onChange={setPromoIds}
+            />
+            {/* §10: Период акции date-range. */}
+            <div className="flex h-9 items-center gap-1.5 rounded-md border bg-white dark:bg-card px-2.5 text-sm">
+              <span className="text-xs text-muted-foreground">Период</span>
+              <input
+                type="date"
+                aria-label="Период акции — с"
+                value={periodStart}
+                onChange={(e) => setPeriodStart(e.target.value)}
+                className="bg-transparent text-xs tabular-nums outline-none"
+              />
+              <span className="text-xs text-muted-foreground">—</span>
+              <input
+                type="date"
+                aria-label="Период акции — по"
+                value={periodEnd}
+                min={periodStart || undefined}
+                onChange={(e) => setPeriodEnd(e.target.value)}
+                className="bg-transparent text-xs tabular-nums outline-none"
+              />
+            </div>
             <label className="flex h-9 items-center gap-2 rounded-md border bg-white dark:bg-card px-3">
               <Switch
                 id="hide-cancelled"
@@ -1120,8 +1220,10 @@ export function FullCalendarPage() {
             access={access}
             linesFor={displayLinesFor}
             onEdit={onEdit}
+            onDeleteLine={onDeleteLine}
             onAddRequest={onAddRequest}
             onGiftPick={onGiftPick}
+            onRemoveGift={onRemoveGift}
             onLineTap={onLineTap}
             onEditCampaign={onEditCampaignRequest}
             onHistory={onHistoryRequest}
@@ -1132,12 +1234,6 @@ export function FullCalendarPage() {
             }
             onCancelCampaign={
               canCancelCampaign(currentRole) ? onCancelRequest : undefined
-            }
-            onEditDeadline={
-              canManageDeadline(currentRole) ? onDeadlineRequest : undefined
-            }
-            onApproveDeadline={
-              canApproveDeadline(currentRole) ? onApproveDeadline : undefined
             }
             onRequestRemoval={
               canRequestLineRemoval(currentRole) ? onRemovalRequest : undefined
@@ -1166,10 +1262,10 @@ export function FullCalendarPage() {
         onPick={onPickForAdd}
       />
 
-      {/* Gift-nomenclature picker (§8.8) — same 1С reference. */}
+      {/* Gift-nomenclature picker (§8.8 / §8) — same 1С reference. */}
       <AddNomenclatureDialog
-        open={giftLineId !== null}
-        onOpenChange={(open) => !open && setGiftLineId(null)}
+        open={giftTarget !== null}
+        onOpenChange={(open) => !open && setGiftTarget(null)}
         title="Выбор подарочной номенклатуры"
         description="Выберите подарочный товар из справочника 1С."
         onPick={onPickForGift}
@@ -1310,17 +1406,6 @@ export function FullCalendarPage() {
         onConfirm={onRemovalConfirm}
       />
 
-      {/* Deadline change (§4.7) — КД initiates → Операционный директор approves. */}
-      <DeadlineChangeDialog
-        campaign={
-          deadlineCampaignId
-            ? campaignsById.get(deadlineCampaignId) ?? null
-            : null
-        }
-        onOpenChange={(open) => !open && setDeadlineCampaignId(null)}
-        onApply={onDeadlineApply}
-      />
-
       {/* Duplicate-confirmation dialog (§8.2.1) — adding is NOT blocked. */}
       <Dialog
         open={pendingDup !== null}
@@ -1374,44 +1459,43 @@ export function FullCalendarPage() {
       {/* Sticky bottom action bar (fixed footer) — full-bleed past the main padding;
           on sm+ its height (h-14 + border) matches the sidebar collapse-button block. */}
       <div className="-mx-3 -mb-3 shrink-0 border-t bg-white dark:bg-card px-3 py-3 sm:h-14 sm:py-0 md:-mx-4 md:-mb-4 md:px-4">
-        <div className="flex h-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
-            {invalidLines > 0 ? (
-              <span className="text-red-600 dark:text-red-400">
-                {invalidLines} {pluralLines(invalidLines)}: не заполнены
-                обязательные поля
+        <div className="flex h-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-0.5">
+            <p className="text-sm text-muted-foreground">
+              {invalidLines > 0 ? (
+                <span className="text-red-600 dark:text-red-400">
+                  {invalidLines} {pluralLines(invalidLines)}: не заполнены
+                  обязательные поля
+                </span>
+              ) : pending1CCount > 0 ? (
+                <span className="text-amber-700 dark:text-amber-300">
+                  {pending1CCount} {pluralLines(pending1CCount)} ожидают проверки 1С
+                </span>
+              ) : (
+                "Все обязательные поля заполнены"
+              )}
+            </p>
+            {/* §3: no «Сохранить черновик» button — changes autosave until submit. */}
+            {access.canEditOwnLines && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                Изменения номенклатуры и полей сохраняются автоматически
               </span>
-            ) : pending1CCount > 0 ? (
-              <span className="text-amber-700 dark:text-amber-300">
-                {pending1CCount} {pluralLines(pending1CCount)} ожидают проверки 1С
-              </span>
-            ) : (
-              "Все обязательные поля заполнены"
             )}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              onClick={saveDraft}
-              disabled={!access.canEditOwnLines}
-              className="min-h-11 sm:min-h-9"
-            >
-              Сохранить черновик
-            </Button>
-            <SubmitButton
-              canSubmit={canSubmit}
-              reason={
-                !access.canEditOwnLines
-                  ? "Доступно только для категорийного менеджера, заполняющего свои строки"
-                  : invalidLines > 0
-                    ? `Заполните обязательные поля (${invalidLines} ${pluralLines(invalidLines)})`
-                    : pending1CCount > 0
-                      ? `Дождитесь проверки 1С (${pending1CCount} ${pluralLines(pending1CCount)})`
-                      : ""
-              }
-              onClick={submitForApproval}
-            />
           </div>
+          <SubmitButton
+            canSubmit={canSubmit}
+            reason={
+              !access.canEditOwnLines
+                ? "Доступно только для категорийного менеджера, заполняющего свои строки"
+                : invalidLines > 0
+                  ? `Заполните обязательные поля (${invalidLines} ${pluralLines(invalidLines)})`
+                  : pending1CCount > 0
+                    ? `Дождитесь проверки 1С (${pending1CCount} ${pluralLines(pending1CCount)})`
+                    : ""
+            }
+            onClick={submitForApproval}
+          />
         </div>
       </div>
     </div>
@@ -1509,98 +1593,6 @@ function PeriodEditDialog({
   );
 }
 
-/**
- * Deadline-change request editor (§4.7). КД picks a new «заполнение КМ» deadline
- * and gives a required reason; the request takes effect only after Операционный
- * директор approves it. Reuses the local-tz date helpers above.
- */
-function DeadlineChangeDialog({
-  campaign,
-  onOpenChange,
-  onApply,
-}: {
-  campaign: PromoCampaign | null;
-  onOpenChange: (open: boolean) => void;
-  onApply: (campaignId: string, newDeadline: Date, reason: string) => void;
-}) {
-  const [date, setDate] = React.useState("");
-  const [reason, setReason] = React.useState("");
-
-  React.useEffect(() => {
-    if (campaign) {
-      setDate(toInputDate(effectiveFillDeadline(campaign)));
-      setReason("");
-    }
-  }, [campaign]);
-
-  const d = fromInputDate(date);
-  const current = campaign ? effectiveFillDeadline(campaign) : null;
-  const changed =
-    !!d && !!current && d.getTime() !== current.getTime();
-  const valid = !!d && changed && reason.trim().length > 0;
-
-  return (
-    <Dialog open={campaign !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CalendarClock className="size-5" />
-            Изменить дедлайн заполнения
-          </DialogTitle>
-          <DialogDescription>
-            Изменение крайнего срока заполнения КМ вступает в силу только после
-            утверждения вышестоящим руководством (Операционный директор).
-            Инициатор, причина, дата и старый/новый дедлайн фиксируются в истории.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3 py-1">
-          <div className="rounded-md bg-gray-50 dark:bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-            Текущий дедлайн:{" "}
-            <span className="font-medium text-gray-900 dark:text-gray-100 tabular-nums">
-              {current ? current.toLocaleDateString("ru-RU") : "—"}
-            </span>{" "}
-            <span className="text-xs">(календарные дни)</span>
-          </div>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Новый дедлайн</span>
-            <input
-              type="date"
-              value={date}
-              onChange={(ev) => setDate(ev.target.value)}
-              className="h-9 rounded-md border px-2 text-sm"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">
-              Причина изменения <span className="text-destructive">*</span>
-            </span>
-            <textarea
-              value={reason}
-              onChange={(ev) => setReason(ev.target.value)}
-              placeholder="Укажите причину…"
-              rows={3}
-              className="rounded-md border px-2 py-1.5 text-sm"
-            />
-          </label>
-        </div>
-        <DialogFooter>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Отмена
-          </Button>
-          <Button
-            disabled={!valid}
-            onClick={() =>
-              campaign && d && onApply(campaign.id, d, reason.trim())
-            }
-          >
-            Отправить на утверждение
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function SubmitButton({
   canSubmit,
   reason,
@@ -1656,4 +1648,13 @@ function pluralLines(n: number): string {
   if (mod10 === 1 && mod100 !== 11) return "строка";
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "строки";
   return "строк";
+}
+
+/** «N позиций» plural for the selection counter (feedback §13). */
+function pluralPositions(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "позиция";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "позиции";
+  return "позиций";
 }
