@@ -125,9 +125,13 @@ function reducer(state: ReviewItem[], action: ReviewAction): ReviewItem[] {
         at: action.at,
         text: isNonPart ? "«Не участвует» согласовано." : "Набор согласован.",
       };
+      // A Старший-КМ approval forwards the item to the КД — stamp the moment so the
+      // КД SLA counts separately from this point (§9).
+      const forwardsToKd = action.actor === "Старший КМ";
       return {
         ...it,
         kmStatus: approvedKmStatusFor(action.actor, it.kind),
+        kdStageStartedAt: forwardsToKd ? action.at : it.kdStageStartedAt,
         // A reviewer can't approve a set that still carries its own rejections.
         lineFeedback: {},
         comments: [...it.comments, note],

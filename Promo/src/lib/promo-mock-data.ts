@@ -1788,6 +1788,13 @@ export interface ReviewItem {
   kmStatus: KmStatus;
   /** When the КМ sent the set / non-participation request for review (ISO). */
   submittedAt: string;
+  /**
+   * When the item entered the КД stage (ISO) — set on a live Старший-КМ approval so
+   * the КД SLA counts separately from that moment (§9). Undefined for a seed that
+   * starts at the КД stage (its `submittedAt` is used) or an auto-escalated item
+   * (its КД SLA counts from the Старший-КМ deadline).
+   */
+  kdStageStartedAt?: string;
   /** Auto-forwarded to КД after the Старший КМ SLA lapsed (spec §4.5.2). */
   escalatedToKD: boolean;
   /** Required reason when kind === "non-participation". */
@@ -1939,6 +1946,90 @@ export function reviewQueueFor(
   return items.filter((it) => effectiveReviewer(it, ref) === role);
 }
 
+/**
+ * Items VISIBLE to a reviewer (4th-round feedback §3): BOTH review stages are shown
+ * to Старший КМ and КД (view), while ACTING stays gated by `effectiveReviewer`
+ * (`reviewQueueFor` / `canAct`). Старший КМ «sees promo of their КМ at both stages»;
+ * КД «sees all promo» — with no per-person КМ identity in the mock both resolve to
+ * every item still in a review stage (terminal items drop out). The «Статус
+ * согласования» filter then narrows to one stage.
+ */
+export function visibleReviewQueue(
+  items: ReviewItem[],
+  ref: Date = new Date()
+): ReviewItem[] {
+  return items.filter((it) => effectiveReviewer(it, ref) !== undefined);
+}
+
+/** Which review stage an item is currently in (auto-escalation aware), for filtering. */
+export type ReviewStage = "senior" | "kd";
+export function reviewStageOf(
+  item: ReviewItem,
+  ref: Date = new Date()
+): ReviewStage | undefined {
+  const reviewer = effectiveReviewer(item, ref);
+  if (reviewer === "Старший КМ") return "senior";
+  if (reviewer === "Коммерческий директор") return "kd";
+  return undefined;
+}
+
+/**
+ * The moment the CURRENT stage's SLA counts from (§9 — SLA is calculated separately
+ * per stage):
+ *  • Старший-КМ stage → when the КМ submitted (`submittedAt`).
+ *  • КД stage → when the item reached the КД: the AUTO-FORWARD moment (= the
+ *    Старший-КМ deadline) for an auto-escalated item; the recorded forward time
+ *    (`kdStageStartedAt`) for a live Старший-КМ approval; else `submittedAt` for a
+ *    seed that already starts at the КД stage.
+ */
+export function stageSlaStart(item: ReviewItem, ref: Date = new Date()): Date {
+  const submitted = new Date(item.submittedAt);
+  if (reviewStageOf(item, ref) === "kd") {
+    if (isAutoEscalated(item, ref)) {
+      return addWorkingDays(submitted, REVIEW_SLA_WORKING_DAYS);
+    }
+    if (item.kdStageStartedAt) return new Date(item.kdStageStartedAt);
+  }
+  return submitted;
+}
+
+/** The SLA in force for a review item's CURRENT stage (§9) — use instead of reviewSla(submittedAt). */
+export function itemSla(item: ReviewItem, ref: Date = new Date()): ReviewSla {
+  return reviewSla(stageSlaStart(item, ref), ref);
+}
+
+/**
+ * For an auto-escalated item, the Старший-КМ SLA that lapsed before the КД took over
+ * (§8/§9) — surfaced in the promo card and the approval history. `autoForwardedAt`
+ * is the Старший-КМ deadline (= the moment the КД SLA starts).
+ */
+export interface SeniorOverdueInfo {
+  autoForwardedAt: Date;
+  seniorSlaDays: number;
+}
+export function seniorOverdueInfo(
+  item: ReviewItem,
+  ref: Date = new Date()
+): SeniorOverdueInfo | undefined {
+  if (!isAutoEscalated(item, ref)) return undefined;
+  return {
+    autoForwardedAt: addWorkingDays(new Date(item.submittedAt), REVIEW_SLA_WORKING_DAYS),
+    seniorSlaDays: REVIEW_SLA_WORKING_DAYS,
+  };
+}
+
+/**
+ * Status shown in the general list for a review item (§8/§9): an auto-escalated item
+ * displays «На согласовании у коммерческого директора» even though its underlying
+ * `kmStatus` is still «На согласовании у старшего КМ» (escalation is derived, not a
+ * mutation, so routing stays intact). Everything else shows its own `kmStatus`.
+ */
+export function displayKmStatus(item: ReviewItem, ref: Date = new Date()): KmStatus {
+  return isAutoEscalated(item, ref)
+    ? "На согласовании у коммерческого директора"
+    : item.kmStatus;
+}
+
 /** A КМ-level status counts as a FINAL decision (campaign may advance past it). */
 export function isFinalKmDecision(status: KmStatus): boolean {
   return (
@@ -2020,6 +2111,33 @@ export function canRequestNonParticipation(status: KmStatus): boolean {
     status !== "Согласовано КД" &&
     status !== "Отменена"
   );
+}
+
+/**
+ * «SLA КМ» (4th-round §10) — whether the КМ sent the promo FOR APPROVAL on time after
+ * the campaign was created. This is a DIFFERENT SLA from the reviewer SLA (§4.5); the
+ * mock has no real «created vs sent» timestamps, so it is seeded deterministically per
+ * (campaign, КМ): «В срок» for a submitted set, «+N раб. дн. просрочено» for the seeded
+ * late ones, and «—» while «Не заполнено» (nothing sent yet).
+ */
+export type KmSubmissionSla =
+  | { state: "onTime" }
+  | { state: "overdue"; days: number }
+  | { state: "none" };
+
+const KM_SUBMISSION_OVERDUE: Record<string, number> = {
+  "PR-2026-007~km-5": 3,
+  "PR-2026-002~km-5": 2,
+};
+
+export function kmSubmissionSla(
+  campaignId: string,
+  kmId: string,
+  status: KmStatus
+): KmSubmissionSla {
+  if (status === "Не заполнено") return { state: "none" };
+  const days = KM_SUBMISSION_OVERDUE[reviewItemId(campaignId, kmId)];
+  return days ? { state: "overdue", days } : { state: "onTime" };
 }
 
 // ── S4 — Версионирование и изменения (§5.1, §7.1) ──────────────────────────────

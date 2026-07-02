@@ -21,6 +21,8 @@ export const PROMO_STATUS_CONFIG: Record<string, StatusConfig> = {
   "Не заполнено": { label: "Не заполнено", bg: "bg-red-50 dark:bg-red-500/15", text: "text-red-700 dark:text-red-300" },
   "Согласовано КД": { label: "Согласовано КД", bg: "bg-emerald-50 dark:bg-emerald-500/15", text: "text-emerald-700 dark:text-emerald-300" },
   "Не участвует": { label: "Не участвует", bg: "bg-gray-100 dark:bg-gray-700", text: "text-gray-600 dark:text-gray-300" },
+  // КМ «Мои участия» — a non-participation request awaiting a decision (4th-round §10)
+  "Заявка о неучастии отправлена": { label: "Заявка о неучастии отправлена", bg: "bg-amber-50 dark:bg-amber-500/15", text: "text-amber-700 dark:text-amber-300" },
 
   // Other states (PROMPT 0)
   "Ожидает проверки 1С": { label: "Ожидает проверки 1С", bg: "bg-orange-50 dark:bg-orange-500/15", text: "text-orange-700 dark:text-orange-300" },

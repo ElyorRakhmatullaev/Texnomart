@@ -147,8 +147,9 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
         {autoEscalated && (
           <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/15 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300">
             <Zap className="mt-0.5 size-3.5 shrink-0" />
-            Авто-передано КД по истечении срока (Старший КМ не отреагировал за 2
-            раб. дн.).
+            Авто-передано: просрочка у старшего КМ (не отреагировал за 2 раб. дн.).
+            Решение принимает коммерческий директор — старший КМ больше не может
+            согласовать это промо (§8).
           </p>
         )}
 

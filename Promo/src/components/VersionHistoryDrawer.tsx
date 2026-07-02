@@ -14,6 +14,7 @@ import {
   Minus,
   Plus,
   Send,
+  Zap,
 } from "lucide-react";
 import {
   Sheet,
@@ -106,6 +107,8 @@ interface VersionHistoryDrawerProps {
   overdueDays?: number;
   /** S4 Phase 3 deadline-change request (§4.7) — surfaced as a log entry. */
   deadlineChange?: DeadlineChangeRequest;
+  /** 4th-round §8/§9 — auto-forward to КД after the Старший-КМ SLA lapsed. */
+  autoForward?: { at: Date; seniorSlaDays: number };
 }
 
 /**
@@ -130,6 +133,7 @@ export function VersionHistoryDrawer({
   reviewComments,
   overdueDays = 0,
   deadlineChange,
+  autoForward,
 }: VersionHistoryDrawerProps) {
   const [view, setView] = React.useState<ViewKey>("history");
   const hasPending = !!pendingChanges && pendingChanges.length > 0;
@@ -292,6 +296,22 @@ export function VersionHistoryDrawer({
                   {overdueDays === 1 ? "рабочий день" : "раб. дн."}. Не блокирует
                   отправку — зафиксировано в истории.
                 </p>
+              </div>
+            )}
+
+            {autoForward && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 p-3">
+                <Zap className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                    Авто-передано коммерческому директору
+                  </p>
+                  <p className="mt-0.5 text-xs text-amber-800/90 dark:text-amber-300/90 tabular-nums">
+                    Просрочка у старшего КМ: не отреагировал за {autoForward.seniorSlaDays} раб.
+                    дн. Передано {autoForward.at.toLocaleDateString("ru-RU")} — срок КД
+                    отсчитывается заново.
+                  </p>
+                </div>
               </div>
             )}
 

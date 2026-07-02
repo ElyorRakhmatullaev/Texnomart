@@ -20,12 +20,14 @@ import { SubmittedLinesPanel } from "./SubmittedLinesPanel";
 import { ReviewActionsPanel, MobileReviewActionBar } from "./ReviewActionsPanel";
 import {
   campaignDecisionSummary,
+  displayKmStatus,
   effectiveReviewer,
   getCampaignById,
   getCategoryManager,
   getPromoLines,
   isAutoEscalated,
-  reviewSla,
+  itemSla,
+  seniorOverdueInfo,
 } from "../../../lib/promo-mock-data";
 
 /** The reason flow currently confirmed in the ReasonDialog. */
@@ -77,7 +79,7 @@ export function ApprovalDetailPage() {
   }
 
   const km = getCategoryManager(item.kmId);
-  const sla = reviewSla(new Date(item.submittedAt));
+  const sla = itemSla(item); // stage-aware SLA (§9) — КД stage counts from auto-forward
   const lines = getPromoLines(item.campaignId).filter(
     (l) => l.kmId === item.kmId
   );
@@ -85,6 +87,7 @@ export function ApprovalDetailPage() {
 
   // Live auto-escalation (a breached Старший-КМ item is now acted on by the КД).
   const autoEscalated = isAutoEscalated(item);
+  const senior = seniorOverdueInfo(item); // §9 — Старший-КМ breach info for the card/history
   const actingReviewer = effectiveReviewer(item);
   const canAct = actingReviewer === currentRole;
   const isKd = currentRole === "Коммерческий директор";
@@ -194,7 +197,7 @@ export function ApprovalDetailPage() {
         }
         badges={
           <>
-            <PromoStatusBadge status={item.kmStatus} />
+            <PromoStatusBadge status={displayKmStatus(item)} />
             <Badge variant="outline">
               {campaign.planned ? "Плановая" : "Внеплановая"}
             </Badge>
@@ -206,7 +209,7 @@ export function ApprovalDetailPage() {
             {autoEscalated && (
               <Badge className="border-0 bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300">
                 <Zap className="mr-1 size-3" />
-                Авто-передано КД
+                Авто-передано: просрочка у старшего КМ
               </Badge>
             )}
           </>
@@ -232,25 +235,42 @@ export function ApprovalDetailPage() {
           />
           <InfoRow label="Текущий проверяющий" value={actingReviewer ?? "—"} />
           <InfoRow
-            label="Срок проверки (раб. дни)"
+            label={`Срок проверки${autoEscalated ? " (этап КД)" : ""}`}
             value={
               sla.overdue > 0 ? (
                 <span className="flex items-center gap-1.5">
                   <OverdueTag days={sla.overdue} />
                   <span className="text-sm text-muted-foreground">
-                    из 2 раб. дн.
+                    просрочено · срок был до {sla.deadline.toLocaleDateString("ru-RU")}
                   </span>
                 </span>
               ) : (
                 <span className="flex items-center gap-1.5 text-sm tabular-nums text-gray-700 dark:text-gray-200">
                   <Clock className="size-3.5 text-muted-foreground" />
-                  осталось {sla.remaining} раб. дн.
+                  осталось {sla.remaining} раб. дн. (до{" "}
+                  {sla.deadline.toLocaleDateString("ru-RU")})
                 </span>
               )
             }
           />
         </div>
       </DetailPageHero>
+
+      {/* §9 — Старший-КМ breach info surfaced on the promo card: auto-forwarded to the
+          КД, whose SLA restarts from the auto-forward moment. */}
+      {senior && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 px-4 py-3">
+          <Zap className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-sm text-amber-800 dark:text-amber-300">
+            Авто-передано коммерческому директору: старший КМ не отреагировал за{" "}
+            {senior.seniorSlaDays} раб. дн. Срок согласования КД отсчитывается заново с{" "}
+            <span className="font-medium tabular-nums">
+              {senior.autoForwardedAt.toLocaleDateString("ru-RU")}
+            </span>
+            .
+          </p>
+        </div>
+      )}
 
       {/* Non-blocking просрочка note (spec §4.5.2): record, never hard-stop. */}
       {sla.overdue > 0 && (
@@ -376,6 +396,14 @@ export function ApprovalDetailPage() {
         onOpenChange={setHistoryOpen}
         reviewComments={item.comments}
         overdueDays={sla.overdue}
+        autoForward={
+          senior
+            ? {
+                at: senior.autoForwardedAt,
+                seniorSlaDays: senior.seniorSlaDays,
+              }
+            : undefined
+        }
       />
     </div>
   );
