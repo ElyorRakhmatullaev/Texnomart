@@ -15,7 +15,7 @@ import { Label } from "@texnomart/ui/label";
 import { useRole } from "../../role-context";
 import { VersionHistoryDrawer } from "../../../components/VersionHistoryDrawer";
 import { DepartmentReportView } from "./DepartmentReportView";
-import { reportFieldsFor } from "./reportFields";
+import { reportColumnsFor } from "./reportFields";
 import {
   DEPARTMENT_SHORT,
   buildCampaignReport,
@@ -58,7 +58,7 @@ export function ReportsPage() {
     () => (campaign ? getPromoLines(campaign.id) : []),
     [campaign]
   );
-  const fields = React.useMemo(() => reportFieldsFor(department), [department]);
+  const fields = React.useMemo(() => reportColumnsFor(department), [department]);
 
   // ── marketing «В рекламу (выбрано маркетингом)» store (in-memory overrides) ──
   const [flags, setFlags] = React.useState<Map<string, boolean>>(new Map());

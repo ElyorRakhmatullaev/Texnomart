@@ -1,15 +1,20 @@
-// S5 — Department-report field routing (Appendix C M/P/A columns, spec §7.2–§7.2.2).
-//
-// Each department report shows its own subset of the full-calendar field
-// dictionary. Marketing receives the widest set (identity + prices + installment
-// block + gifts + УТП + both «В рекламу» checkboxes); Purchasing and Analytics
-// receive the same narrow compensation/limit set. Field VALUES are computed here
-// (a heterogeneous accessor per field, reusing the mock-data installment helpers);
-// DepartmentReportView owns the rendering (highlight, checkbox, Mode-B cards).
+// S5 — Department-report columns, PROJECTED from the full-calendar dictionary
+// (gridFields.ts) so labels/order/formatting stay in sync with the full calendar
+// (feedback §1) and new fields (Бренд, Наличие в магазинах, %) flow in automatically.
+// Each department shows its own ordered subset; report-local identity columns
+// (№ промо, ФИО КМ, Начало, Окончание, Номенклатура, подарки) are defined here
+// because they are not 1:1 scrolling gridFields columns. Value accessors live here.
 
 import {
+  COLUMNS as GRID_COLUMNS,
+  type CellKind,
+  type ColumnDef,
+} from "../full-calendar/gridFields";
+import {
+  formatAvailabilityPct,
   getCategoryManager,
   getNomenclatureItem,
+  getStoreAvailability,
   installmentTerm,
   programMonthly,
   type PromoCampaign,
@@ -26,283 +31,142 @@ export type ReportFieldKind =
   | "date"
   | "check";
 
-export interface ReportField {
+export interface ReportColumn {
   /** Stable id — the suffix in a `${lineId}:${fieldId}` changed-cell key. */
   id: string;
   label: string;
   kind: ReportFieldKind;
   /** Group header for the wide marketing table; omitted for the narrow reports. */
   group?: string;
+  /** px column width (frozen/scroll pane alignment). */
+  width: number;
   /** RU-formatted display value (string), or a boolean for checkbox fields. */
   value: (line: PromoLine, campaign: PromoCampaign) => string | boolean;
 }
 
+/** Back-compat alias so existing imports keep compiling. */
+export type ReportField = ReportColumn;
+
+export const MARKETING_EDITABLE_FIELD = "advSelectedMarketing";
+
 // ── value helpers ──────────────────────────────────────────────────────────────
-
 const DASH = "—";
+const ruDate = (d: Date) => d.toLocaleDateString("ru-RU");
+const money = (v: number | undefined) => (v != null ? formatSum(v) : DASH);
+const num = (v: number | undefined) => (v != null ? v.toLocaleString("ru-RU") : DASH);
+const pct = (v: number | undefined) => (v != null ? `${v}%` : DASH);
+const nomName = (id: string | undefined) =>
+  !id ? DASH : getNomenclatureItem(id)?.name ?? id;
+const oldPriceOf = (line: PromoLine) =>
+  getNomenclatureItem(line.nomenclatureId)?.oldRetailPrice ?? 0;
 
-function ruDate(d: Date): string {
-  return d.toLocaleDateString("ru-RU");
+// gridFields CellKind ("checkbox") → ReportFieldKind ("check").
+function mapKind(k: CellKind): ReportFieldKind {
+  return k === "checkbox" ? "check" : k;
 }
-function money(v: number | undefined): string {
-  return v != null ? formatSum(v) : DASH;
-}
-function num(v: number | undefined): string {
-  return v != null ? v.toLocaleString("ru-RU") : DASH;
-}
-function pct(v: number | undefined): string {
-  return v != null ? `${v}%` : DASH;
-}
-function nomName(id: string | undefined): string {
-  if (!id) return DASH;
-  return getNomenclatureItem(id)?.name ?? id;
-}
-function oldPriceOf(line: PromoLine): number {
-  return getNomenclatureItem(line.nomenclatureId)?.oldRetailPrice ?? 0;
-}
+const GRID_GROUP_LABEL: Record<string, string> = {
+  identity: "Идентификация",
+  product: "Товар",
+  prices: "Цены",
+  installments: "Рассрочка",
+  marketing: "Маркетинг",
+};
 
-// ── identity fields (shared by all reports) ──────────────────────────────────────
+// ── value accessors, keyed by column id ──────────────────────────────────────────
+type Accessor = (l: PromoLine, c: PromoCampaign) => string | boolean;
 
-const PRIZNAK: ReportField = {
-  id: "priznak",
-  label: "Признак",
-  kind: "text",
-  group: "Идентификация",
-  value: (_l, c) => (c.planned ? "Плановая" : "Внеплановая"),
-};
-const KM: ReportField = {
-  id: "km",
-  label: "ФИО КМ",
-  kind: "text",
-  group: "Идентификация",
-  value: (l) => getCategoryManager(l.kmId)?.name ?? l.kmId,
-};
-const PROMO_NO: ReportField = {
-  id: "promoNo",
-  label: "№ промо",
-  kind: "text",
-  group: "Идентификация",
-  value: (_l, c) => c.id,
-};
-const TYPE: ReportField = {
-  id: "type",
-  label: "Тип промо",
-  kind: "text",
-  group: "Идентификация",
-  value: (_l, c) => c.type,
-};
-const NAME: ReportField = {
-  id: "name",
-  label: "Название акции",
-  kind: "text",
-  group: "Идентификация",
-  value: (_l, c) => c.name,
-};
-const START: ReportField = {
-  id: "start",
-  label: "Начало",
-  kind: "date",
-  group: "Идентификация",
-  value: (_l, c) => ruDate(c.startDate),
-};
-const END: ReportField = {
-  id: "end",
-  label: "Окончание",
-  kind: "date",
-  group: "Идентификация",
-  value: (_l, c) => ruDate(c.endDate),
-};
-const NOMENCLATURE: ReportField = {
-  id: "nomenclature",
-  label: "Номенклатура",
-  kind: "text",
-  group: "Товар",
-  value: (l) => nomName(l.nomenclatureId),
-};
-const GIFT_NOMENCLATURE: ReportField = {
-  id: "giftNomenclature",
-  label: "Номенклатура по подаркам",
-  kind: "text",
-  group: "Товар",
-  value: (l) =>
+const ACCESSORS: Record<string, Accessor> = {
+  // report-local identity
+  priznak: (_l, c) => (c.planned ? "Плановая" : "Внеплановая"),
+  km: (l) => getCategoryManager(l.kmId)?.name ?? l.kmId,
+  promoNo: (_l, c) => c.id,
+  type: (_l, c) => c.type,
+  name: (_l, c) => c.name,
+  start: (_l, c) => ruDate(c.startDate),
+  end: (_l, c) => ruDate(c.endDate),
+  nomenclature: (l) => nomName(l.nomenclatureId),
+  giftNomenclature: (l) =>
     l.gifts && l.gifts.length
       ? l.gifts.map((g) => nomName(g.nomenclatureId)).join(", ")
       : DASH,
+  // product (from gridFields)
+  brand: (l) => getNomenclatureItem(l.nomenclatureId)?.brand ?? DASH,
+  storeAvailability: (l) =>
+    formatAvailabilityPct(getStoreAvailability(l.nomenclatureId).pct),
+  stock: (l) => num(l.stock),
+  oldPrice: (l) => money(oldPriceOf(l)),
+  // prices
+  newPrice: (l) => money(l.newPrice),
+  discountPct: (l) => pct(l.discountPct),
+  cashDiscountPct: (l) => pct(l.cashDiscountPct),
+  // installments (representative subset)
+  inst006: (l) => money(programMonthly(l.newPrice, 6)),
+  inst0012: (l) => money(programMonthly(l.newPrice, 12)),
+  inst5002: (l) => money(programMonthly(l.newPrice, 2, 0.5)),
+  t12new: (l) => money(installmentTerm(l, oldPriceOf(l), 12).newMonthly),
+  t12full: (l) => money(installmentTerm(l, oldPriceOf(l), 12).newFullPrice),
+  t24new: (l) => money(installmentTerm(l, oldPriceOf(l), 24).newMonthly),
+  t24full: (l) => money(installmentTerm(l, oldPriceOf(l), 24).newFullPrice),
+  t36new: (l) => money(installmentTerm(l, oldPriceOf(l), 36).newMonthly),
+  t36full: (l) => money(installmentTerm(l, oldPriceOf(l), 36).newFullPrice),
+  // marketing
+  giftStock: (l) => num(getNomenclatureItem(l.gifts?.[0]?.nomenclatureId ?? "")?.stock),
+  utp: (l) => l.utp ?? DASH,
+  advRecommendedKm: (l) => l.advRecommendedKm,
+  advSelectedMarketing: (l) => l.advSelectedMarketing,
+  // compensation (Закуп/Аналитика)
+  supplierCompensation: (l) => money(l.supplierCompensation),
+  compensationLimit: (l) => num(l.compensationLimit),
 };
 
-// ── marketing-only fields ────────────────────────────────────────────────────────
-
-const STOCK: ReportField = {
-  id: "stock",
-  label: "Остаток",
-  kind: "number",
-  group: "Товар",
-  value: (l) => num(l.stock),
-};
-const OLD_PRICE: ReportField = {
-  id: "oldPrice",
-  label: "Розничная цена (старая)",
-  kind: "money",
-  group: "Цены",
-  value: (l) => money(oldPriceOf(l)),
-};
-const NEW_PRICE: ReportField = {
-  id: "newPrice",
-  label: "Новая цена",
-  kind: "money",
-  group: "Цены",
-  value: (l) => money(l.newPrice),
-};
-const DISCOUNT: ReportField = {
-  id: "discountPct",
-  label: "Скидка, %",
-  kind: "percent",
-  group: "Цены",
-  value: (l) => pct(l.discountPct),
-};
-const CASH_DISCOUNT: ReportField = {
-  id: "cashDiscountPct",
-  label: "Скидка за Cash, %",
-  kind: "percent",
-  group: "Цены",
-  value: (l) => pct(l.cashDiscountPct),
-};
-const GIFT_STOCK: ReportField = {
-  id: "giftStock",
-  label: "Остаток подарка",
-  kind: "number",
-  group: "Подарки",
-  // Остаток подарка загружается из 1С по подарочной номенклатуре (feedback §8).
-  value: (l) =>
-    num(getNomenclatureItem(l.gifts?.[0]?.nomenclatureId ?? "")?.stock),
-};
-const UTP: ReportField = {
-  id: "utp",
-  label: "УТП",
-  kind: "text",
-  group: "Маркетинг",
-  value: (l) => l.utp ?? DASH,
-};
-const ADV_KM: ReportField = {
-  id: "advRecommendedKm",
-  label: "В рекламу (КМ)",
-  kind: "check",
-  group: "Маркетинг",
-  value: (l) => l.advRecommendedKm,
-};
-const ADV_MARKETING: ReportField = {
-  id: "advSelectedMarketing",
-  label: "В рекламу (маркетинг)",
-  kind: "check",
-  group: "Маркетинг",
-  value: (l) => l.advSelectedMarketing,
+// Report-local identity/extra columns not present (or not 1:1) in gridFields.
+const LOCAL_COLUMNS: Record<string, Omit<ReportColumn, "value">> = {
+  priznak: { id: "priznak", label: "Признак", kind: "text", group: "Идентификация", width: 130 },
+  km: { id: "km", label: "ФИО КМ", kind: "text", group: "Идентификация", width: 180 },
+  promoNo: { id: "promoNo", label: "№ промо", kind: "text", group: "Идентификация", width: 130 },
+  start: { id: "start", label: "Начало", kind: "date", group: "Идентификация", width: 120 },
+  end: { id: "end", label: "Окончание", kind: "date", group: "Идентификация", width: 120 },
+  nomenclature: { id: "nomenclature", label: "Номенклатура", kind: "text", group: "Товар", width: 260 },
+  giftNomenclature: { id: "giftNomenclature", label: "Номенклатура по подаркам", kind: "text", group: "Товар", width: 220 },
+  giftStock: { id: "giftStock", label: "Остаток подарка", kind: "number", group: "Маркетинг", width: 150 },
 };
 
-/** Installment program / term columns (§8.5) — representative of the «full block». */
-const INST_006: ReportField = {
-  id: "inst006",
-  label: "0-0-6 (платёж/мес)",
-  kind: "money",
-  group: "Рассрочка",
-  value: (l) => money(programMonthly(l.newPrice, 6)),
-};
-const INST_0012: ReportField = {
-  id: "inst0012",
-  label: "0-0-12 (платёж/мес)",
-  kind: "money",
-  group: "Рассрочка",
-  value: (l) => money(programMonthly(l.newPrice, 12)),
-};
-const INST_5002: ReportField = {
-  id: "inst5002",
-  label: "50-0-2 (платёж/мес)",
-  kind: "money",
-  group: "Рассрочка",
-  value: (l) => money(programMonthly(l.newPrice, 2, 0.5)),
-};
+const GRID_BY_ID = new Map<string, ColumnDef>(GRID_COLUMNS.map((c) => [c.id, c]));
 
-function termField(
-  months: 12 | 24 | 36,
-  part: "new" | "full",
-  label: string
-): ReportField {
+function buildColumn(id: string): ReportColumn {
+  const value = ACCESSORS[id];
+  if (!value) throw new Error(`reportFields: no accessor for column "${id}"`);
+  const local = LOCAL_COLUMNS[id];
+  if (local) return { ...local, value };
+  const g = GRID_BY_ID.get(id);
+  if (!g) throw new Error(`reportFields: "${id}" is neither local nor a gridFields column`);
   return {
-    id: `t${months}${part}`,
-    label,
-    kind: "money",
-    group: "Рассрочка",
-    value: (l) => {
-      const t = installmentTerm(l, oldPriceOf(l), months);
-      return money(part === "new" ? t.newMonthly : t.newFullPrice);
-    },
+    id: g.id,
+    label: g.label,
+    kind: mapKind(g.kind),
+    group: GRID_GROUP_LABEL[g.group],
+    width: g.width,
+    value,
   };
 }
 
-// ── compensation fields (purchasing / analytics) ─────────────────────────────────
-
-const SUPPLIER_COMPENSATION: ReportField = {
-  id: "supplierCompensation",
-  label: "Компенсация поставщика",
-  kind: "money",
-  group: "Компенсация",
-  value: (l) => money(l.supplierCompensation),
-};
-const COMPENSATION_LIMIT: ReportField = {
-  id: "compensationLimit",
-  label: "Лимит компенс. кол-ва",
-  kind: "number",
-  group: "Компенсация",
-  value: (l) => num(l.compensationLimit),
-};
-
-// ── per-department field lists (Appendix C) ──────────────────────────────────────
-
-const MARKETING_FIELDS: ReportField[] = [
-  PRIZNAK,
-  KM,
-  PROMO_NO,
-  TYPE,
-  NAME,
-  START,
-  END,
-  NOMENCLATURE,
-  STOCK,
-  OLD_PRICE,
-  NEW_PRICE,
-  DISCOUNT,
-  CASH_DISCOUNT,
-  INST_006,
-  INST_0012,
-  INST_5002,
-  termField(12, "new", "12 мес: платёж (новая)"),
-  termField(12, "full", "12 мес: полная цена"),
-  termField(24, "new", "24 мес: платёж (новая)"),
-  termField(24, "full", "24 мес: полная цена"),
-  termField(36, "new", "36 мес: платёж (новая)"),
-  termField(36, "full", "36 мес: полная цена"),
-  GIFT_NOMENCLATURE,
-  GIFT_STOCK,
-  UTP,
-  ADV_KM,
-  ADV_MARKETING,
+// Ordered per-department id lists (subset of gridFields + local identity columns).
+const MARKETING_IDS = [
+  "priznak", "km", "promoNo", "type", "name", "start", "end",
+  "nomenclature", "brand", "storeAvailability", "stock", "oldPrice",
+  "newPrice", "discountPct", "cashDiscountPct",
+  "inst006", "inst0012", "inst5002",
+  "t12new", "t12full", "t24new", "t24full", "t36new", "t36full",
+  "giftNomenclature", "giftStock", "utp", "advRecommendedKm", "advSelectedMarketing",
+];
+const COMPENSATION_IDS = [
+  "type", "name", "start", "end",
+  "nomenclature", "giftNomenclature", "supplierCompensation", "compensationLimit",
 ];
 
-// Purchasing & Analytics share the same narrow set (§7.2.1, §7.2.2): тип, название,
-// dates, номенклатура, gift, компенсация, лимит — all read-only.
-const COMPENSATION_FIELDS: ReportField[] = [
-  TYPE,
-  NAME,
-  START,
-  END,
-  NOMENCLATURE,
-  GIFT_NOMENCLATURE,
-  SUPPLIER_COMPENSATION,
-  COMPENSATION_LIMIT,
-];
+const MARKETING_COLUMNS = MARKETING_IDS.map(buildColumn);
+const COMPENSATION_COLUMNS = COMPENSATION_IDS.map(buildColumn);
 
-export function reportFieldsFor(department: ReportDepartment): ReportField[] {
-  return department === "marketing" ? MARKETING_FIELDS : COMPENSATION_FIELDS;
+export function reportColumnsFor(department: ReportDepartment): ReportColumn[] {
+  return department === "marketing" ? MARKETING_COLUMNS : COMPENSATION_COLUMNS;
 }
-
-/** The single marketing-editable field id (§7.2) — «В рекламу (выбрано маркетингом)». */
-export const MARKETING_EDITABLE_FIELD = "advSelectedMarketing";
