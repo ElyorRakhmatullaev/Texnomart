@@ -1009,7 +1009,7 @@ const LINE_SEED: LineSeed[] = [
   // отделам»): one normal line + one already-approved removal (removed) so the
   // "Исключено" report plashka is demoable on load (see REPORT_CHANGE_SETS).
   { id: "L-0019", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10008", off: 0.11, forecast: 22, utp: "Бесплатная доставка и установка", advKm: true, advMkt: true, supplierCompensation: 300000, compensationLimit: 40 },
-  { id: "L-0020", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10009", off: 0.09, forecast: 30, removalPending: false, removed: true, removalReason: "Снят с продаж поставщиком — исключить из акции.", supplierCompensation: 200000, compensationLimit: 25 },
+  { id: "L-0020", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10009", off: 0.09, forecast: 30, removalPending: true, removalReason: "Снят с продаж поставщиком — исключить из акции.", supplierCompensation: 200000, compensationLimit: 25 },
   // Added in the latest report version (S5 «добавленные данные» demo — see REPORT_CHANGE_SETS).
   { id: "L-0021", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10007", off: 0.13, forecast: 18, utp: "Подарочная упаковка", supplierCompensation: 350000, compensationLimit: 35 },
 ];

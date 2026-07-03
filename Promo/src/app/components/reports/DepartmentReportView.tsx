@@ -111,6 +111,11 @@ export function DepartmentReportView({
     changeSet.addedLineIds.length > 0 ||
     changeSet.removedLineIds.length > 0;
 
+  const excludedIds = React.useMemo(
+    () => new Set(changeSet.removedLineIds),
+    [changeSet]
+  );
+
   const isAcked = React.useCallback(
     (lineId: string) => acknowledgedAll || acknowledgedLines.has(lineId),
     [acknowledgedAll, acknowledgedLines]
@@ -314,6 +319,7 @@ export function DepartmentReportView({
           changeKind={changeKind}
           lineHasUnacked={lineHasUnacked}
           onAcknowledgeLine={ackLine}
+          excludedIds={excludedIds}
         />
       </Card>
 
@@ -338,6 +344,7 @@ export function DepartmentReportView({
               kind={changeKind(line.id)}
               hasUnacked={lineHasUnacked(line.id)}
               onAcknowledge={() => ackLine(line.id)}
+              excludedIds={excludedIds}
             />
           ))
         )}
@@ -379,6 +386,7 @@ interface ReportBandTableProps {
   changeKind: (lineId: string) => ChangeKind;
   lineHasUnacked: (lineId: string) => boolean;
   onAcknowledgeLine: (lineId: string) => void;
+  excludedIds: Set<string>;
 }
 
 function ReportBandTable({
@@ -394,6 +402,7 @@ function ReportBandTable({
   changeKind,
   lineHasUnacked,
   onAcknowledgeLine,
+  excludedIds,
 }: ReportBandTableProps) {
   // «Номенклатура» is frozen with «Изменение»; everything else in `fields` scrolls.
   const scrollingFields = fields.filter((f) => f.id !== "nomenclature");
@@ -564,7 +573,7 @@ function ReportBandTable({
         {/* Frozen pane — bulk-select checkbox (marketing) + «Изменение» + «Номенклатура» */}
         <div className="shrink-0 border-r bg-white dark:bg-card">
           {lines.map((line) => {
-            const struck = line.removed || line.rejected;
+            const struck = line.removed || line.rejected || excludedIds.has(line.id);
             const nomValue = nomField
               ? String(nomField.value(line, campaign))
               : line.nomenclatureId;
@@ -611,7 +620,7 @@ function ReportBandTable({
         >
           <div className="min-w-max">
             {lines.map((line) => {
-              const struck = line.removed || line.rejected;
+              const struck = line.removed || line.rejected || excludedIds.has(line.id);
               return (
                 <div
                   key={line.id}
@@ -689,6 +698,7 @@ interface ReportCardProps {
   kind: ChangeKind;
   hasUnacked: boolean;
   onAcknowledge: () => void;
+  excludedIds: Set<string>;
 }
 
 function ReportCard({
@@ -705,8 +715,9 @@ function ReportCard({
   kind,
   hasUnacked,
   onAcknowledge,
+  excludedIds,
 }: ReportCardProps) {
-  const struck = line.removed || line.rejected;
+  const struck = line.removed || line.rejected || excludedIds.has(line.id);
   const title =
     fields.find((f) => f.id === "nomenclature")?.value(line, campaign) ??
     line.nomenclatureId;
