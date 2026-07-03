@@ -1006,10 +1006,10 @@ const LINE_SEED: LineSeed[] = [
   { id: "L-0017", campaignId: "PR-2026-004", kmId: "km-1", nomenclatureId: "1C-10001", off: 0.22, forecast: 80 },
   { id: "L-0018", campaignId: "PR-2026-004", kmId: "km-1", nomenclatureId: "1C-10004", off: 0.25, forecast: 110 },
   // UN-2026-015 «Срочная скидка на холодильники» is APPROVED («…отправлено смежным
-  // отделам»): one normal line + one already-requested removal (removalPending) so
-  // the КД «Подтвердить исключение» path is demoable on load.
+  // отделам»): one normal line + one already-approved removal (removed) so the
+  // "Исключено" report plashka is demoable on load (see REPORT_CHANGE_SETS).
   { id: "L-0019", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10008", off: 0.11, forecast: 22, utp: "Бесплатная доставка и установка", advKm: true, advMkt: true, supplierCompensation: 300000, compensationLimit: 40 },
-  { id: "L-0020", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10009", off: 0.09, forecast: 30, removalPending: true, removalReason: "Снят с продаж поставщиком — исключить из акции.", supplierCompensation: 200000, compensationLimit: 25 },
+  { id: "L-0020", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10009", off: 0.09, forecast: 30, removalPending: false, removed: true, removalReason: "Снят с продаж поставщиком — исключить из акции.", supplierCompensation: 200000, compensationLimit: 25 },
   // Added in the latest report version (S5 «добавленные данные» demo — see REPORT_CHANGE_SETS).
   { id: "L-0021", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10007", off: 0.13, forecast: 18, utp: "Подарочная упаковка", supplierCompensation: 350000, compensationLimit: 35 },
 ];
@@ -2835,35 +2835,59 @@ export function getReportSendStatus(campaign: PromoCampaign): ReportSendStatus {
 }
 
 /**
- * The changed/added cells of a campaign's LATEST report version, vs the previous
- * one (§7.1). Highlighted in the report until the recipient acknowledges (§11.4).
- * Seed-stale (the audit trail is mocked) — keyed `${lineId}:${fieldId}`.
+ * The changed/added/removed cells+lines of a campaign's LATEST report version,
+ * vs the previous one (§7.1). Highlighted in the report until the recipient
+ * acknowledges (§11.4). Seed-stale (the audit trail is mocked).
  */
+export interface ReportCellChange {
+  lineId: string;
+  fieldId: string;
+  /** Pre-formatted display strings for the tooltip. */
+  prevValue: string;
+  newValue: string;
+  changedAt: Date;
+}
+
 export interface ReportChangeSet {
-  /** `${lineId}:${fieldId}` keys of changed cells → amber highlight. */
-  changedCells: string[];
-  /** Lines added in the latest version → emerald «добавлено» highlight. */
+  /** Lines added in the latest version → green «Добавлено» plashka. */
   addedLineIds: string[];
+  /** Lines excluded in the latest version → red «Исключено» plashka (kept, struck). */
+  removedLineIds: string[];
+  /** Per-cell changes → amber highlight + before→after tooltip. */
+  changedCells: ReportCellChange[];
 }
 
 const REPORT_CHANGE_SETS: Record<string, ReportChangeSet> = {
-  // UN-2026-015 received a later incremental correction (see its version chain):
-  // one price/discount change on L-0019 + one added position (L-0021). The
-  // компенсация/лимит cells are flagged too so the diff is visible in the закуп/
-  // аналитика tabs as well as маркетинг.
+  // UN-2026-015 received a later incremental correction: a price/discount change on
+  // L-0019, one added position (L-0021), and one excluded position (L-0020).
   "UN-2026-015": {
-    changedCells: [
-      "L-0019:newPrice",
-      "L-0019:discountPct",
-      "L-0019:supplierCompensation",
-      "L-0019:compensationLimit",
-    ],
     addedLineIds: ["L-0021"],
+    removedLineIds: ["L-0020"],
+    changedCells: [
+      { lineId: "L-0019", fieldId: "newPrice", prevValue: "5 200 000 сум", newValue: "4 990 000 сум", changedAt: new Date(2026, 5, 5, 10, 40) },
+      { lineId: "L-0019", fieldId: "discountPct", prevValue: "8%", newValue: "12%", changedAt: new Date(2026, 5, 5, 10, 40) },
+      { lineId: "L-0019", fieldId: "supplierCompensation", prevValue: "250 000 сум", newValue: "300 000 сум", changedAt: new Date(2026, 5, 5, 10, 40) },
+      { lineId: "L-0019", fieldId: "compensationLimit", prevValue: "30", newValue: "40", changedAt: new Date(2026, 5, 5, 10, 40) },
+    ],
   },
 };
 
+const EMPTY_CHANGE_SET: ReportChangeSet = {
+  addedLineIds: [],
+  removedLineIds: [],
+  changedCells: [],
+};
+
 export function getReportChangeSet(campaignId: string): ReportChangeSet {
-  return REPORT_CHANGE_SETS[campaignId] ?? { changedCells: [], addedLineIds: [] };
+  return REPORT_CHANGE_SETS[campaignId] ?? EMPTY_CHANGE_SET;
+}
+
+export function reportCellChange(
+  set: ReportChangeSet,
+  lineId: string,
+  fieldId: string
+): ReportCellChange | undefined {
+  return set.changedCells.find((c) => c.lineId === lineId && c.fieldId === fieldId);
 }
 
 // ── S6 — Центр уведомлений (notifications) — spec §11.3 ──────────────────────

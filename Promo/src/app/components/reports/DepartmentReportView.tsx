@@ -27,6 +27,7 @@ import {
   getReportDeadline,
   getReportSentAt,
   getReportVersionNo,
+  reportCellChange,
   type PromoCampaign,
   type PromoLine,
   type ReportDepartment,
@@ -106,31 +107,34 @@ export function DepartmentReportView({
   const overdueDays = getOverdueDays(getReportDeadline(campaign), sentAt);
 
   const hasChangeData =
-    changeSet.changedCells.length > 0 || changeSet.addedLineIds.length > 0;
+    changeSet.changedCells.length > 0 ||
+    changeSet.addedLineIds.length > 0 ||
+    changeSet.removedLineIds.length > 0;
 
   const isAcked = React.useCallback(
     (lineId: string) => acknowledgedAll || acknowledgedLines.has(lineId),
     [acknowledgedAll, acknowledgedLines]
   );
   const cellChanged = (lineId: string, fieldId: string) =>
-    changeSet.changedCells.includes(`${lineId}:${fieldId}`) && !isAcked(lineId);
+    !!reportCellChange(changeSet, lineId, fieldId) && !isAcked(lineId);
   const rowAdded = (lineId: string) =>
     changeSet.addedLineIds.includes(lineId) && !isAcked(lineId);
   const lineHasUnacked = (lineId: string) =>
     (changeSet.addedLineIds.includes(lineId) ||
-      changeSet.changedCells.some((k) => k.startsWith(`${lineId}:`))) &&
+      changeSet.removedLineIds.includes(lineId) ||
+      changeSet.changedCells.some((c) => c.lineId === lineId)) &&
     !isAcked(lineId);
   const lineById = React.useMemo(
     () => new Map(lines.map((l) => [l.id, l])),
     [lines]
   );
   // Which change plashka a line shows in the «Изменение» column.
-  // (Phase 1 uses the existing change model; Phase 2 enriches it.)
   const changeKind = (lineId: string): ChangeKind => {
     const line = lineById.get(lineId);
-    if (line && (line.removed || line.rejected)) return "excluded";
+    if ((line && (line.removed || line.rejected)) || changeSet.removedLineIds.includes(lineId))
+      return "excluded";
     if (changeSet.addedLineIds.includes(lineId)) return "added";
-    if (changeSet.changedCells.some((k) => k.startsWith(`${lineId}:`))) return "changed";
+    if (changeSet.changedCells.some((c) => c.lineId === lineId)) return "changed";
     return null;
   };
 
