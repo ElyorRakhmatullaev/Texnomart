@@ -120,10 +120,14 @@ export function DepartmentReportView({
     (changeSet.addedLineIds.includes(lineId) ||
       changeSet.changedCells.some((k) => k.startsWith(`${lineId}:`))) &&
     !isAcked(lineId);
+  const lineById = React.useMemo(
+    () => new Map(lines.map((l) => [l.id, l])),
+    [lines]
+  );
   // Which change plashka a line shows in the «Изменение» column.
   // (Phase 1 uses the existing change model; Phase 2 enriches it.)
   const changeKind = (lineId: string): ChangeKind => {
-    const line = lines.find((l) => l.id === lineId);
+    const line = lineById.get(lineId);
     if (line && (line.removed || line.rejected)) return "excluded";
     if (changeSet.addedLineIds.includes(lineId)) return "added";
     if (changeSet.changedCells.some((k) => k.startsWith(`${lineId}:`))) return "changed";
@@ -434,7 +438,7 @@ function ReportBandTable({
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [lines]);
+  }, [lines, fields, canEditMarketingFlag]);
 
   // Mirror one scroller's scrollLeft onto the other two (idempotent writes, so
   // the resulting scroll events self-terminate — no re-entrancy flag needed).
