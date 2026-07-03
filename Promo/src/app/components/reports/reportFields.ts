@@ -9,6 +9,7 @@ import {
   COLUMNS as GRID_COLUMNS,
   type CellKind,
   type ColumnDef,
+  type ColumnGroupKey,
 } from "../full-calendar/gridFields";
 import {
   formatAvailabilityPct,
@@ -64,7 +65,7 @@ const oldPriceOf = (line: PromoLine) =>
 function mapKind(k: CellKind): ReportFieldKind {
   return k === "checkbox" ? "check" : k;
 }
-const GRID_GROUP_LABEL: Record<string, string> = {
+const GRID_GROUP_LABEL: Record<ColumnGroupKey, string> = {
   identity: "Идентификация",
   product: "Товар",
   prices: "Цены",
@@ -128,10 +129,18 @@ const LOCAL_COLUMNS: Record<string, Omit<ReportColumn, "value">> = {
   end: { id: "end", label: "Окончание", kind: "date", group: "Идентификация", width: 120 },
   nomenclature: { id: "nomenclature", label: "Номенклатура", kind: "text", group: "Товар", width: 260 },
   giftNomenclature: { id: "giftNomenclature", label: "Номенклатура по подаркам", kind: "text", group: "Товар", width: 220 },
-  giftStock: { id: "giftStock", label: "Остаток подарка", kind: "number", group: "Маркетинг", width: 150 },
+  giftStock: { id: "giftStock", label: "Остаток подарка", kind: "number", group: "Подарки", width: 150 },
 };
 
 const GRID_BY_ID = new Map<string, ColumnDef>(GRID_COLUMNS.map((c) => [c.id, c]));
+
+// supplierCompensation/compensationLimit live under gridFields' "marketing" group
+// (full-calendar layout), but in the Закуп/Аналитика report they belong to their
+// own «Компенсация» group header.
+const GROUP_OVERRIDE: Record<string, string> = {
+  supplierCompensation: "Компенсация",
+  compensationLimit: "Компенсация",
+};
 
 function buildColumn(id: string): ReportColumn {
   const value = ACCESSORS[id];
@@ -144,7 +153,7 @@ function buildColumn(id: string): ReportColumn {
     id: g.id,
     label: g.label,
     kind: mapKind(g.kind),
-    group: GRID_GROUP_LABEL[g.group],
+    group: GROUP_OVERRIDE[g.id] ?? GRID_GROUP_LABEL[g.group],
     width: g.width,
     value,
   };
