@@ -36,6 +36,32 @@ import {
   type ReportField,
 } from "./reportFields";
 
+/** Which change plashka a line shows in the «Изменение» column. */
+type ChangeKind = "added" | "changed" | "excluded" | null;
+
+function ChangePlashka({ kind }: { kind: ChangeKind }) {
+  if (!kind) return <span className="text-xs text-muted-foreground">—</span>;
+  const meta = {
+    added: {
+      label: "Добавлено",
+      cls: "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300",
+    },
+    changed: {
+      label: "Изменено",
+      cls: "bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300",
+    },
+    excluded: {
+      label: "Исключено",
+      cls: "bg-red-100 dark:bg-red-500/20 text-red-800 dark:text-red-300",
+    },
+  }[kind];
+  return (
+    <Badge className={cn("rounded-full border-0 text-[11px] font-medium", meta.cls)}>
+      {meta.label}
+    </Badge>
+  );
+}
+
 interface DepartmentReportViewProps {
   campaign: PromoCampaign;
   lines: PromoLine[];
@@ -94,6 +120,15 @@ export function DepartmentReportView({
     (changeSet.addedLineIds.includes(lineId) ||
       changeSet.changedCells.some((k) => k.startsWith(`${lineId}:`))) &&
     !isAcked(lineId);
+  // Which change plashka a line shows in the «Изменение» column.
+  // (Phase 1 uses the existing change model; Phase 2 enriches it.)
+  const changeKind = (lineId: string): ChangeKind => {
+    const line = lines.find((l) => l.id === lineId);
+    if (line && (line.removed || line.rejected)) return "excluded";
+    if (changeSet.addedLineIds.includes(lineId)) return "added";
+    if (changeSet.changedCells.some((k) => k.startsWith(`${lineId}:`))) return "changed";
+    return null;
+  };
 
   const unackedCount = lines.filter((l) => lineHasUnacked(l.id)).length;
 
@@ -135,8 +170,6 @@ export function DepartmentReportView({
   const marketingApprove = () => {
     toast.success("Выбор «В рекламу» согласован. Категорийные менеджеры уведомлены.");
   };
-
-  const showAck = canEditMarketingFlag;
 
   return (
     <div className="space-y-4">
@@ -257,25 +290,23 @@ export function DepartmentReportView({
         </div>
       )}
 
-      {/* ── desktop table ── */}
-      <Card className="hidden overflow-hidden p-0 md:block">
-        <div className="overflow-x-auto">
-          <ReportTable
-            campaign={campaign}
-            lines={displayLines}
-            fields={fields}
-            canEditMarketingFlag={canEditMarketingFlag}
-            showAck={showAck}
-            selected={selected}
-            onToggleSelected={toggleSelected}
-            flagFor={flagFor}
-            onToggleFlag={onToggleFlag}
-            cellChanged={cellChanged}
-            rowAdded={rowAdded}
-            lineHasUnacked={lineHasUnacked}
-            onAcknowledgeLine={ackLine}
-          />
-        </div>
+      {/* ── desktop table (Pattern F band layout — sticky header + synced
+            top/bottom scrollbars; «Изменение»+«Номенклатура» frozen) ── */}
+      <Card className="hidden overflow-clip p-0 md:block">
+        <ReportBandTable
+          campaign={campaign}
+          lines={displayLines}
+          fields={fields}
+          canEditMarketingFlag={canEditMarketingFlag}
+          selected={selected}
+          onToggleSelected={toggleSelected}
+          flagFor={flagFor}
+          onToggleFlag={onToggleFlag}
+          cellChanged={cellChanged}
+          changeKind={changeKind}
+          lineHasUnacked={lineHasUnacked}
+          onAcknowledgeLine={ackLine}
+        />
       </Card>
 
       {/* ── mobile cards (Mode B) ── */}
@@ -296,6 +327,7 @@ export function DepartmentReportView({
               onToggleFlag={onToggleFlag}
               cellChanged={cellChanged}
               added={rowAdded(line.id)}
+              kind={changeKind(line.id)}
               hasUnacked={lineHasUnacked(line.id)}
               onAcknowledge={() => ackLine(line.id)}
             />
@@ -312,25 +344,36 @@ export function DepartmentReportView({
   );
 }
 
-// ── desktop table ───────────────────────────────────────────────────────────────
+// ── desktop table — Pattern F band layout ───────────────────────────────────────
+// Ported from ShortCalendarTable: a horizontal overflow container traps
+// position:sticky, so the table is split into a non-scrolling HEADER band over a
+// vertically-scrolling BODY band, with three horizontal scrollers kept in sync (a
+// STICKY TOP scrollbar, the header, and the body's own scrollbar). «Изменение» +
+// «Номенклатура» are frozen; the rest of `fields` scrolls, followed by a trailing
+// «Ознакомление» action column.
+const ROW_H = 52;
+const CELL = "border-r border-gray-100 dark:border-border";
+const HEADER_H = "h-11";
+const GROUP_H = "h-7";
+const CHANGE_COL_W = 130;
+const ACK_COL_W = 150;
 
-interface ReportTableProps {
+interface ReportBandTableProps {
   campaign: PromoCampaign;
   lines: PromoLine[];
   fields: ReportField[];
   canEditMarketingFlag: boolean;
-  showAck: boolean;
   selected: Set<string>;
   onToggleSelected: (lineId: string) => void;
   flagFor: (lineId: string) => boolean;
   onToggleFlag: (lineId: string) => void;
   cellChanged: (lineId: string, fieldId: string) => boolean;
-  rowAdded: (lineId: string) => boolean;
+  changeKind: (lineId: string) => ChangeKind;
   lineHasUnacked: (lineId: string) => boolean;
   onAcknowledgeLine: (lineId: string) => void;
 }
 
-function ReportTable({
+function ReportBandTable({
   campaign,
   lines,
   fields,
@@ -340,136 +383,285 @@ function ReportTable({
   flagFor,
   onToggleFlag,
   cellChanged,
-  rowAdded,
+  changeKind,
   lineHasUnacked,
   onAcknowledgeLine,
-}: ReportTableProps) {
-  // Group header (marketing only — narrow reports have no field.group).
+}: ReportBandTableProps) {
+  // «Номенклатура» is frozen with «Изменение»; everything else in `fields` scrolls.
+  const scrollingFields = fields.filter((f) => f.id !== "nomenclature");
+  const nomField = fields.find((f) => f.id === "nomenclature");
+  const nomWidth = nomField?.width ?? 260;
+
+  // Group header (marketing only — narrow reports have no field.group). Widths
+  // (not colSpan, since flexbox divs replace the old <table>'s <th colSpan>) —
+  // computed over the SCROLLING columns only («Изменение»/«Номенклатура» are frozen).
   const groups = React.useMemo(() => {
-    const out: { label: string; span: number }[] = [];
-    for (const f of fields) {
+    const out: { label: string; width: number }[] = [];
+    for (const f of scrollingFields) {
       const label = f.group ?? "";
       const last = out[out.length - 1];
-      if (last && last.label === label) last.span += 1;
-      else out.push({ label, span: 1 });
+      if (last && last.label === label) last.width += f.width;
+      else out.push({ label, width: f.width });
     }
     return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fields]);
   const hasGroups = fields.some((f) => f.group);
+
+  // Sticky header + synced horizontal scroll (Pattern F, ported verbatim from
+  // ShortCalendarTable) — the header is sticky to the PAGE scroll; three
+  // horizontal scrollers are kept in sync: a STICKY TOP scrollbar, the header
+  // band, and the body's bottom scrollbar.
+  const headRef = React.useRef<HTMLDivElement>(null);
+  const bodyRef = React.useRef<HTMLDivElement>(null);
+  const topScrollRef = React.useRef<HTMLDivElement>(null);
+  const frozenHeadRef = React.useRef<HTMLDivElement>(null);
+
+  const [frozenW, setFrozenW] = React.useState(0);
+  const [scrollW, setScrollW] = React.useState(0);
+
+  React.useLayoutEffect(() => {
+    function measure() {
+      if (frozenHeadRef.current) setFrozenW(frozenHeadRef.current.offsetWidth);
+      if (bodyRef.current) setScrollW(bodyRef.current.scrollWidth);
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (bodyRef.current) ro.observe(bodyRef.current);
+    if (frozenHeadRef.current) ro.observe(frozenHeadRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [lines]);
+
+  // Mirror one scroller's scrollLeft onto the other two (idempotent writes, so
+  // the resulting scroll events self-terminate — no re-entrancy flag needed).
+  const syncScroll = React.useCallback((from: "top" | "body") => {
+    const src = from === "top" ? topScrollRef.current : bodyRef.current;
+    const x = src?.scrollLeft ?? 0;
+    if (headRef.current && headRef.current.scrollLeft !== x)
+      headRef.current.scrollLeft = x;
+    if (
+      from !== "top" &&
+      topScrollRef.current &&
+      topScrollRef.current.scrollLeft !== x
+    )
+      topScrollRef.current.scrollLeft = x;
+    if (from !== "body" && bodyRef.current && bodyRef.current.scrollLeft !== x)
+      bodyRef.current.scrollLeft = x;
+  }, []);
 
   if (lines.length === 0) {
     return null;
   }
 
   return (
-    <table className="w-full border-collapse text-sm">
-      <thead>
-        {hasGroups && (
-          <tr className="border-b bg-gray-50/80 dark:bg-muted/40">
-            {canEditMarketingFlag && <th className="w-10" />}
-            {groups.map((g, i) => (
-              <th
-                key={i}
-                colSpan={g.span}
-                className="border-l px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:border-l-0"
+    <>
+      {/* ── STICKY TOP band — pinned to the page scroll. `-top-4` cancels
+            <main>'s p-4 (16px) so it sits flush at the content top. ─────────── */}
+      <div className="sticky -top-4 z-30 border-b bg-gray-50 dark:bg-muted/40">
+        {/* Top horizontal scrollbar — synced with the body's bottom scrollbar. A
+            spacer the width of the frozen pane keeps it aligned with the scroll
+            area; the inner track width = the scroll content width so the thumb
+            matches. */}
+        <div className="flex">
+          <div className="shrink-0" style={{ width: frozenW }} />
+          <div
+            ref={topScrollRef}
+            onScroll={() => syncScroll("top")}
+            className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+          >
+            <div style={{ width: scrollW, height: 1 }} />
+          </div>
+        </div>
+
+        {/* Group header (marketing only) + column-title rows */}
+        <div className="flex">
+          <div
+            ref={frozenHeadRef}
+            className="flex shrink-0 flex-col border-r"
+          >
+            {hasGroups && (
+              <div className={cn("flex items-center border-b", GROUP_H)} />
+            )}
+            <div className={cn("flex items-center", HEADER_H)}>
+              {canEditMarketingFlag && <div className="w-10 shrink-0" />}
+              <div
+                className={cn(
+                  "flex h-full shrink-0 items-center px-3 text-xs font-semibold text-gray-700 dark:text-gray-200",
+                  CELL
+                )}
+                style={{ width: CHANGE_COL_W }}
               >
-                {g.label}
-              </th>
-            ))}
-            <th />
-          </tr>
-        )}
-        <tr className="border-b bg-gray-50/80 dark:bg-muted/40">
-          {canEditMarketingFlag && (
-            <th className="sticky left-0 z-10 w-10 bg-gray-50/80 dark:bg-muted/40 px-2 py-2" />
-          )}
-          {fields.map((f) => (
-            <th
-              key={f.id}
-              className={cn(
-                "whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-200",
-                isNumericKind(f.kind) && "text-right",
-                f.kind === "check" && "text-center"
+                Изменение
+              </div>
+              <div
+                className="flex h-full shrink-0 items-center px-3 text-xs font-semibold text-gray-700 dark:text-gray-200"
+                style={{ width: nomWidth }}
+              >
+                Номенклатура
+              </div>
+            </div>
+          </div>
+          <div ref={headRef} className="min-w-0 flex-1 overflow-hidden">
+            <div className="min-w-max">
+              {hasGroups && (
+                <div className={cn("flex items-center border-b", GROUP_H)}>
+                  {groups.map((g, i) => (
+                    <div
+                      key={i}
+                      style={{ width: g.width }}
+                      className="shrink-0 border-l px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:border-l-0"
+                    >
+                      {g.label}
+                    </div>
+                  ))}
+                  <div style={{ width: ACK_COL_W }} className="shrink-0" />
+                </div>
               )}
-            >
-              {f.label}
-            </th>
-          ))}
-          <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 dark:text-gray-200">
-            {/* acknowledge action column */}
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {lines.map((line) => {
-          const struck = line.removed || line.rejected;
-          const added = rowAdded(line.id);
-          return (
-            <tr
-              key={line.id}
-              className={cn(
-                "border-b last:border-0 hover:bg-gray-50/50 dark:hover:bg-accent",
-                added && "bg-emerald-50/60 dark:bg-emerald-500/10"
-              )}
-            >
-              {canEditMarketingFlag && (
-                <td
+              <div className={cn("flex items-center", HEADER_H)}>
+                {scrollingFields.map((f) => (
+                  <div
+                    key={f.id}
+                    style={{ width: f.width }}
+                    className={cn(
+                      "flex h-full shrink-0 items-center px-3 text-xs font-semibold text-gray-700 dark:text-gray-200 truncate",
+                      CELL,
+                      isNumericKind(f.kind) && "justify-end",
+                      f.kind === "check" && "justify-center"
+                    )}
+                  >
+                    {f.label}
+                  </div>
+                ))}
+                <div
+                  style={{ width: ACK_COL_W }}
                   className={cn(
-                    "sticky left-0 z-10 bg-white dark:bg-card px-2 py-2",
-                    added && "bg-emerald-50 dark:bg-emerald-500/10"
+                    "flex h-full shrink-0 items-center px-3 text-xs font-semibold text-gray-700 dark:text-gray-200",
+                    CELL
                   )}
                 >
-                  <Checkbox
-                    checked={selected.has(line.id)}
-                    onCheckedChange={() => onToggleSelected(line.id)}
-                    aria-label="Выбрать строку"
-                  />
-                </td>
-              )}
-              {fields.map((f) => {
-                const changed = cellChanged(line.id, f.id);
-                return (
-                  <td
-                    key={f.id}
-                    className={cn(
-                      "whitespace-nowrap px-3 py-2 align-middle",
-                      isNumericKind(f.kind) && "text-right tabular-nums",
-                      f.kind === "check" && "text-center",
-                      struck && "text-gray-400 dark:text-gray-500 line-through",
-                      changed && "bg-amber-100 dark:bg-amber-500/15 ring-1 ring-inset ring-amber-300 dark:ring-amber-500/40"
-                    )}
-                  >
-                    <CellValue
-                      field={f}
-                      line={line}
-                      campaign={campaign}
-                      canEditMarketingFlag={canEditMarketingFlag}
-                      flagFor={flagFor}
-                      onToggleFlag={onToggleFlag}
+                  Ознакомление
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── BODY band — natural height; the MAIN PAGE handles vertical scroll ── */}
+      <div className="flex">
+        {/* Frozen pane — bulk-select checkbox (marketing) + «Изменение» + «Номенклатура» */}
+        <div className="shrink-0 border-r bg-white dark:bg-card">
+          {lines.map((line) => {
+            const struck = line.removed || line.rejected;
+            const nomValue = nomField
+              ? String(nomField.value(line, campaign))
+              : line.nomenclatureId;
+            return (
+              <div
+                key={line.id}
+                style={{ height: ROW_H }}
+                className="flex items-center border-b last:border-b-0"
+              >
+                {canEditMarketingFlag && (
+                  <div className="flex w-10 shrink-0 items-center justify-center">
+                    <Checkbox
+                      checked={selected.has(line.id)}
+                      onCheckedChange={() => onToggleSelected(line.id)}
+                      aria-label="Выбрать строку"
                     />
-                  </td>
-                );
-              })}
-              <td className="whitespace-nowrap px-3 py-2 text-right">
-                {lineHasUnacked(line.id) && (
-                  <button
-                    type="button"
-                    onClick={() => onAcknowledgeLine(line.id)}
-                    className={cn(
-                      buttonVariants({ variant: "ghost", size: "sm" }),
-                      "h-8 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/15"
-                    )}
-                  >
-                    <Check className="size-3.5" />
-                    Ознакомлен
-                  </button>
+                  </div>
                 )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+                <div
+                  className={cn("flex h-full shrink-0 items-center px-3", CELL)}
+                  style={{ width: CHANGE_COL_W }}
+                >
+                  <ChangePlashka kind={changeKind(line.id)} />
+                </div>
+                <div
+                  className={cn(
+                    "flex h-full shrink-0 items-center px-3 text-sm text-gray-900 dark:text-gray-100",
+                    struck && "text-gray-400 dark:text-gray-500 line-through"
+                  )}
+                  style={{ width: nomWidth }}
+                >
+                  <span className="truncate">{nomValue}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Scrolling pane — the BOTTOM scrollbar; drives the header + top scrollbar. */}
+        <div
+          ref={bodyRef}
+          onScroll={() => syncScroll("body")}
+          className="min-w-0 flex-1 overflow-x-auto"
+        >
+          <div className="min-w-max">
+            {lines.map((line) => {
+              const struck = line.removed || line.rejected;
+              return (
+                <div
+                  key={line.id}
+                  style={{ height: ROW_H }}
+                  className="flex items-center border-b last:border-b-0"
+                >
+                  {scrollingFields.map((f) => {
+                    const changed = cellChanged(line.id, f.id);
+                    return (
+                      <div
+                        key={f.id}
+                        style={{ width: f.width }}
+                        className={cn(
+                          "flex h-full shrink-0 items-center px-3 text-sm text-gray-800 dark:text-gray-100 truncate",
+                          CELL,
+                          isNumericKind(f.kind) && "justify-end tabular-nums",
+                          f.kind === "check" && "justify-center",
+                          struck && "text-gray-400 dark:text-gray-500 line-through",
+                          changed &&
+                            "bg-amber-100 dark:bg-amber-500/15 ring-1 ring-inset ring-amber-300 dark:ring-amber-500/40"
+                        )}
+                      >
+                        <CellValue
+                          field={f}
+                          line={line}
+                          campaign={campaign}
+                          canEditMarketingFlag={canEditMarketingFlag}
+                          flagFor={flagFor}
+                          onToggleFlag={onToggleFlag}
+                        />
+                      </div>
+                    );
+                  })}
+                  <div
+                    style={{ width: ACK_COL_W }}
+                    className={cn("flex h-full shrink-0 items-center px-3", CELL)}
+                  >
+                    {lineHasUnacked(line.id) && (
+                      <button
+                        type="button"
+                        onClick={() => onAcknowledgeLine(line.id)}
+                        className={cn(
+                          buttonVariants({ variant: "ghost", size: "sm" }),
+                          "h-8 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/15"
+                        )}
+                      >
+                        <Check className="size-3.5" />
+                        Ознакомлен
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -486,6 +678,7 @@ interface ReportCardProps {
   onToggleFlag: (lineId: string) => void;
   cellChanged: (lineId: string, fieldId: string) => boolean;
   added: boolean;
+  kind: ChangeKind;
   hasUnacked: boolean;
   onAcknowledge: () => void;
 }
@@ -501,6 +694,7 @@ function ReportCard({
   onToggleFlag,
   cellChanged,
   added,
+  kind,
   hasUnacked,
   onAcknowledge,
 }: ReportCardProps) {
@@ -543,11 +737,7 @@ function ReportCard({
             </div>
           </div>
         </div>
-        {added && (
-          <Badge className="shrink-0 rounded-full border-0 bg-emerald-100 dark:bg-emerald-500/20 text-[10px] text-emerald-800 dark:text-emerald-300">
-            добавлено
-          </Badge>
-        )}
+        <ChangePlashka kind={kind} />
       </div>
 
       <dl className="mt-3 space-y-1.5">
