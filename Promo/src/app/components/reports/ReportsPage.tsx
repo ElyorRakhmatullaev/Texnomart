@@ -31,6 +31,7 @@ import {
   getPromoLines,
   getReportAccess,
   getReportChangeSet,
+  getReportSnapshot,
   getSentCampaigns,
   type ReportDepartment,
 } from "../../../lib/promo-mock-data";
@@ -367,6 +368,7 @@ export function ReportsPage() {
             campaignLabel={`${campaign.id} · ${campaign.name}`}
             versions={getCampaignVersions(campaign.id)}
             currentReport={buildCampaignReport(lines)}
+            snapshotFor={(v) => getReportSnapshot(campaign.id, v)}
           />
         </>
       )}

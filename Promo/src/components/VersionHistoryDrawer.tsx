@@ -109,6 +109,10 @@ interface VersionHistoryDrawerProps {
   deadlineChange?: DeadlineChangeRequest;
   /** 4th-round §8/§9 — auto-forward to КД after the Старший-КМ SLA lapsed. */
   autoForward?: { at: Date; seniorSlaDays: number };
+  /** Report per-version snapshot resolver (S5). When provided, «История версий»
+   *  versions become clickable → their read-only snapshot renders in «Полный
+   *  актуальный отчёт», and the newest version is marked «Текущая версия». */
+  snapshotFor?: (version: number) => CampaignReportRow[] | undefined;
 }
 
 /**
@@ -134,15 +138,30 @@ export function VersionHistoryDrawer({
   overdueDays = 0,
   deadlineChange,
   autoForward,
+  snapshotFor,
 }: VersionHistoryDrawerProps) {
   const [view, setView] = React.useState<ViewKey>("history");
   const hasPending = !!pendingChanges && pendingChanges.length > 0;
+
+  // Selected «История версий» version (S5) — a read-only snapshot of an older
+  // version, rendered in «Полный актуальный отчёт». Reset whenever the drawer
+  // opens/closes so it never leaks between campaigns.
+  const [selectedVersion, setSelectedVersion] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    setSelectedVersion(null);
+  }, [open]);
 
   // Versions that actually carry a field-level diff (for «Только изменения»).
   const changeVersions = React.useMemo(
     () => versions.filter((v) => v.changes.length > 0),
     [versions]
   );
+
+  const latestVersion = versions[0]?.version;
+  const snapshotRows =
+    snapshotFor && selectedVersion != null
+      ? (snapshotFor(selectedVersion) ?? currentReport)
+      : currentReport;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -234,11 +253,27 @@ export function VersionHistoryDrawer({
             value="report"
             className="m-0 flex-1 overflow-y-auto p-4"
           >
-            {!currentReport || currentReport.length === 0 ? (
+            {snapshotFor && selectedVersion != null && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/15 p-3">
+                <p className="text-sm text-blue-800 dark:text-blue-300">
+                  Просмотр версии {selectedVersion} — данные на момент
+                  отправки (только чтение).
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7"
+                  onClick={() => setSelectedVersion(null)}
+                >
+                  Вернуться к актуальной
+                </Button>
+              </div>
+            )}
+            {!snapshotRows || snapshotRows.length === 0 ? (
               <EmptyNote text="Актуальный отчёт недоступен — в акции пока нет строк." />
             ) : (
               <div className="space-y-2">
-                {currentReport.map((row) => (
+                {snapshotRows.map((row) => (
                   <div
                     key={row.lineId}
                     className={cn(
@@ -391,37 +426,72 @@ export function VersionHistoryDrawer({
               </div>
             )}
 
-            {versions.map((v) => (
-              <div
-                key={v.id}
-                className="rounded-lg border bg-card p-3 shadow-[0px_2px_4px_rgba(204,204,204,0.25)]"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2">
-                    <Badge
-                      className={`${CHANGE_TYPE_STYLE[v.changeType]} border-0 rounded-full text-xs`}
-                    >
-                      {v.changeType}
-                    </Badge>
-                    <span className="text-xs font-medium text-gray-500">
-                      в. {v.version}
+            {versions.map((v) => {
+              const isCurrent = v.version === latestVersion;
+              const isSelected = snapshotFor && selectedVersion === v.version;
+              const cardBody = (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">
+                      <Badge
+                        className={`${CHANGE_TYPE_STYLE[v.changeType]} border-0 rounded-full text-xs`}
+                      >
+                        {v.changeType}
+                      </Badge>
+                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                        в. {v.version}
+                      </span>
+                      {snapshotFor && isCurrent && (
+                        <Badge className="border-0 rounded-full bg-emerald-50 dark:bg-emerald-500/15 text-xs text-emerald-700 dark:text-emerald-300">
+                          Текущая версия
+                        </Badge>
+                      )}
                     </span>
-                  </span>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    <RuDate value={v.date} withTime />
-                  </span>
-                </div>
-                <p className="mt-2 text-sm">{v.summary}</p>
-                {v.changes.length > 0 && (
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      <RuDate value={v.date} withTime />
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm">{v.summary}</p>
+                  {v.changes.length > 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Изменённых полей: {v.changes.length}
+                    </p>
+                  )}
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Изменённых полей: {v.changes.length}
+                    {v.author} · {v.role}
                   </p>
-                )}
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {v.author} · {v.role}
-                </p>
-              </div>
-            ))}
+                </>
+              );
+
+              if (!snapshotFor) {
+                return (
+                  <div
+                    key={v.id}
+                    className="rounded-lg border bg-card p-3 shadow-[0px_2px_4px_rgba(204,204,204,0.25)]"
+                  >
+                    {cardBody}
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedVersion(v.version);
+                    setView("report");
+                  }}
+                  className={cn(
+                    "w-full text-left rounded-lg border bg-card p-3 shadow-[0px_2px_4px_rgba(204,204,204,0.25)] transition-colors hover:bg-gray-50 dark:hover:bg-muted/40",
+                    isCurrent && "ring-1 ring-emerald-300 dark:ring-emerald-500/40",
+                    isSelected && "ring-2 ring-primary"
+                  )}
+                >
+                  {cardBody}
+                </button>
+              );
+            })}
           </TabsContent>
         </Tabs>
 

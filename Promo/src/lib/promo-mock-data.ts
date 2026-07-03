@@ -2437,6 +2437,39 @@ export function getCampaignVersions(campaignId: string): CampaignVersion[] {
   ];
 }
 
+// Per-version report snapshots (§7): the latest version = the live report; seeded
+// earlier versions show a few pre-change field values so «История версий» → выбор
+// версии renders a visibly different read-only snapshot. Illustrative mock.
+const REPORT_SNAPSHOT_OVERRIDES: Record<string, Record<number, Record<string, Record<string, string>>>> = {
+  // campaignId → version → lineId → { fieldLabel → old display value }
+  "UN-2026-015": {
+    1: {
+      "L-0019": { "Новая цена": "5 200 000 сум", "Скидка": "8%" },
+    },
+  },
+};
+
+export function getReportSnapshot(
+  campaignId: string,
+  version: number
+): CampaignReportRow[] | undefined {
+  const versions = getCampaignVersions(campaignId);
+  if (!versions.length) return undefined;
+  const base = buildCampaignReport(getPromoLines(campaignId));
+  const latest = versions[0].version;
+  if (version === latest) return base;
+  const overrides = REPORT_SNAPSHOT_OVERRIDES[campaignId]?.[version];
+  if (!overrides) return base; // valid snapshot (equals current) for un-seeded older versions
+  return base.map((row) => {
+    const o = overrides[row.lineId];
+    if (!o) return row;
+    return {
+      ...row,
+      fields: row.fields.map((f) => (o[f.label] != null ? { ...f, value: o[f.label] } : f)),
+    };
+  });
+}
+
 // ── S4 — Изменение после согласования (§5.1, §5.2, §11.8) ──────────────────────
 // After a campaign is «Согласовано и отправлено смежным отделам», any edit is a
 // tracked change detected by diffing the live lines/period against the last sent
