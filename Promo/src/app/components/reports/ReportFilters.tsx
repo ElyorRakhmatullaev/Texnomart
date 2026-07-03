@@ -54,12 +54,17 @@ export const EMPTY_REPORT_FILTERS: ReportFilterState = { columns: {}, change: []
 const ENUM_COLUMN_IDS = new Set(["priznak", "type"]);
 
 function parseNum(s: string): number | null {
-  const digits = s.replace(/[^\d]/g, "");
-  return digits ? Number(digits) : null;
+  const cleaned = s.replace(/[^\d,.-]/g, "").replace(",", ".");
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : null;
 }
 function parseRuDate(s: string): number | null {
   const m = s.match(/(\d{2})\.(\d{2})\.(\d{4})/);
   return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])).getTime() : null;
+}
+function parseIsoLocal(s: string): number | null {
+  const m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime() : null;
 }
 
 export function countActiveReportFilters(s: ReportFilterState): number {
@@ -122,9 +127,14 @@ export function applyReportFilters(
       }
       if (col.kind === "date") {
         const t = parseRuDate(sv);
-        if (f.from && (t == null || t < new Date(f.from).getTime())) return false;
-        // include the whole "to" day: add < to+1day
-        if (f.to && (t == null || t > new Date(f.to).getTime() + 86_400_000 - 1)) return false;
+        if (f.from) {
+          const ft = parseIsoLocal(f.from);
+          if (ft != null && (t == null || t < ft)) return false;
+        }
+        if (f.to) {
+          const tt = parseIsoLocal(f.to);
+          if (tt != null && (t == null || t > tt + 86_400_000 - 1)) return false;
+        }
       }
     }
     return true;
