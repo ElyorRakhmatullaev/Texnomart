@@ -2923,6 +2923,39 @@ export function reportCellChange(
   return set.changedCells.find((c) => c.lineId === lineId && c.fieldId === fieldId);
 }
 
+// Roster of adjacent-department staff (for the «кто ознакомился» view — Task 4.3)
+// and a seed of partial acknowledgements so that view has a realistic mix on load.
+export interface ReportRosterUser { id: string; name: string; }
+const REPORT_ROSTER: Record<ReportDepartment, ReportRosterUser[]> = {
+  marketing: [
+    { id: "u-mkt-1", name: "Ахмедова Дилноза" },
+    { id: "u-mkt-2", name: "Юсупов Тимур" },
+    { id: "u-mkt-3", name: "Каримова Севара" },
+  ],
+  purchasing: [
+    { id: "u-buy-1", name: "Сотрудник закупа АС" },
+    { id: "u-buy-2", name: "Рахимов Джасур" },
+  ],
+  analytics: [
+    { id: "u-an-1", name: "Аналитик КР" },
+    { id: "u-an-2", name: "Собиров Азиз" },
+  ],
+};
+export function getReportRoster(department: ReportDepartment): ReportRosterUser[] {
+  return REPORT_ROSTER[department] ?? [];
+}
+// Partial acknowledgements so the «кто ознакомился» view has a realistic mix.
+// version = 2, the actual latest report version of UN-2026-015 (getReportVersionNo).
+const REPORT_ACK_SEED: { campaignId: string; department: ReportDepartment; version: number; userId: string; lineId: string; at: string }[] = [
+  { campaignId: "UN-2026-015", department: "marketing", version: 2, userId: "u-mkt-1", lineId: "L-0019", at: new Date(2026, 5, 5, 12, 10).toISOString() },
+  { campaignId: "UN-2026-015", department: "marketing", version: 2, userId: "u-mkt-1", lineId: "L-0021", at: new Date(2026, 5, 5, 12, 11).toISOString() },
+];
+export function getReportAckSeed(campaignId: string, department: ReportDepartment, version: number) {
+  return REPORT_ACK_SEED.filter(
+    (r) => r.campaignId === campaignId && r.department === department && r.version === version
+  );
+}
+
 // ── S6 — Центр уведомлений (notifications) — spec §11.3 ──────────────────────
 
 /**

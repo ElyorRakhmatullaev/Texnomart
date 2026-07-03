@@ -14,6 +14,7 @@ import {
 } from "@texnomart/ui/select";
 import { Label } from "@texnomart/ui/label";
 import { useRole } from "../../role-context";
+import { useCurrentUser } from "../../current-user-context";
 import { VersionHistoryDrawer } from "../../../components/VersionHistoryDrawer";
 import { DepartmentReportView } from "./DepartmentReportView";
 import { reportColumnsFor } from "./reportFields";
@@ -32,11 +33,15 @@ import {
   getReportAccess,
   getReportChangeSet,
   getReportSnapshot,
+  getReportVersionNo,
   getSentCampaigns,
   type ReportDepartment,
 } from "../../../lib/promo-mock-data";
-
-const EMPTY_SET: ReadonlySet<string> = new Set();
+import {
+  acknowledgeLine,
+  acknowledgeLines,
+  getAckedLines,
+} from "../../../lib/report-ack-store";
 
 export function ReportsPage() {
   const { currentRole } = useRole();
@@ -120,28 +125,44 @@ export function ReportsPage() {
     [changeSet, lineById]
   );
 
-  // ── acknowledgement state, keyed per (campaign + department) view ──
+  // ── acknowledgement state — per-user, per (campaign + department + version),
+  // backed by localStorage (`report-ack-store`) so it survives reload and stays
+  // independent per logged-in user (E-1 §2). `viewKey` still keys the child's
+  // `key=` prop below so per-view local UI state resets on tab/campaign switch.
   const viewKey = `${campaignId}:${department}`;
-  const [ackAll, setAckAll] = React.useState<Set<string>>(new Set());
-  const [ackLines, setAckLines] = React.useState<Map<string, Set<string>>>(
-    new Map()
+  const { currentUser } = useCurrentUser();
+  const userId = currentUser?.id ?? "anon";
+  const version = campaign ? getReportVersionNo(campaign) : 0;
+  const [ackTick, setAckTick] = React.useState(0);
+  const acknowledgedLines = React.useMemo(
+    () =>
+      campaign
+        ? getAckedLines({ campaignId, department, version }, userId)
+        : new Set<string>(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [campaignId, department, version, userId, ackTick, campaign]
   );
-  const acknowledgedAll = ackAll.has(viewKey);
-  const acknowledgedLines = (ackLines.get(viewKey) ?? EMPTY_SET) as Set<string>;
-  const onAcknowledgeAll = () =>
-    setAckAll((prev) => new Set(prev).add(viewKey));
-  const onAcknowledgeLine = (lineId: string) =>
-    setAckLines((prev) => {
-      const next = new Map(prev);
-      const set = new Set(next.get(viewKey) ?? []);
-      set.add(lineId);
-      next.set(viewKey, set);
-      return next;
-    });
+  const changedLineIds = React.useMemo(() => {
+    const ids = new Set<string>([
+      ...changeSet.addedLineIds,
+      ...changeSet.removedLineIds,
+    ]);
+    changeSet.changedCells.forEach((c) => ids.add(c.lineId));
+    return [...ids];
+  }, [changeSet]);
+  const onAcknowledgeLine = (lineId: string) => {
+    acknowledgeLine({ campaignId, department, version }, userId, lineId);
+    setAckTick((t) => t + 1);
+  };
+  const onAcknowledgeAll = () => {
+    const ids = changedLineIds.filter((id) => !acknowledgedLines.has(id));
+    acknowledgeLines({ campaignId, department, version }, userId, ids);
+    setAckTick((t) => t + 1);
+  };
 
   const isAckedPage = React.useCallback(
-    (lineId: string) => acknowledgedAll || acknowledgedLines.has(lineId),
-    [acknowledgedAll, acknowledgedLines]
+    (lineId: string) => acknowledgedLines.has(lineId),
+    [acknowledgedLines]
   );
 
   // «Показать только изменённые» + column filters — both reset when the view changes.
@@ -349,7 +370,6 @@ export function ReportsPage() {
             fields={fields}
             onlyChanged={onlyChanged}
             onToggleOnlyChanged={setOnlyChanged}
-            acknowledgedAll={acknowledgedAll}
             acknowledgedLines={acknowledgedLines}
             onAcknowledgeAll={onAcknowledgeAll}
             onAcknowledgeLine={onAcknowledgeLine}

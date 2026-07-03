@@ -73,8 +73,7 @@ interface DepartmentReportViewProps {
   /** «Показать только изменённые/добавленные данные». */
   onlyChanged: boolean;
   onToggleOnlyChanged: (v: boolean) => void;
-  /** Acknowledgement (§11.4): whole report or per line. */
-  acknowledgedAll: boolean;
+  /** Acknowledgement (§11.4): per-user, per-line (backed by report-ack-store). */
   acknowledgedLines: Set<string>;
   onAcknowledgeAll: () => void;
   onAcknowledgeLine: (lineId: string) => void;
@@ -93,7 +92,6 @@ export function DepartmentReportView({
   fields,
   onlyChanged,
   onToggleOnlyChanged,
-  acknowledgedAll,
   acknowledgedLines,
   onAcknowledgeAll,
   onAcknowledgeLine,
@@ -119,8 +117,8 @@ export function DepartmentReportView({
   );
 
   const isAcked = React.useCallback(
-    (lineId: string) => acknowledgedAll || acknowledgedLines.has(lineId),
-    [acknowledgedAll, acknowledgedLines]
+    (lineId: string) => acknowledgedLines.has(lineId),
+    [acknowledgedLines]
   );
   const cellChanged = (lineId: string, fieldId: string) =>
     !!reportCellChange(changeSet, lineId, fieldId) && !isAcked(lineId);
@@ -147,7 +145,18 @@ export function DepartmentReportView({
     return null;
   };
 
-  const unackedCount = lines.filter((l) => lineHasUnacked(l.id)).length;
+  // Version-wide unacked count (NOT filtered by the visible `lines` prop) — the
+  // header button reflects the whole report version's changes, not just what's
+  // currently shown after column/only-changed filters (E-1 §2).
+  const allChangedIds = React.useMemo(() => {
+    const ids = new Set<string>([
+      ...changeSet.addedLineIds,
+      ...changeSet.removedLineIds,
+    ]);
+    changeSet.changedCells.forEach((c) => ids.add(c.lineId));
+    return [...ids];
+  }, [changeSet]);
+  const unackedChangesCount = allChangedIds.filter((id) => !isAcked(id)).length;
 
   // Version totals (§2) — do NOT decrease as the user acknowledges; they
   // describe the change composition of this report version, not read state.
@@ -263,10 +272,10 @@ export function DepartmentReportView({
               <History className="size-4" />
               История версий
             </Button>
-            {unackedCount > 0 && (
+            {unackedChangesCount > 0 && (
               <Button size="sm" onClick={ackAll}>
                 <CheckCheck className="size-4" />
-                Ознакомиться со всеми ({unackedCount})
+                Ознакомиться со всеми изменениями ({unackedChangesCount})
               </Button>
             )}
           </div>
