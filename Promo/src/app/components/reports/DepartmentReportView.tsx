@@ -17,6 +17,7 @@ import { Button, buttonVariants } from "@texnomart/ui/button";
 import { Checkbox } from "@texnomart/ui/checkbox";
 import { Switch } from "@texnomart/ui/switch";
 import { Label } from "@texnomart/ui/label";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import { cn } from "@texnomart/ui/utils";
 import { RuDate } from "../../../components/RuDate";
 import { OverdueTag } from "../../../components/OverdueTag";
@@ -30,6 +31,7 @@ import {
   reportCellChange,
   type PromoCampaign,
   type PromoLine,
+  type ReportCellChange,
   type ReportDepartment,
 } from "../../../lib/promo-mock-data";
 import {
@@ -122,6 +124,8 @@ export function DepartmentReportView({
   );
   const cellChanged = (lineId: string, fieldId: string) =>
     !!reportCellChange(changeSet, lineId, fieldId) && !isAcked(lineId);
+  const cellChangeFor = (lineId: string, fieldId: string) =>
+    isAcked(lineId) ? undefined : reportCellChange(changeSet, lineId, fieldId);
   const rowAdded = (lineId: string) =>
     changeSet.addedLineIds.includes(lineId) && !isAcked(lineId);
   const lineHasUnacked = (lineId: string) =>
@@ -145,11 +149,23 @@ export function DepartmentReportView({
 
   const unackedCount = lines.filter((l) => lineHasUnacked(l.id)).length;
 
-  // «Только изменённые» filters to lines with an unacknowledged change/addition.
+  // Version totals (§2) — do NOT decrease as the user acknowledges; they
+  // describe the change composition of this report version, not read state.
+  const addedCount = changeSet.addedLineIds.length;
+  const changedCount = new Set(changeSet.changedCells.map((c) => c.lineId)).size;
+  const excludedCount = changeSet.removedLineIds.length;
+
+  // «Только изменения» keeps any added/changed/excluded line of this version,
+  // independent of acknowledgement — a view of the version's change
+  // composition, not of unread state.
+  const isChangedLine = (lineId: string) =>
+    changeSet.addedLineIds.includes(lineId) ||
+    changeSet.removedLineIds.includes(lineId) ||
+    changeSet.changedCells.some((c) => c.lineId === lineId);
   const displayLines = React.useMemo(
-    () => (onlyChanged ? lines.filter((l) => lineHasUnacked(l.id)) : lines),
+    () => (onlyChanged ? lines.filter((l) => isChangedLine(l.id)) : lines),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lines, onlyChanged, acknowledgedAll, acknowledgedLines]
+    [lines, onlyChanged]
   );
 
   // ── marketing bulk-select (§7.2) ──
@@ -197,10 +213,21 @@ export function DepartmentReportView({
               <Badge className="rounded-full border-0 bg-blue-50 dark:bg-blue-500/15 text-xs text-blue-700 dark:text-blue-300">
                 Версия {versionNo}
               </Badge>
-              {hasChangeData && unackedCount > 0 && (
-                <Badge className="rounded-full border-0 bg-amber-100 dark:bg-amber-500/20 text-xs text-amber-800 dark:text-amber-300">
-                  Новых/изменённых: {unackedCount}
-                </Badge>
+              {hasChangeData && (
+                <>
+                  <Badge className="rounded-full border-0 bg-emerald-100 dark:bg-emerald-500/20 text-xs tabular-nums text-emerald-800 dark:text-emerald-300">
+                    Добавлено: {addedCount}
+                  </Badge>
+                  <Badge className="rounded-full border-0 bg-amber-100 dark:bg-amber-500/20 text-xs tabular-nums text-amber-800 dark:text-amber-300">
+                    Изменено: {changedCount}
+                  </Badge>
+                  <Badge className="rounded-full border-0 bg-red-100 dark:bg-red-500/20 text-xs tabular-nums text-red-800 dark:text-red-300">
+                    Исключено: {excludedCount}
+                  </Badge>
+                  <Badge className="rounded-full border-0 bg-gray-100 dark:bg-muted text-xs tabular-nums text-gray-700 dark:text-gray-300">
+                    Всего позиций: {lines.length}
+                  </Badge>
+                </>
               )}
             </div>
             <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
@@ -222,12 +249,13 @@ export function DepartmentReportView({
             {hasChangeData && (
               <div className="flex items-center gap-2 rounded-md border bg-gray-50 dark:bg-muted/40 px-2.5 py-1.5">
                 <Switch
-                  id="only-changed"
+                  id="only-changes"
                   checked={onlyChanged}
                   onCheckedChange={onToggleOnlyChanged}
+                  aria-label="Только изменения"
                 />
-                <Label htmlFor="only-changed" className="text-xs font-normal">
-                  Только изменённые
+                <Label htmlFor="only-changes" className="text-xs font-normal">
+                  Только изменения
                 </Label>
               </div>
             )}
@@ -316,6 +344,7 @@ export function DepartmentReportView({
           flagFor={flagFor}
           onToggleFlag={onToggleFlag}
           cellChanged={cellChanged}
+          cellChangeFor={cellChangeFor}
           changeKind={changeKind}
           lineHasUnacked={lineHasUnacked}
           onAcknowledgeLine={ackLine}
@@ -340,6 +369,7 @@ export function DepartmentReportView({
               flagFor={flagFor}
               onToggleFlag={onToggleFlag}
               cellChanged={cellChanged}
+              cellChangeFor={cellChangeFor}
               added={rowAdded(line.id)}
               kind={changeKind(line.id)}
               hasUnacked={lineHasUnacked(line.id)}
@@ -383,6 +413,7 @@ interface ReportBandTableProps {
   flagFor: (lineId: string) => boolean;
   onToggleFlag: (lineId: string) => void;
   cellChanged: (lineId: string, fieldId: string) => boolean;
+  cellChangeFor: (lineId: string, fieldId: string) => ReportCellChange | undefined;
   changeKind: (lineId: string) => ChangeKind;
   lineHasUnacked: (lineId: string) => boolean;
   onAcknowledgeLine: (lineId: string) => void;
@@ -399,6 +430,7 @@ function ReportBandTable({
   flagFor,
   onToggleFlag,
   cellChanged,
+  cellChangeFor,
   changeKind,
   lineHasUnacked,
   onAcknowledgeLine,
@@ -629,6 +661,7 @@ function ReportBandTable({
                 >
                   {scrollingFields.map((f) => {
                     const changed = cellChanged(line.id, f.id);
+                    const chg = cellChangeFor(line.id, f.id);
                     return (
                       <div
                         key={f.id}
@@ -643,14 +676,39 @@ function ReportBandTable({
                             "bg-amber-100 dark:bg-amber-500/15 ring-1 ring-inset ring-amber-300 dark:ring-amber-500/40"
                         )}
                       >
-                        <CellValue
-                          field={f}
-                          line={line}
-                          campaign={campaign}
-                          canEditMarketingFlag={canEditMarketingFlag}
-                          flagFor={flagFor}
-                          onToggleFlag={onToggleFlag}
-                        />
+                        {chg ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-help underline decoration-dotted decoration-amber-400 underline-offset-2">
+                                <CellValue
+                                  field={f}
+                                  line={line}
+                                  campaign={campaign}
+                                  canEditMarketingFlag={canEditMarketingFlag}
+                                  flagFor={flagFor}
+                                  onToggleFlag={onToggleFlag}
+                                />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs">
+                              <div>Было: <span className="tabular-nums">{chg.prevValue}</span></div>
+                              <div>Стало: <span className="tabular-nums font-medium">{chg.newValue}</span></div>
+                              <div className="mt-0.5 text-muted-foreground tabular-nums">
+                                {chg.changedAt.toLocaleDateString("ru-RU")}{" "}
+                                {chg.changedAt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <CellValue
+                            field={f}
+                            line={line}
+                            campaign={campaign}
+                            canEditMarketingFlag={canEditMarketingFlag}
+                            flagFor={flagFor}
+                            onToggleFlag={onToggleFlag}
+                          />
+                        )}
                       </div>
                     );
                   })}
@@ -694,6 +752,7 @@ interface ReportCardProps {
   flagFor: (lineId: string) => boolean;
   onToggleFlag: (lineId: string) => void;
   cellChanged: (lineId: string, fieldId: string) => boolean;
+  cellChangeFor: (lineId: string, fieldId: string) => ReportCellChange | undefined;
   added: boolean;
   kind: ChangeKind;
   hasUnacked: boolean;
@@ -711,6 +770,7 @@ function ReportCard({
   flagFor,
   onToggleFlag,
   cellChanged,
+  cellChangeFor,
   added,
   kind,
   hasUnacked,
@@ -762,6 +822,7 @@ function ReportCard({
       <dl className="mt-3 space-y-1.5">
         {bodyFields.map((f) => {
           const changed = cellChanged(line.id, f.id);
+          const chg = cellChangeFor(line.id, f.id);
           const editableFlag =
             canEditMarketingFlag && f.id === MARKETING_EDITABLE_FIELD;
           return (
@@ -781,14 +842,39 @@ function ReportCard({
                   struck && f.kind !== "check" && "text-gray-400 dark:text-gray-500 line-through"
                 )}
               >
-                <CellValue
-                  field={f}
-                  line={line}
-                  campaign={campaign}
-                  canEditMarketingFlag={canEditMarketingFlag}
-                  flagFor={flagFor}
-                  onToggleFlag={onToggleFlag}
-                />
+                {chg ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help underline decoration-dotted decoration-amber-400 underline-offset-2">
+                        <CellValue
+                          field={f}
+                          line={line}
+                          campaign={campaign}
+                          canEditMarketingFlag={canEditMarketingFlag}
+                          flagFor={flagFor}
+                          onToggleFlag={onToggleFlag}
+                        />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="text-xs">
+                      <div>Было: <span className="tabular-nums">{chg.prevValue}</span></div>
+                      <div>Стало: <span className="tabular-nums font-medium">{chg.newValue}</span></div>
+                      <div className="mt-0.5 text-muted-foreground tabular-nums">
+                        {chg.changedAt.toLocaleDateString("ru-RU")}{" "}
+                        {chg.changedAt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <CellValue
+                    field={f}
+                    line={line}
+                    campaign={campaign}
+                    canEditMarketingFlag={canEditMarketingFlag}
+                    flagFor={flagFor}
+                    onToggleFlag={onToggleFlag}
+                  />
+                )}
               </dd>
             </div>
           );
@@ -867,7 +953,7 @@ function EmptyNote({ onlyChanged }: { onlyChanged: boolean }) {
       <Info className="size-8 text-muted-foreground/50" />
       <p className="max-w-[280px] text-sm text-muted-foreground">
         {onlyChanged
-          ? "Непрочитанных изменений нет — все данные отмечены как прочитанные."
+          ? "В этой версии отчёта нет изменений — все позиции без добавлений, изменений и исключений."
           : "В отчёте пока нет строк."}
       </p>
     </div>
