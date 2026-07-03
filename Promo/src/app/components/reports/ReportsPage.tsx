@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, ChevronUp, Inbox, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, Inbox, SlidersHorizontal } from "lucide-react";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { Tabs, TabsList, TabsTrigger } from "@texnomart/ui/tabs";
 import { Button } from "@texnomart/ui/button";
@@ -17,6 +17,7 @@ import { useRole } from "../../role-context";
 import { VersionHistoryDrawer } from "../../../components/VersionHistoryDrawer";
 import { DepartmentReportView } from "./DepartmentReportView";
 import { reportColumnsFor } from "./reportFields";
+import { exportReportXlsx } from "../../../lib/report-xlsx";
 import {
   ReportFilters,
   applyReportFilters,
@@ -167,9 +168,10 @@ export function ReportsPage() {
     changeSet.addedLineIds.includes(lineId) ||
     changeSet.removedLineIds.includes(lineId) ||
     changeSet.changedCells.some((c) => c.lineId === lineId);
-  const shownCount = (
-    onlyChanged ? filteredLines.filter((l) => isChangedLine(l.id)) : filteredLines
-  ).length;
+  const shownLines = onlyChanged
+    ? filteredLines.filter((l) => isChangedLine(l.id))
+    : filteredLines;
+  const shownCount = shownLines.length;
   const activeFilterCount = countActiveReportFilters(filters);
 
   // Version-history drawer (deferred open — Radix self-dismiss guard).
@@ -276,30 +278,50 @@ export function ReportsPage() {
             </div>
           </div>
 
-          {/* ── «Фильтры» toggle + «Показано: N» (E-1 §1) ── */}
+          {/* ── «Фильтры» toggle + «Экспорт» + «Показано: N» (E-1 §1) ── */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 min-w-[120px] justify-between"
-              onClick={() => setFiltersOpen((o) => !o)}
-              aria-expanded={filtersOpen}
-            >
-              <span className="flex items-center gap-2">
-                <SlidersHorizontal className="size-4" />
-                Фильтры
-                {activeFilterCount > 0 && (
-                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
-                    {activeFilterCount}
-                  </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 min-w-[120px] justify-between"
+                onClick={() => setFiltersOpen((o) => !o)}
+                aria-expanded={filtersOpen}
+              >
+                <span className="flex items-center gap-2">
+                  <SlidersHorizontal className="size-4" />
+                  Фильтры
+                  {activeFilterCount > 0 && (
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </span>
+                {filtersOpen ? (
+                  <ChevronUp className="size-4" />
+                ) : (
+                  <ChevronDown className="size-4" />
                 )}
-              </span>
-              {filtersOpen ? (
-                <ChevronUp className="size-4" />
-              ) : (
-                <ChevronDown className="size-4" />
-              )}
-            </Button>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
+                disabled={shownLines.length === 0}
+                onClick={() =>
+                  exportReportXlsx({
+                    department,
+                    campaign,
+                    columns: fields,
+                    lines: shownLines,
+                    changeKind: changeKindPage,
+                  })
+                }
+              >
+                <Download className="size-4" />
+                Экспорт
+              </Button>
+            </div>
             <span className="text-sm text-muted-foreground">
               Показано:{" "}
               <span className="font-medium tabular-nums text-gray-900 dark:text-gray-100">
