@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Inbox } from "lucide-react";
+import { ChevronDown, ChevronUp, Inbox, SlidersHorizontal } from "lucide-react";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { Tabs, TabsList, TabsTrigger } from "@texnomart/ui/tabs";
+import { Button } from "@texnomart/ui/button";
 import {
   Select,
   SelectContent,
@@ -17,11 +18,18 @@ import { VersionHistoryDrawer } from "../../../components/VersionHistoryDrawer";
 import { DepartmentReportView } from "./DepartmentReportView";
 import { reportColumnsFor } from "./reportFields";
 import {
+  ReportFilters,
+  applyReportFilters,
+  countActiveReportFilters,
+  EMPTY_REPORT_FILTERS,
+} from "./ReportFilters";
+import {
   DEPARTMENT_SHORT,
   buildCampaignReport,
   getCampaignVersions,
   getPromoLines,
   getReportAccess,
+  getReportChangeSet,
   getSentCampaigns,
   type ReportDepartment,
 } from "../../../lib/promo-mock-data";
@@ -60,6 +68,10 @@ export function ReportsPage() {
   );
   const fields = React.useMemo(() => reportColumnsFor(department), [department]);
 
+  // «Изменение» classification for this campaign's report version, and the
+  // «Показано: N» / filter-panel wiring below both key off it (E-1 §1).
+  const changeSet = React.useMemo(() => getReportChangeSet(campaignId), [campaignId]);
+
   // ── marketing «В рекламу (выбрано маркетингом)» store (in-memory overrides) ──
   const [flags, setFlags] = React.useState<Map<string, boolean>>(new Map());
   const lineById = React.useMemo(
@@ -92,6 +104,20 @@ export function ReportsPage() {
     []
   );
 
+  // Which change plashka a line shows — mirrors DepartmentReportView's own
+  // `changeKind`, needed here (page level) for `applyReportFilters`.
+  const changeKindPage = React.useCallback(
+    (lineId: string): "added" | "changed" | "excluded" | null => {
+      const line = lineById.get(lineId);
+      if ((line && (line.removed || line.rejected)) || changeSet.removedLineIds.includes(lineId))
+        return "excluded";
+      if (changeSet.addedLineIds.includes(lineId)) return "added";
+      if (changeSet.changedCells.some((c) => c.lineId === lineId)) return "changed";
+      return null;
+    },
+    [changeSet, lineById]
+  );
+
   // ── acknowledgement state, keyed per (campaign + department) view ──
   const viewKey = `${campaignId}:${department}`;
   const [ackAll, setAckAll] = React.useState<Set<string>>(new Set());
@@ -111,9 +137,40 @@ export function ReportsPage() {
       return next;
     });
 
-  // «Показать только изменённые» — reset when the view changes.
+  const isAckedPage = React.useCallback(
+    (lineId: string) => acknowledgedAll || acknowledgedLines.has(lineId),
+    [acknowledgedAll, acknowledgedLines]
+  );
+
+  // «Показать только изменённые» + column filters — both reset when the view changes.
   const [onlyChanged, setOnlyChanged] = React.useState(false);
-  React.useEffect(() => setOnlyChanged(false), [campaignId, department]);
+  const [filters, setFilters] = React.useState(EMPTY_REPORT_FILTERS);
+  React.useEffect(() => {
+    setOnlyChanged(false);
+    setFilters(EMPTY_REPORT_FILTERS);
+  }, [campaignId, department]);
+
+  // «Фильтры» panel toggle (E-1 §1).
+  const [filtersOpen, setFiltersOpen] = React.useState(false);
+
+  const filteredLines = React.useMemo(
+    () =>
+      campaign
+        ? applyReportFilters(lines, fields, campaign, filters, changeKindPage, isAckedPage)
+        : lines,
+    [lines, fields, campaign, filters, changeKindPage, isAckedPage]
+  );
+
+  // «Показано: N позиций» — the final shown count, layering «Только изменения»
+  // on top of the column filters (mirrors DepartmentReportView's own `isChangedLine`).
+  const isChangedLine = (lineId: string) =>
+    changeSet.addedLineIds.includes(lineId) ||
+    changeSet.removedLineIds.includes(lineId) ||
+    changeSet.changedCells.some((c) => c.lineId === lineId);
+  const shownCount = (
+    onlyChanged ? filteredLines.filter((l) => isChangedLine(l.id)) : filteredLines
+  ).length;
+  const activeFilterCount = countActiveReportFilters(filters);
 
   // Version-history drawer (deferred open — Radix self-dismiss guard).
   const [historyOpen, setHistoryOpen] = React.useState(false);
@@ -219,10 +276,52 @@ export function ReportsPage() {
             </div>
           </div>
 
+          {/* ── «Фильтры» toggle + «Показано: N» (E-1 §1) ── */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 min-w-[120px] justify-between"
+              onClick={() => setFiltersOpen((o) => !o)}
+              aria-expanded={filtersOpen}
+            >
+              <span className="flex items-center gap-2">
+                <SlidersHorizontal className="size-4" />
+                Фильтры
+                {activeFilterCount > 0 && (
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </span>
+              {filtersOpen ? (
+                <ChevronUp className="size-4" />
+              ) : (
+                <ChevronDown className="size-4" />
+              )}
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Показано:{" "}
+              <span className="font-medium tabular-nums text-gray-900 dark:text-gray-100">
+                {shownCount.toLocaleString("ru-RU")}
+              </span>{" "}
+              позиций
+            </span>
+          </div>
+
+          <ReportFilters
+            columns={fields}
+            lines={lines}
+            campaign={campaign}
+            state={filters}
+            onChange={setFilters}
+            open={filtersOpen}
+          />
+
           <DepartmentReportView
             key={viewKey}
             campaign={campaign}
-            lines={lines}
+            lines={filteredLines}
             department={department}
             fields={fields}
             onlyChanged={onlyChanged}
