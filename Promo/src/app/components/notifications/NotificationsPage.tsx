@@ -9,6 +9,7 @@ import { PageHeader } from "@texnomart/shared/components/page-header";
 import type { FilterConfig } from "@texnomart/shared/types";
 import { useRole } from "../../role-context";
 import { useNotifications } from "./NotificationsProvider";
+import { useNotificationSettings } from "../notification-settings/NotificationSettingsProvider";
 import { NotificationItem } from "./NotificationItem";
 import {
   NOTIFICATION_TYPE_META,
@@ -62,14 +63,15 @@ function GroupedList({
 export function NotificationsPage() {
   const { currentRole } = useRole();
   const { notifications, acknowledge, acknowledgeMany } = useNotifications();
+  const { config: notificationConfig } = useNotificationSettings();
   const [typeFilter, setTypeFilter] = React.useState<Record<string, string>>({
     type: "all",
   });
 
   // §11.3.1 — what the active role may see, then the type filter.
   const visible = React.useMemo(
-    () => notificationsForRole(currentRole, notifications),
-    [currentRole, notifications]
+    () => notificationsForRole(currentRole, notifications, notificationConfig),
+    [currentRole, notifications, notificationConfig]
   );
   const filtered = React.useMemo(() => {
     const t = typeFilter.type ?? "all";

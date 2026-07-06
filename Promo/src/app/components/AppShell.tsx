@@ -19,6 +19,7 @@ import { useCurrentUser } from "../current-user-context";
 import { useTheme } from "../theme-context";
 import { getInitials } from "@texnomart/shared/utils/formatters";
 import { useNotifications } from "./notifications/NotificationsProvider";
+import { useNotificationSettings } from "./notification-settings/NotificationSettingsProvider";
 import { notificationsForRole } from "../../lib/promo-mock-data";
 
 /** «5 мин назад» / «2 ч назад» / «3 дн назад» — compact relative time for the bell. */
@@ -115,13 +116,14 @@ export function AppShell() {
   const { currentUser } = useCurrentUser();
   const { pathname } = useLocation();
   const { notifications } = useNotifications();
+  const { config: notificationConfig } = useNotificationSettings();
   const { theme, cycleTheme } = useTheme();
 
   // Bell shows only what the active role may see (§11.3.1); the nav badge + bell
   // count both come from this live, role-filtered set so acknowledging updates them.
   const visibleNotifications = React.useMemo(
-    () => notificationsForRole(currentRole, notifications),
-    [currentRole, notifications]
+    () => notificationsForRole(currentRole, notifications, notificationConfig),
+    [currentRole, notifications, notificationConfig]
   );
   const bellItems = React.useMemo(
     () =>
