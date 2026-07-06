@@ -21,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import { cn } from "@texnomart/ui/utils";
 import { RuDate } from "../../../components/RuDate";
 import { OverdueTag } from "../../../components/OverdueTag";
+import { useNotifications } from "../notifications/NotificationsProvider";
 import {
   DEPARTMENT_LABELS,
   getOverdueDays,
@@ -104,6 +105,7 @@ export function DepartmentReportView({
   onToggleFlag,
   onBulkFlag,
 }: DepartmentReportViewProps) {
+  const { notify } = useNotifications();
   const changeSet = getReportChangeSet(campaign.id);
   const sentAt = getReportSentAt(campaign);
   const versionNo = getReportVersionNo(campaign);
@@ -209,7 +211,14 @@ export function DepartmentReportView({
     toast.success("Позиция отмечена прочитанной.");
   };
   const marketingApprove = () => {
-    toast.success("Выбор «В рекламу» согласован. Категорийные менеджеры уведомлены.");
+    notify({
+      type: "ad-approval",
+      campaignId: campaign.id,
+      campaignName: campaign.name,
+      description:
+        "Маркетинг согласовал выбор позиций «В рекламу». Категорийные менеджеры уведомлены.",
+      href: "/reports",
+    });
   };
 
   return (
