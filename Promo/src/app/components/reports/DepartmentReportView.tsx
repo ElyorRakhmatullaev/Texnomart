@@ -215,8 +215,7 @@ export function DepartmentReportView({
       type: "ad-approval",
       campaignId: campaign.id,
       campaignName: campaign.name,
-      description:
-        "Маркетинг согласовал выбор позиций «В рекламу». Категорийные менеджеры уведомлены.",
+      description: "Маркетинг согласовал выбор позиций «В рекламу».",
       href: "/reports",
     });
   };
