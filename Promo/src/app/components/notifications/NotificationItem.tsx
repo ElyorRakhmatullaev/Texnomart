@@ -17,9 +17,13 @@ import { buttonVariants } from "@texnomart/ui/button";
 import { RuDate } from "../../../components/RuDate";
 import {
   NOTIFICATION_TYPE_META,
+  notificationLinksFor,
   type NotificationType,
   type PromoNotification,
 } from "../../../lib/promo-mock-data";
+import { rolesForType } from "../../../lib/notification-settings-store";
+import { useRole } from "../../role-context";
+import { useNotificationSettings } from "../notification-settings/NotificationSettingsProvider";
 
 const TYPE_ICONS: Record<NotificationType, LucideIcon> = {
   "data-changed": RefreshCw,
@@ -28,11 +32,6 @@ const TYPE_ICONS: Record<NotificationType, LucideIcon> = {
   "marketing-reapproval": RotateCcw,
   "km-assignment": UserPlus,
   "ad-approval": Megaphone,
-};
-
-const LINK_LABEL: Record<string, string> = {
-  "/reports": "Открыть отчёт",
-  "/full-calendar": "Открыть акцию",
 };
 
 interface NotificationItemProps {
@@ -46,6 +45,11 @@ export function NotificationItem({
 }: NotificationItemProps) {
   const meta = NOTIFICATION_TYPE_META[n.type];
   const Icon = TYPE_ICONS[n.type];
+  const { config } = useNotificationSettings();
+  const { currentRole } = useRole();
+  const tagRoles = rolesForType(n.type, config);
+  const links = notificationLinksFor(n);
+  const currentIncluded = tagRoles.includes(currentRole);
 
   return (
     <div
@@ -114,16 +118,39 @@ export function NotificationItem({
           <RuDate value={n.sentAt} withTime className="tabular-nums" />
         </div>
 
+        <div className="flex flex-wrap items-center gap-1 text-xs">
+          <span className="text-muted-foreground">Роли:</span>
+          {tagRoles.length === 0 ? (
+            <span className="text-muted-foreground">—</span>
+          ) : (
+            <span
+              className={cn(
+                "inline-flex items-center rounded-md px-1.5 py-0.5 font-medium",
+                currentIncluded
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-gray-100 text-gray-600 dark:bg-muted dark:text-gray-300"
+              )}
+              title={tagRoles.join(", ")}
+            >
+              {tagRoles.slice(0, 2).join(", ")}
+              {tagRoles.length > 2 ? ` +${tagRoles.length - 2}` : ""}
+            </span>
+          )}
+        </div>
+
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          <Link
-            to={n.href}
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "h-8"
-            )}
-          >
-            {LINK_LABEL[n.href] ?? "Открыть"}
-          </Link>
+          {links.map((lnk) => (
+            <Link
+              key={lnk.kind}
+              to={lnk.href}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "h-8"
+              )}
+            >
+              {lnk.label}
+            </Link>
+          ))}
           {!n.read && (
             <Button
               variant="ghost"
