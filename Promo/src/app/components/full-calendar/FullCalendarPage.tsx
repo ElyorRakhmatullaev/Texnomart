@@ -36,6 +36,7 @@ import {
 } from "../../../lib/promo-export";
 import { PromoNoFilter } from "../short-calendar/PromoNoFilter";
 import { useRole } from "../../role-context";
+import { useNotifications } from "../notifications/NotificationsProvider";
 import { FullCalendarGrid } from "./FullCalendarGrid";
 import { ColumnGroupToggle } from "./ColumnGroupToggle";
 import { AddNomenclatureDialog } from "./AddNomenclatureDialog";
@@ -227,6 +228,7 @@ function lineReducer(state: LineMap, action: LineAction): LineMap {
 
 export function FullCalendarPage() {
   const { currentRole } = useRole();
+  const { notify } = useNotifications();
   const access = getFullCalendarAccess(currentRole);
   const editorMode = access.canEditOwnLines || access.marketingFlagOnly;
 
@@ -746,11 +748,16 @@ export function FullCalendarPage() {
         )
       );
       setPeriodEditId(null);
-      toast.success(
-        "Период изменён. Изменение требует повторного согласования маркетинга перед отправкой."
-      );
+      notify({
+        type: "marketing-reapproval",
+        campaignId,
+        campaignName: campaignsById.get(campaignId)?.name,
+        description:
+          "Изменён период акции — требуется повторное согласование выбора «В рекламу» маркетингом перед отправкой.",
+        href: "/full-calendar",
+      });
     },
-    []
+    [notify, campaignsById]
   );
 
   // ── Re-approval + incremental send (§5.1 / §11.8) ────────────────────────────
@@ -801,11 +808,16 @@ export function FullCalendarPage() {
         next.delete(campaignId);
         return next;
       });
-      toast.success(
-        `Версия ${nextNo} сформирована и отправлена смежным отделам (инкрементально). Отделы уведомлены.`
-      );
+      notify({
+        type: "data-changed",
+        campaignId,
+        campaignName: campaignsById.get(campaignId)?.name,
+        reportVersion: nextNo,
+        description: `Сформирована и отправлена версия ${nextNo} смежным отделам (инкрементально).`,
+        href: "/reports",
+      });
     },
-    [changeSetFor, versionsFor, linesFor, campaignsById, currentRole]
+    [changeSetFor, versionsFor, linesFor, campaignsById, currentRole, notify]
   );
 
   // ── Campaign cancellation (§5.3) — КД only, required reason ──────────────────
@@ -845,11 +857,15 @@ export function FullCalendarPage() {
       );
       setSelectedIds(new Set());
       setCancelCampaignId(null);
-      toast.success(
-        "Акция отменена. Отдельное уведомление «Акция отменена» направлено всем смежным отделам."
-      );
+      notify({
+        type: "campaign-cancelled",
+        campaignId,
+        campaignName: campaignsById.get(campaignId)?.name,
+        description: `Акция отменена. Причина: ${reason}. Смежные подразделения уведомлены.`,
+        href: "/full-calendar",
+      });
     },
-    [cancelCampaignId, versionsFor, currentRole]
+    [cancelCampaignId, versionsFor, currentRole, notify, campaignsById]
   );
 
   // ── Line removal / exclusion (§5.3) — КМ requests, КД approves ───────────────
@@ -890,11 +906,15 @@ export function FullCalendarPage() {
       setLiveVersions((prev) =>
         new Map(prev).set(line.campaignId, [version, ...prevVersions])
       );
-      toast.success(
-        `Позиция исключена из акции: ${name}. Отделы уведомлены инкрементально.`
-      );
+      notify({
+        type: "line-removed",
+        campaignId: line.campaignId,
+        campaignName: campaignsById.get(line.campaignId)?.name,
+        description: `Из акции исключена позиция «${name}» по запросу КМ. Отделы уведомлены инкрементально.`,
+        href: "/full-calendar",
+      });
     },
-    [lines, versionsFor, currentRole]
+    [lines, versionsFor, currentRole, notify, campaignsById]
   );
 
   const onRejectRemoval = React.useCallback((lineId: string) => {
