@@ -3025,6 +3025,71 @@ const ADJ_DEPARTMENTS_AUDIENCE: PromoRole[] = [
 ];
 
 /**
+ * E-2 — what an action handler passes to `notify()`. The store fills in
+ * id / sentAt / actor / read; audience defaults from `notificationAudienceFor`.
+ */
+export interface NotificationInput {
+  type: NotificationType;
+  campaignId?: string;
+  campaignName?: string;
+  reportVersion?: number;
+  description: string;
+  /** In-app quick link; defaults to "/notifications". */
+  href?: string;
+  /** Override the type's default audience (§11.3.1). */
+  visibleTo?: PromoRole[];
+}
+
+/**
+ * Default audience per notification type (§11.3.1) so callers rarely pass
+ * `visibleTo`. Both audiences include Коммерческий директор; MARKETING_AUDIENCE
+ * includes Сотрудник маркетинга — so the actor of every wired emission is inside
+ * the resulting audience and sees their own item. `km-assignment` → undefined
+ * (visible to all); it is not emitted live.
+ */
+export function notificationAudienceFor(
+  type: NotificationType
+): PromoRole[] | undefined {
+  switch (type) {
+    case "campaign-cancelled":
+    case "line-removed":
+    case "data-changed":
+      return ADJ_DEPARTMENTS_AUDIENCE;
+    case "marketing-reapproval":
+    case "ad-approval":
+      return MARKETING_AUDIENCE;
+    case "km-assignment":
+      return undefined;
+  }
+}
+
+/**
+ * Pure factory for a live-emitted notification. `at` / `seq` are passed in (no
+ * `Date.now()` at the data layer) so ids are unique within a session:
+ * `live-<epoch>-<seq>`.
+ */
+export function createLiveNotification(
+  input: NotificationInput,
+  actor: { name: string; role: PromoRole },
+  seq: number,
+  at: Date
+): PromoNotification {
+  return {
+    id: `live-${at.getTime()}-${seq}`,
+    type: input.type,
+    campaignId: input.campaignId,
+    campaignName: input.campaignName,
+    reportVersion: input.reportVersion,
+    actor,
+    description: input.description,
+    sentAt: at,
+    read: false,
+    href: input.href ?? "/notifications",
+    visibleTo: input.visibleTo ?? notificationAudienceFor(input.type),
+  };
+}
+
+/**
  * Seed ~8 notifications across all types and read/unread states, with live
  * relative timestamps (so the date grouping «Сегодня»/«Вчера»/дата stays fresh).
  * `new Date()` is fine in app/mock code — the no-`Date.now()` rule is only for
