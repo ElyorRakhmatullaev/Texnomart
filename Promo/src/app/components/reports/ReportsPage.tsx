@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, ChevronUp, Download, Inbox, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, Inbox, SlidersHorizontal, Users } from "lucide-react";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { Tabs, TabsList, TabsTrigger } from "@texnomart/ui/tabs";
 import { Button } from "@texnomart/ui/button";
@@ -17,6 +17,7 @@ import { useRole } from "../../role-context";
 import { useCurrentUser } from "../../current-user-context";
 import { VersionHistoryDrawer } from "../../../components/VersionHistoryDrawer";
 import { DepartmentReportView } from "./DepartmentReportView";
+import { ReportAcknowledgeDrawer } from "./ReportAcknowledgeDrawer";
 import { reportColumnsFor } from "./reportFields";
 import { exportReportXlsx } from "../../../lib/report-xlsx";
 import {
@@ -199,6 +200,17 @@ export function ReportsPage() {
   // Version-history drawer (deferred open — Radix self-dismiss guard).
   const [historyOpen, setHistoryOpen] = React.useState(false);
 
+  // «Кто ознакомился» detail — visible only to the responsible manager /
+  // Администратор (§2). Deferred open (Radix self-dismiss guard).
+  const canSeeWhoAcked = [
+    "Администратор",
+    "Коммерческий директор",
+    "Директор маркетинга",
+    "Операционный директор",
+    "Старший КМ",
+  ].includes(currentRole);
+  const [ackWhoOpen, setAckWhoOpen] = React.useState(false);
+
   const subtitle = `${access.note} Отправлено отчётов: ${sentCampaigns.length.toLocaleString("ru-RU")}.`;
 
   return (
@@ -343,6 +355,17 @@ export function ReportsPage() {
                 <Download className="size-4" />
                 Экспорт
               </Button>
+              {canSeeWhoAcked && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  onClick={() => setTimeout(() => setAckWhoOpen(true), 0)}
+                >
+                  <Users className="size-4" />
+                  Кто ознакомился
+                </Button>
+              )}
             </div>
             <span className="text-sm text-muted-foreground">
               Показано:{" "}
@@ -390,6 +413,17 @@ export function ReportsPage() {
             currentReport={buildCampaignReport(lines)}
             snapshotFor={(v) => getReportSnapshot(campaign.id, v)}
           />
+
+          {canSeeWhoAcked && (
+            <ReportAcknowledgeDrawer
+              open={ackWhoOpen}
+              onOpenChange={setAckWhoOpen}
+              campaign={campaign}
+              department={department}
+              version={version}
+              lines={lines}
+            />
+          )}
         </>
       )}
     </div>
