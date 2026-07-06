@@ -3200,16 +3200,58 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
   ];
 }
 
+/** E-2b — per-role notification config: which categories each role receives. */
+export type RoleNotificationConfig = Record<PromoRole, NotificationType[]>;
+
 /**
- * Filter notifications by what the active role may see (§11.3.1). Администратор
- * sees everything; an item with no `visibleTo` is visible to all.
+ * Notifications a role may see. Администратор is never filtered (god-mode escape
+ * hatch). With a `config` (E-2b), visibility = the role's configured categories;
+ * without one, the pre-E-2b `visibleTo` audience behavior (back-compat until the
+ * consumers pass the config).
  */
 export function notificationsForRole(
   role: PromoRole,
-  list: PromoNotification[]
+  list: PromoNotification[],
+  config?: RoleNotificationConfig
 ): PromoNotification[] {
   if (role === "Администратор") return list;
+  if (config) {
+    const allowed = config[role] ?? [];
+    return list.filter((n) => allowed.includes(n.type));
+  }
   return list.filter((n) => !n.visibleTo || n.visibleTo.includes(role));
+}
+
+/** E-2b — a context deep-link surfaced on a notification. */
+export interface NotificationLink {
+  label: string;
+  href: string;
+  kind: "promo" | "approval" | "report";
+}
+
+/**
+ * Context deep-links for a notification (E-2b). Produced only when the item has a
+ * `campaignId`; the target screens focus the campaign via `?promo=<id>`
+ * (full-calendar/approvals show a banner, reports pre-selects the picker).
+ */
+export function notificationLinksFor(n: PromoNotification): NotificationLink[] {
+  if (!n.campaignId) return [];
+  const id = n.campaignId;
+  const promo: NotificationLink = { label: "Открыть промо", href: `/full-calendar?promo=${id}`, kind: "promo" };
+  const approval: NotificationLink = { label: "Открыть согласование", href: `/approvals?promo=${id}`, kind: "approval" };
+  const report: NotificationLink = { label: "Открыть отчёт", href: `/reports?promo=${id}`, kind: "report" };
+  switch (n.type) {
+    case "data-changed":
+      return [report, promo];
+    case "campaign-cancelled":
+    case "line-removed":
+    case "marketing-reapproval":
+      return [promo, approval];
+    case "km-assignment":
+      return [promo];
+    case "ad-approval":
+      return [report, promo];
+  }
 }
 
 export interface NotificationDateGroup {
