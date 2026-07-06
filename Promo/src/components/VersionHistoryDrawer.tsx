@@ -262,7 +262,6 @@ export function VersionHistoryDrawer({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7"
                   onClick={() => setSelectedVersion(null)}
                 >
                   Вернуться к актуальной
