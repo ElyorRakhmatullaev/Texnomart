@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "react-router";
 import { ChevronDown, ChevronUp, Download, Inbox, SlidersHorizontal, Users } from "lucide-react";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { Tabs, TabsList, TabsTrigger } from "@texnomart/ui/tabs";
@@ -68,6 +69,17 @@ export function ReportsPage() {
       setCampaignId(sentCampaigns[0]?.id ?? "");
     }
   }, [sentCampaigns, campaignId]);
+
+  // E-2b — a notification deep-link (`/reports?promo=<id>`) pre-selects the campaign
+  // in the picker. Runs once on mount; later picker changes stay user-driven.
+  const [searchParams] = useSearchParams();
+  React.useEffect(() => {
+    const promo = searchParams.get("promo");
+    if (promo && sentCampaigns.some((c) => c.id === promo)) {
+      setCampaignId(promo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const campaign = sentCampaigns.find((c) => c.id === campaignId);
   const lines = React.useMemo(
