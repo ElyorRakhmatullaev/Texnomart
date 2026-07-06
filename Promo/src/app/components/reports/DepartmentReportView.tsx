@@ -68,6 +68,8 @@ function ChangePlashka({ kind }: { kind: ChangeKind }) {
 interface DepartmentReportViewProps {
   campaign: PromoCampaign;
   lines: PromoLine[];
+  /** Full (unfiltered) line count for «Всего позиций» — a stable version total. */
+  totalCount: number;
   department: ReportDepartment;
   fields: ReportField[];
   /** «Показать только изменённые/добавленные данные». */
@@ -88,6 +90,7 @@ interface DepartmentReportViewProps {
 export function DepartmentReportView({
   campaign,
   lines,
+  totalCount,
   department,
   fields,
   onlyChanged,
@@ -234,7 +237,7 @@ export function DepartmentReportView({
                     Исключено: {excludedCount}
                   </Badge>
                   <Badge className="rounded-full border-0 bg-gray-100 dark:bg-muted text-xs tabular-nums text-gray-700 dark:text-gray-300">
-                    Всего позиций: {lines.length}
+                    Всего позиций: {totalCount}
                   </Badge>
                 </>
               )}

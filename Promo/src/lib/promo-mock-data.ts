@@ -2444,7 +2444,7 @@ const REPORT_SNAPSHOT_OVERRIDES: Record<string, Record<number, Record<string, Re
   // campaignId → version → lineId → { fieldLabel → old display value }
   "UN-2026-015": {
     1: {
-      "L-0019": { "Новая цена": "5 200 000 сум", "Скидка": "8%" },
+      "L-0019": { "Новая цена": "12 690 000 сум", "Скидка": "9%" },
     },
   },
 };
@@ -2897,8 +2897,8 @@ const REPORT_CHANGE_SETS: Record<string, ReportChangeSet> = {
     addedLineIds: ["L-0021"],
     removedLineIds: ["L-0020"],
     changedCells: [
-      { lineId: "L-0019", fieldId: "newPrice", prevValue: "5 200 000 сум", newValue: "4 990 000 сум", changedAt: new Date(2026, 5, 5, 10, 40) },
-      { lineId: "L-0019", fieldId: "discountPct", prevValue: "8%", newValue: "12%", changedAt: new Date(2026, 5, 5, 10, 40) },
+      { lineId: "L-0019", fieldId: "newPrice", prevValue: "12 690 000 сум", newValue: "12 450 000 сум", changedAt: new Date(2026, 5, 5, 10, 40) },
+      { lineId: "L-0019", fieldId: "discountPct", prevValue: "9%", newValue: "11%", changedAt: new Date(2026, 5, 5, 10, 40) },
       { lineId: "L-0019", fieldId: "supplierCompensation", prevValue: "250 000 сум", newValue: "300 000 сум", changedAt: new Date(2026, 5, 5, 10, 40) },
       { lineId: "L-0019", fieldId: "compensationLimit", prevValue: "30", newValue: "40", changedAt: new Date(2026, 5, 5, 10, 40) },
     ],

@@ -389,6 +389,7 @@ export function ReportsPage() {
             key={viewKey}
             campaign={campaign}
             lines={filteredLines}
+            totalCount={lines.length}
             department={department}
             fields={fields}
             onlyChanged={onlyChanged}
