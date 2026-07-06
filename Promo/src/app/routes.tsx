@@ -8,6 +8,7 @@ import { ApprovalsProvider } from "./components/approvals/ApprovalsProvider";
 import { ApprovalsPage } from "./components/approvals/ApprovalsPage";
 import { ApprovalDetailPage } from "./components/approvals/ApprovalDetailPage";
 import { ReportsPage } from "./components/reports/ReportsPage";
+import { NotificationSettingsProvider } from "./components/notification-settings/NotificationSettingsProvider";
 import { NotificationsProvider } from "./components/notifications/NotificationsProvider";
 import { NotificationsPage } from "./components/notifications/NotificationsPage";
 import { PromoTypesProvider } from "./components/promo-types/PromoTypesProvider";
@@ -37,13 +38,17 @@ function ProtectedLayout() {
     return <Navigate to="/change-password" replace />;
   }
 
-  // NotificationsProvider sits ABOVE the AppShell so the top-bar bell, the
-  // sidebar «Уведомления» badge, and the /notifications page share one live
-  // read/unread store (S6, spec §11.3).
+  // NotificationSettingsProvider sits ABOVE the NotificationsProvider so the
+  // notification editor, the notification center, and the top-bar bell all react
+  // to toggles live (E-2b). NotificationsProvider sits ABOVE the AppShell so the
+  // top-bar bell, the sidebar «Уведомления» badge, and the /notifications page
+  // share one live read/unread store (S6, spec §11.3).
   return (
-    <NotificationsProvider>
-      <AppShell />
-    </NotificationsProvider>
+    <NotificationSettingsProvider>
+      <NotificationsProvider>
+        <AppShell />
+      </NotificationsProvider>
+    </NotificationSettingsProvider>
   );
 }
 
