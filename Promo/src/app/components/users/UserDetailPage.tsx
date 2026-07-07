@@ -34,6 +34,7 @@ import { useRole } from "../../role-context";
 import {
   canDeactivate,
   canManageUser,
+  canRevokeAdmin,
   DEPARTMENTS,
   effectiveAdminScope,
   getUserById,
@@ -154,9 +155,19 @@ export function UserDetailPage() {
 
   const roles = rolesOf(user);
   const primary = roles[0];
-  const scope = effectiveAdminScope(user);
-  const isGlobalAdmin = effectiveAdminScope(currentUser) === "global";
-  const canManage = canManageUser(currentUser, user);
+  // Scope of the VIEWED user's own admin grant (for the "Область
+  // администрирования" display below) — distinct from the ACTOR's scope.
+  const targetScope = effectiveAdminScope(user);
+  // Effective admin scope for the LOGGED-IN user (actor), mirroring
+  // UsersPage's derivation exactly: `effectiveAdminScope` reads the
+  // multi-role set + `adminScope` off `currentUser`, with a god-mode
+  // fallback to "global" when the role switcher is on «Администратор»
+  // without a matching seeded `currentUser` (dev/demo convenience).
+  // Without this fallback a non-admin god-moded into «Администратор» would
+  // see a working /users list but a dead /users/:id detail page.
+  const scope = effectiveAdminScope(currentUser) ?? (currentRole === "Администратор" ? "global" : null);
+  const isGlobalAdmin = scope === "global";
+  const canManage = scope === "global" ? true : scope ? canManageUser(currentUser, user) : false;
   const adminCount = usableAdminCount(allUsers);
   const deactivateBlocked = user.status !== "blocked" && !canDeactivate(user.id);
   const managerName = allUsers.find((u) => u.id === user.managerId)?.fullName ?? "—";
@@ -164,6 +175,26 @@ export function UserDetailPage() {
   function handleEditSubmit(value: UserFormValue) {
     if (!user) return;
     const prevRoles = rolesOf(user);
+
+    // Belt-and-suspenders gate on the «Администратор» role: the form dialog
+    // already locks the chip for non-global-admins (adminRoleLocked below),
+    // but the parent still re-checks here — both because a non-global-admin
+    // must never grant/revoke global admin rights, and because only this
+    // scope knows the live ≥2-admin invariant (`canRevokeAdmin`).
+    const wouldGrantAdmin =
+      !prevRoles.includes("Администратор") && value.roles.includes("Администратор");
+    const wouldRemoveAdmin =
+      prevRoles.includes("Администратор") && !value.roles.includes("Администратор");
+
+    if ((wouldGrantAdmin || wouldRemoveAdmin) && !isGlobalAdmin) {
+      toast.error("Изменять роль «Администратор» может только глобальный администратор.");
+      return;
+    }
+    if (wouldRemoveAdmin && !canRevokeAdmin(user.id)) {
+      toast.error("Должно остаться не менее двух администраторов.");
+      return;
+    }
+
     const profileChanged =
       value.fullName !== user.fullName ||
       value.email !== user.email ||
@@ -339,10 +370,10 @@ export function UserDetailPage() {
               <InfoRow
                 label="Область администрирования"
                 value={
-                  scope === "global"
+                  targetScope === "global"
                     ? "Глобальный"
-                    : scope
-                    ? `Подразделение «${scope.department}»`
+                    : targetScope
+                    ? `Подразделение «${targetScope.department}»`
                     : "—"
                 }
               />
@@ -496,6 +527,7 @@ export function UserDetailPage() {
         initial={user}
         allUsers={allUsers}
         onSubmit={handleEditSubmit}
+        adminRoleLocked={!isGlobalAdmin}
       />
 
       <TempPasswordDialog

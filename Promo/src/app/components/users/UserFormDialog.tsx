@@ -47,7 +47,18 @@ interface UserFormDialogProps {
   /** Full user list — options for «Руководитель» (excludes the edited user). */
   allUsers: PromoUser[];
   onSubmit: (value: UserFormValue) => void;
+  /**
+   * When true, the «Администратор» role chip is locked: it can neither be
+   * added nor removed from the form. Used when the acting user is not a
+   * global admin, so they can't grant/revoke global admin rights via the
+   * edit dialog (that decision is gated elsewhere — see `canToggleGlobalAdmin`
+   * / `canRevokeAdmin` on the row-menu path). Defaults to false (current
+   * create-flow behavior — all roles freely toggleable).
+   */
+  adminRoleLocked?: boolean;
 }
+
+const ADMIN_ROLE: PromoRole = "Администратор";
 
 export function UserFormDialog({
   open,
@@ -56,6 +67,7 @@ export function UserFormDialog({
   initial,
   allUsers,
   onSubmit,
+  adminRoleLocked = false,
 }: UserFormDialogProps) {
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -94,6 +106,7 @@ export function UserFormDialog({
   const isValid = nameValid && emailValid && rolesValid;
 
   const toggleRole = (r: PromoRole) => {
+    if (adminRoleLocked && r === ADMIN_ROLE) return;
     setRoles((prev) =>
       prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]
     );
@@ -154,16 +167,20 @@ export function UserFormDialog({
             <div className="flex flex-wrap gap-2">
               {PROMO_ROLES.map((r) => {
                 const checked = roles.includes(r);
+                const locked = adminRoleLocked && r === ADMIN_ROLE;
                 return (
                   <button
                     key={r}
                     type="button"
+                    disabled={locked}
+                    title={locked ? "Изменять роль «Администратор» может только глобальный администратор" : undefined}
                     onClick={() => toggleRole(r)}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
                       checked
                         ? "border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 text-amber-900 dark:text-amber-300"
-                        : "border-gray-200 dark:border-border bg-white dark:bg-card text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-accent"
+                        : "border-gray-200 dark:border-border bg-white dark:bg-card text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-accent",
+                      locked && "cursor-not-allowed opacity-60"
                     )}
                   >
                     {checked && <CheckCircle2 className="size-3.5" />}
