@@ -45,7 +45,6 @@ import {
   assignSubstitution,
   revokeSubstitution,
   substituteName,
-  type KdSubstitution,
 } from "../../../lib/kd-substitution-store";
 
 /** ISO «YYYY-MM-DD» → local-midnight Date (avoids the UTC-parse off-by-one RuDate would show). */
