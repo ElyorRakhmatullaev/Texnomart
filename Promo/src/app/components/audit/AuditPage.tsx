@@ -13,6 +13,7 @@ import { OWN_AUDIT_KM_ID } from "../../../lib/promo-mock-data";
 import type { PromoRole } from "../../role-context";
 import { PARTICIPANT_ROLES } from "../../../lib/audit-control";
 import { AuditLogTable } from "./AuditLogTable";
+import { PlanDeadlinesTab } from "./PlanDeadlinesTab";
 
 const TAB_TRIGGER =
   "flex-none whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-gray-900 dark:data-[state=active]:text-gray-100 data-[state=active]:shadow-none";
@@ -98,7 +99,7 @@ export function AuditPage() {
         </div>
 
         <TabsContent value="plan" className="mt-0">
-          <TabPlaceholder label="Сроки по плану" />
+          <PlanDeadlinesTab access={access} globals={globals} />
         </TabsContent>
         <TabsContent value="promo" className="mt-0">
           <TabPlaceholder label="Сроки по промо и отчётам" />
