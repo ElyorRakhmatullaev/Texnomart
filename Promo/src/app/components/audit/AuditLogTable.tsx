@@ -109,13 +109,15 @@ export function AuditLogTable({
   const [filters, setFilters] = React.useState<AuditFilters>(EMPTY_AUDIT_FILTERS);
   const [sheetOpen, setSheetOpen] = React.useState(false);
 
+  const isKm = access?.role === "Категорийный менеджер (КМ)";
+
   const scopedEvents = React.useMemo(() => {
     const myName = getCategoryManager(access?.ownKmId ?? "")?.name;
     return events.filter((e) => {
       // action scope
       if (!(isAdmin && showAll) && NON_KEY_ACTIONS.has(e.action)) return false;
-      // role-scoped rows: plain КМ sees only their own
-      if (access && !access.canSeeAll) {
+      // role-scoped rows: only the КМ role is own-scoped — every other role sees all
+      if (isKm) {
         if (e.role !== "Категорийный менеджер (КМ)") return false;
         if (myName && e.user !== myName) return false;
       }
@@ -127,7 +129,7 @@ export function AuditLogTable({
       }
       return true;
     });
-  }, [events, isAdmin, showAll, access, globals]);
+  }, [events, isAdmin, showAll, isKm, access, globals]);
 
   const users = React.useMemo(
     () => Array.from(new Set(scopedEvents.map((e) => e.user))).sort(),
@@ -163,8 +165,8 @@ export function AuditLogTable({
     <div className="flex flex-col gap-3">
       {isAdmin && (
         <div className="flex items-center gap-2">
-          <Button variant={showAll ? "default" : "outline"} size="sm" className="h-8" onClick={() => setShowAll(false)}>Ключевые действия</Button>
-          <Button variant={showAll ? "outline" : "default"} size="sm" className="h-8" onClick={() => setShowAll(true)}>Все действия</Button>
+          <Button variant={showAll ? "outline" : "default"} size="sm" className="h-8" onClick={() => setShowAll(false)}>Ключевые действия</Button>
+          <Button variant={showAll ? "default" : "outline"} size="sm" className="h-8" onClick={() => setShowAll(true)}>Все действия</Button>
           <span className="text-[11px] text-muted-foreground">черновики, редактирование и автосохранение — только в «Все действия»</span>
         </div>
       )}

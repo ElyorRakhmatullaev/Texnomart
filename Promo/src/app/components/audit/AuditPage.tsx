@@ -116,11 +116,3 @@ export function AuditPage() {
     </div>
   );
 }
-
-function TabPlaceholder({ label }: { label: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center text-sm text-muted-foreground">
-      {label} — в разработке
-    </div>
-  );
-}

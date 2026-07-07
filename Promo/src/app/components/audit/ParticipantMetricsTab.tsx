@@ -25,7 +25,7 @@ export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
   const dueLabel = role === "Категорийный менеджер (КМ)" ? "Промо с дедлайном" : "Задач с дедлайном";
 
   const th = "border-b border-r border-gray-200 dark:border-border bg-gray-50 dark:bg-muted/40 px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap";
-  const td = "border-b border-r border-gray-100 dark:border-border px-3 py-2 text-sm";
+  const td = "border-b border-r border-gray-100 dark:border-border px-3 py-2 text-sm align-top";
 
   return (
     <div className="flex flex-col gap-3">

@@ -21,7 +21,6 @@ import {
   buildReviewItems,
   seniorOverdueInfo,
   stageSlaStart,
-  formatPromoNo,
   CATEGORY_MANAGERS,
   type ReviewItem,
 } from "./promo-mock-data";
