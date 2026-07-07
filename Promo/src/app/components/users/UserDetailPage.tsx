@@ -88,7 +88,9 @@ export function UserDetailPage() {
 
   const [tab, setTab] = React.useState("profile");
   const [editOpen, setEditOpen] = React.useState(false);
-  const [deptDraft, setDeptDraft] = React.useState<string | undefined>(undefined);
+  const [deptDraft, setDeptDraft] = React.useState<string | undefined>(() =>
+    user?.adminScope?.kind === "department" ? user.adminScope.department : undefined
+  );
   const [tempPassword, setTempPassword] = React.useState<string | null>(null);
   const [tempOpen, setTempOpen] = React.useState(false);
 
