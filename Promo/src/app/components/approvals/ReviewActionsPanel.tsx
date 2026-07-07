@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Info, MessageSquare, UserMinus, X, Zap } from "lucide-react";
+import { AlertTriangle, Check, Info, MessageSquare, UserMinus, X, Zap } from "lucide-react";
 import { Button } from "@texnomart/ui/button";
 import { cn } from "@texnomart/ui/utils";
 import { RuDate } from "../../../components/RuDate";
@@ -20,6 +20,10 @@ interface ReviewActionsPanelProps {
   autoEscalated: boolean;
   /** Current role is the Коммерческий директор (may set «Не участвует» directly). */
   isKd: boolean;
+  /** Acting as the КД via a temporary substitution (E-4), not by real role. */
+  substituteActing?: boolean;
+  /** The substitute is the КМ who owns this item — conflict of interest, blocks all actions. */
+  conflicted?: boolean;
   /** Campaign-level advance gate (every КМ needs a final decision). */
   decision: CampaignDecisionSummary;
   lineCount: number;
@@ -125,6 +129,8 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
     actingReviewer,
     autoEscalated,
     isKd,
+    substituteActing,
+    conflicted,
     decision,
     lineCount,
     selectedCount,
@@ -133,13 +139,19 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
 
   const isNonPart = item.kind === "non-participation";
   // КД may set «Не участвует» directly for a КМ whose data set isn't yet final.
+  // A conflicted substitute (own КМ item) is blocked from this too.
   const kdCanSetNonPart =
-    isKd && !isNonPart && item.kmStatus !== "Согласовано КД";
+    isKd && !isNonPart && item.kmStatus !== "Согласовано КД" && !conflicted;
 
   return (
     <div className="space-y-4">
       {/* Actions — buttons hidden below lg (mobile uses the fixed bottom bar). */}
       <div className="rounded-xl border bg-white dark:bg-card p-4">
+        {substituteActing && !conflicted && (
+          <span className="mb-2 inline-block rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground">
+            Замещение КД
+          </span>
+        )}
         <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           {isNonPart ? "Решение по «Не участвует»" : "Действия согласования"}
         </h2>
@@ -185,6 +197,12 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
                 : "Отклонение любой строки требует комментарий и возвращает весь набор КМ на корректировку (§4.5.2)."}
             </p>
           </>
+        ) : conflicted ? (
+          <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 px-2.5 py-1.5 text-sm text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            Конфликт интересов: нельзя согласовать собственную заявку — решение
+            остаётся за коммерческим директором.
+          </p>
         ) : (
           <p className="mt-2 flex items-start gap-1.5 text-sm text-muted-foreground">
             <Info className="mt-0.5 size-4 shrink-0" />

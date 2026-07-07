@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
-import { AlertTriangle, Clock, FileX2, History, Zap } from "lucide-react";
+import { AlertTriangle, Clock, FileX2, History, UserCog, Zap } from "lucide-react";
 import { DetailPageHero } from "@texnomart/shared/components/detail-page-hero";
 import { InfoRow } from "@texnomart/shared/components/info-row";
 import { Badge } from "@texnomart/ui/badge";
@@ -14,8 +14,13 @@ import { OverdueTag } from "../../../components/OverdueTag";
 import { RuDate } from "../../../components/RuDate";
 import { ReasonDialog } from "../../../components/ReasonDialog";
 import { VersionHistoryDrawer } from "../../../components/VersionHistoryDrawer";
-import { useRole } from "../../role-context";
+import { useRole, type PromoRole } from "../../role-context";
+import { useCurrentUser } from "../../current-user-context";
 import { useApprovals } from "./ApprovalsProvider";
+import {
+  getActiveSubstitution,
+  isSubstituteConflicted,
+} from "../../../lib/kd-substitution-store";
 import { SubmittedLinesPanel } from "./SubmittedLinesPanel";
 import { ReviewActionsPanel, MobileReviewActionBar } from "./ReviewActionsPanel";
 import {
@@ -37,9 +42,16 @@ type ReasonFlow =
   | { kind: "reject-nonpart" }
   | { kind: "kd-set-nonpart" };
 
+/** ISO «YYYY-MM-DD» → local-midnight Date (avoids the UTC-parse off-by-one RuDate would show). */
+function parseDateOnly(iso: string): Date {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
 export function ApprovalDetailPage() {
   const { id } = useParams();
   const { currentRole } = useRole();
+  const { currentUser } = useCurrentUser();
   const { items, getItem, approve, reject, setNonParticipationByKd } =
     useApprovals();
 
@@ -89,8 +101,19 @@ export function ApprovalDetailPage() {
   const autoEscalated = isAutoEscalated(item);
   const senior = seniorOverdueInfo(item); // §9 — Старший-КМ breach info for the card/history
   const actingReviewer = effectiveReviewer(item);
-  const canAct = actingReviewer === currentRole;
-  const isKd = currentRole === "Коммерческий директор";
+  // E-4 — temporary «Уполномоченное лицо КД»: the active substitution's user acts
+  // as the КД when the item is at the КД stage, unless conflicted (own КМ item).
+  const sub = getActiveSubstitution();
+  const substituteActing =
+    actingReviewer === "Коммерческий директор" &&
+    !!currentUser &&
+    sub?.substituteUserId === currentUser.id;
+  const conflicted = substituteActing && isSubstituteConflicted(currentUser, item);
+  const canAct = actingReviewer === currentRole || (substituteActing && !conflicted);
+  // Transitions made by a substitute are stamped as «Коммерческий директор» (not
+  // their god-mode role) so the reducer routes the status correctly.
+  const actingAsRole: PromoRole = substituteActing ? "Коммерческий директор" : currentRole;
+  const isKd = currentRole === "Коммерческий директор" || substituteActing;
 
   const decision = campaignDecisionSummary(item.campaignId, items);
 
@@ -107,7 +130,7 @@ export function ApprovalDetailPage() {
   }
 
   function handleApproveAll() {
-    approve(item!.id, currentRole);
+    approve(item!.id, actingAsRole);
     if (isNonPart) {
       toast.success(
         currentRole === "Старший КМ"
@@ -136,11 +159,11 @@ export function ApprovalDetailPage() {
       setNonParticipationByKd(item!.campaignId, item!.kmId, reason);
       toast.success("«Не участвует» установлено коммерческим директором.");
     } else if (flow.kind === "reject-nonpart") {
-      reject(item!.id, { lineIds: [], comment: reason, actor: currentRole });
+      reject(item!.id, { lineIds: [], comment: reason, actor: actingAsRole });
       toast.success("Заявка отклонена — КМ должен заполнить данные.");
     } else {
       const lineIds = flow.kind === "reject-lines" ? flow.lineIds : [];
-      reject(item!.id, { lineIds, comment: reason, actor: currentRole });
+      reject(item!.id, { lineIds, comment: reason, actor: actingAsRole });
       toast.success(
         lineIds.length > 0
           ? `Отклонено строк: ${lineIds.length}. Набор возвращён КМ на корректировку.`
@@ -256,6 +279,20 @@ export function ApprovalDetailPage() {
         </div>
       </DetailPageHero>
 
+      {/* E-4 — acting as the temporary «Уполномоченное лицо КД» via substitution. */}
+      {substituteActing && !conflicted && (
+        <div className="flex items-start gap-2 rounded-xl border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/15 px-4 py-3">
+          <UserCog className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" />
+          <p className="text-sm text-blue-800 dark:text-blue-300">
+            Вы действуете как уполномоченное лицо КД (замещение до{" "}
+            <span className="font-medium tabular-nums">
+              <RuDate value={parseDateOnly(sub!.to)} />
+            </span>
+            ).
+          </p>
+        </div>
+      )}
+
       {/* §9 — Старший-КМ breach info surfaced on the promo card: auto-forwarded to the
           КД, whose SLA restarts from the auto-forward moment. */}
       {senior && (
@@ -346,6 +383,8 @@ export function ApprovalDetailPage() {
             actingReviewer={actingReviewer}
             autoEscalated={autoEscalated}
             isKd={isKd}
+            substituteActing={substituteActing}
+            conflicted={conflicted}
             decision={decision}
             lineCount={lines.length}
             selectedCount={selected.size}
