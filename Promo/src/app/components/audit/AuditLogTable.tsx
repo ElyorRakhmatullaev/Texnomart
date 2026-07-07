@@ -26,6 +26,7 @@ import {
   AUDIT_ACTION_META,
   AUDIT_OBJECT_LABEL,
   buildAuditLog,
+  getCategoryManager,
   type AuditEvent,
 } from "../../../lib/promo-mock-data";
 import {
@@ -34,6 +35,12 @@ import {
   hasActiveAuditFilters,
   type AuditFilters,
 } from "./AuditLogFilters";
+import type { AuditAccess, AuditGlobalFilters } from "./AuditPage";
+
+/** Non-key action types — hidden by default; shown only under «Все действия» (Администратор only). */
+const NON_KEY_ACTIONS = new Set<AuditEvent["action"]>([
+  "создание", "изменение", "смена пароля", "изменение профиля",
+]);
 
 function ActionTag({ action }: { action: AuditEvent["action"] }) {
   const meta = AUDIT_ACTION_META[action];
@@ -88,7 +95,12 @@ function ObjectCell({ event }: { event: AuditEvent }) {
   );
 }
 
-export function AuditLogTable() {
+export function AuditLogTable({
+  access, globals,
+}: { access?: AuditAccess; globals?: AuditGlobalFilters } = {}) {
+  const isAdmin = access?.isAdmin ?? false;
+  const [showAll, setShowAll] = React.useState(false); // «Все действия» (Администратор only)
+
   // Сиды (S8) + живые события модуля учёток (localStorage), новые сверху.
   const events = React.useMemo(() => {
     const merged = [...getLiveAuditEvents(), ...buildAuditLog()];
@@ -97,19 +109,39 @@ export function AuditLogTable() {
   const [filters, setFilters] = React.useState<AuditFilters>(EMPTY_AUDIT_FILTERS);
   const [sheetOpen, setSheetOpen] = React.useState(false);
 
+  const scopedEvents = React.useMemo(() => {
+    const myName = getCategoryManager(access?.ownKmId ?? "")?.name;
+    return events.filter((e) => {
+      // action scope
+      if (!(isAdmin && showAll) && NON_KEY_ACTIONS.has(e.action)) return false;
+      // role-scoped rows: plain КМ sees only their own
+      if (access && !access.canSeeAll) {
+        if (e.role !== "Категорийный менеджер (КМ)") return false;
+        if (myName && e.user !== myName) return false;
+      }
+      // page-level date-range + role
+      if (globals) {
+        if (globals.role !== "all" && e.role !== globals.role) return false;
+        if (globals.from && e.at.getTime() < new Date(`${globals.from}T00:00:00`).getTime()) return false;
+        if (globals.to && e.at.getTime() > new Date(`${globals.to}T23:59:59`).getTime()) return false;
+      }
+      return true;
+    });
+  }, [events, isAdmin, showAll, access, globals]);
+
   const users = React.useMemo(
-    () => Array.from(new Set(events.map((e) => e.user))).sort(),
-    [events]
+    () => Array.from(new Set(scopedEvents.map((e) => e.user))).sort(),
+    [scopedEvents]
   );
   const roles = React.useMemo(
-    () => Array.from(new Set(events.map((e) => e.role))).sort(),
-    [events]
+    () => Array.from(new Set(scopedEvents.map((e) => e.role))).sort(),
+    [scopedEvents]
   );
 
   const filtered = React.useMemo(() => {
     const fromTs = filters.from ? new Date(`${filters.from}T00:00:00`).getTime() : null;
     const toTs = filters.to ? new Date(`${filters.to}T23:59:59`).getTime() : null;
-    return events.filter((e) => {
+    return scopedEvents.filter((e) => {
       if (filters.user !== "all" && e.user !== filters.user) return false;
       if (filters.role !== "all" && e.role !== filters.role) return false;
       if (filters.action !== "all" && e.action !== filters.action) return false;
@@ -119,7 +151,7 @@ export function AuditLogTable() {
       if (toTs !== null && ts > toTs) return false;
       return true;
     });
-  }, [events, filters]);
+  }, [scopedEvents, filters]);
 
   const patch = (p: Partial<AuditFilters>) =>
     setFilters((prev) => ({ ...prev, ...p }));
@@ -129,6 +161,14 @@ export function AuditLogTable() {
 
   return (
     <div className="flex flex-col gap-3">
+      {isAdmin && (
+        <div className="flex items-center gap-2">
+          <Button variant={showAll ? "default" : "outline"} size="sm" className="h-8" onClick={() => setShowAll(false)}>Ключевые действия</Button>
+          <Button variant={showAll ? "outline" : "default"} size="sm" className="h-8" onClick={() => setShowAll(true)}>Все действия</Button>
+          <span className="text-[11px] text-muted-foreground">черновики, редактирование и автосохранение — только в «Все действия»</span>
+        </div>
+      )}
+
       {/* Desktop filters — flush-left with the page title/table */}
       <div className="hidden md:block">
         <div className="flex flex-wrap items-end justify-between gap-3">

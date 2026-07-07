@@ -110,7 +110,7 @@ export function AuditPage() {
           <ParticipantMetricsTab access={access} />
         </TabsContent>
         <TabsContent value="log" className="mt-0">
-          <AuditLogTable />
+          <AuditLogTable access={access} globals={globals} />
         </TabsContent>
       </Tabs>
     </div>
