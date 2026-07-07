@@ -83,6 +83,9 @@ export const CATEGORY_MANAGERS: CategoryManager[] = [
   { id: "km-6", name: "Исмаилов Жасур", category: "Климатическая техника", senior: true },
 ];
 
+/** E-3/§7 audit access: a plain КМ sees only this representative КМ's rows (no per-person identity in the mock). */
+export const OWN_AUDIT_KM_ID = "km-3";
+
 export interface NomenclatureItem {
   /** 1С code. */
   id: string;
@@ -1626,6 +1629,12 @@ export interface CampaignPlanApproval {
   marketing: PlanStageMarketing;
   kd: PlanStageDirector;
   od: PlanStageDirector;
+  /** Optional §11.9 correction chain — emitted as informational control points when present. */
+  returnedAt?: Date;
+  returnedBy?: string;
+  returnComment?: string;
+  resentAt?: Date;
+  deliveredToKmAt?: Date;
 }
 
 export const PLAN_APPROVALS: CampaignPlanApproval[] = [
@@ -1679,6 +1688,11 @@ export const PLAN_APPROVALS: CampaignPlanApproval[] = [
     },
     kd: { decidedAt: new Date(2026, 4, 7, 10, 0), status: "onTime" },
     od: { status: "waiting" },
+    returnedAt: new Date(2026, 4, 5, 12, 30),
+    returnedBy: "Коммерческий директор",
+    returnComment: "План возвращён на корректировку: уточнить перечень категорий.",
+    resentAt: new Date(2026, 4, 6, 9, 15),
+    deliveredToKmAt: new Date(2026, 4, 8, 11, 0),
   },
   {
     campaignId: "PR-2026-007",
@@ -3843,7 +3857,7 @@ export interface ControlMilestone {
   note?: string;
 }
 
-const KM_FILL_SLA_CALENDAR_DAYS = 21; // «заполнение КМ»: start − 21 кал. дн. (mock)
+export const KM_FILL_SLA_CALENDAR_DAYS = 21; // «заполнение КМ»: start − 21 кал. дн. (mock)
 
 /**
  * Build a campaign's milestone timeline (spec §11.9): план → отправка данных КМ →
