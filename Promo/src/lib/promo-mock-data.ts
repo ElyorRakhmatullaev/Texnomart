@@ -3529,7 +3529,10 @@ export type AuditActionType =
   | "блокировка"
   | "разблокировка"
   | "смена пароля"
-  | "изменение профиля";
+  | "изменение профиля"
+  | "изменение ролей"
+  | "назначение замещения"
+  | "снятие замещения";
 
 /** What an action acted on. */
 export type AuditObjectType = "акция" | "строка" | "отчёт" | "план" | "пользователь";
@@ -3554,6 +3557,9 @@ export const AUDIT_ACTION_META: Record<
   "разблокировка": { bg: "bg-green-50 dark:bg-green-500/15", text: "text-green-700 dark:text-green-300" },
   "смена пароля": { bg: "bg-cyan-50 dark:bg-cyan-500/15", text: "text-cyan-700 dark:text-cyan-300" },
   "изменение профиля": { bg: "bg-slate-100 dark:bg-slate-500/20", text: "text-slate-700 dark:text-slate-300" },
+  "изменение ролей": { bg: "bg-purple-50 dark:bg-purple-500/15", text: "text-purple-700 dark:text-purple-300" },
+  "назначение замещения": { bg: "bg-fuchsia-50 dark:bg-fuchsia-500/15", text: "text-fuchsia-700 dark:text-fuchsia-300" },
+  "снятие замещения": { bg: "bg-stone-100 dark:bg-stone-500/20", text: "text-stone-700 dark:text-stone-300" },
 };
 
 export const AUDIT_OBJECT_LABEL: Record<AuditObjectType, string> = {
@@ -3582,6 +3588,8 @@ export interface AuditEvent {
   statusFrom?: string;
   statusTo?: string;
   comment?: string;
+  /** Для журнала конкретного пользователя (E-4) — id затронутой учётки. */
+  targetUserId?: string;
 }
 
 // A curated, seed-consistent action log. Dates align with the version chains and
