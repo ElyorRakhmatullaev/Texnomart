@@ -6,11 +6,23 @@ import {
   PLAN_MARKETING_REVIEW_LEAD_DAYS,
   PLAN_MARKETING_SUBMIT_LEAD_DAYS,
   PLAN_DIRECTOR_SLA_WORKING_DAYS,
+  REVIEW_SLA_WORKING_DAYS,
+  KM_FILL_SLA_CALENDAR_DAYS,
+  CAMPAIGNS,
   addCalendarDays,
   addWorkingDays,
   getOverdueDays,
   getCampaignById,
+  getCategoryManager,
+  getCampaignVersions,
+  getReportDeadline,
+  getReportSentAt,
+  isApprovedCampaign,
+  buildReviewItems,
+  seniorOverdueInfo,
+  stageSlaStart,
   formatPromoNo,
+  type ReviewItem,
 } from "./promo-mock-data";
 
 export type ControlScope = "plan" | "promo";
@@ -140,4 +152,171 @@ export function buildPlanControlPoints(ref: Date = new Date()): ControlPoint[] {
     }
   }
   return points;
+}
+
+const KM_ROLE: PromoRole = "Категорийный менеджер (КМ)";
+
+/** Promo/report control points (spec §11.9 tab 2). */
+export function buildPromoControlPoints(ref: Date = new Date()): ControlPoint[] {
+  const points: ControlPoint[] = [];
+  const items = buildReviewItems(ref);
+  const itemsByCampaign = new Map<string, ReviewItem[]>();
+  for (const it of items) {
+    const arr = itemsByCampaign.get(it.campaignId) ?? [];
+    arr.push(it);
+    itemsByCampaign.set(it.campaignId, arr);
+  }
+
+  for (const c of CAMPAIGNS) {
+    if (c.cancelled) continue;
+    const base = {
+      scope: "promo" as const,
+      campaignId: c.id,
+      promoNo: c.id,
+      promoName: c.name,
+      promoPeriod: { start: c.startDate, end: c.endDate },
+    };
+    const fillDeadline = c.fillDeadlineOverride ?? addCalendarDays(c.startDate, -KM_FILL_SLA_CALENDAR_DAYS);
+    const versions = getCampaignVersions(c.id);
+    const firstSend = versions.find((v) => v.changeType === "Первичная отправка");
+    const cItems = itemsByCampaign.get(c.id) ?? [];
+
+    // 1) Отправка данных КМ — one row per КМ that has a submission signal.
+    const kmSubmissions: { kmId: string; at: Date }[] = cItems.map((it) => ({
+      kmId: it.kmId,
+      at: new Date(it.submittedAt),
+    }));
+    if (kmSubmissions.length === 0 && (isApprovedCampaign(c) || firstSend)) {
+      // Fully-approved campaigns have no pending review items — attribute the first send to the lead КМ.
+      const leadKm = c.participatingKmIds[0];
+      if (leadKm) kmSubmissions.push({ kmId: leadKm, at: firstSend?.date ?? getReportSentAt(c) });
+    }
+    for (const sub of kmSubmissions) {
+      const km = getCategoryManager(sub.kmId);
+      const overdueDays = getOverdueDays(fillDeadline, sub.at);
+      points.push({
+        ...base, id: `cp-promo-${c.id}-datakm-${sub.kmId}`,
+        checkpoint: "Отправка данных КМ",
+        responsibleName: km?.name ?? "Категорийный менеджер", responsibleRole: KM_ROLE,
+        deadline: fillDeadline, actualAt: sub.at,
+        result: overdueDays > 0 ? "Просрочено" : "В срок", overdueDays,
+        comment: overdueDays > 0 ? "Данные поданы после дедлайна заполнения." : undefined,
+      });
+    }
+
+    // 2) Решение старшего КМ + 3) авто-передача КД (per review item).
+    for (const it of cItems) {
+      const submitted = new Date(it.submittedAt);
+      const seniorDeadline = addWorkingDays(submitted, REVIEW_SLA_WORKING_DAYS);
+      const senior = seniorOverdueInfo(it, ref); // defined only when auto-escalated (senior missed)
+      const km = getCategoryManager(it.kmId);
+      const seniorName = "Старший КМ";
+      if (senior) {
+        // Senior missed → auto-forward. Attribute the overdue to the Старший КМ.
+        points.push({
+          ...base, id: `cp-promo-${c.id}-senior-${it.kmId}`,
+          checkpoint: "Решение старшего КМ",
+          responsibleName: seniorName, responsibleRole: "Старший КМ",
+          deadline: seniorDeadline, actualAt: undefined,
+          result: "Просрочено", overdueDays: senior.seniorSlaDays,
+          comment: "Срок согласования старшего КМ истёк.",
+        });
+        points.push({
+          ...base, id: `cp-promo-${c.id}-autofwd-${it.kmId}`,
+          checkpoint: "Авто-передача КД (просрочка старшего КМ)",
+          responsibleName: seniorName, responsibleRole: "Старший КМ",
+          deadline: senior.autoForwardedAt, actualAt: senior.autoForwardedAt,
+          result: "Просрочено", overdueDays: senior.seniorSlaDays,
+          comment: `КМ: ${km?.name ?? "—"} · передано автоматически.`,
+        });
+      } else if (it.kmStatus === "На согласовании у старшего КМ") {
+        points.push({
+          ...base, id: `cp-promo-${c.id}-senior-${it.kmId}`,
+          checkpoint: "Решение старшего КМ",
+          responsibleName: seniorName, responsibleRole: "Старший КМ",
+          deadline: seniorDeadline, actualAt: undefined, ...resolve(seniorDeadline, undefined, ref),
+        });
+      } else {
+        // Passed senior → decided at the КД-stage start (or submitted for seeds starting at КД).
+        const decided = stageSlaStart(it, ref);
+        const overdueDays = getOverdueDays(seniorDeadline, decided);
+        points.push({
+          ...base, id: `cp-promo-${c.id}-senior-${it.kmId}`,
+          checkpoint: "Решение старшего КМ",
+          responsibleName: seniorName, responsibleRole: "Старший КМ",
+          deadline: seniorDeadline, actualAt: decided,
+          result: overdueDays > 0 ? "Просрочено" : "В срок", overdueDays,
+        });
+      }
+
+      // 4) Решение КД.
+      const kdStart = stageSlaStart(it, ref);
+      const kdDeadline = addWorkingDays(kdStart, REVIEW_SLA_WORKING_DAYS);
+      if (it.kmStatus === "Согласовано КД") {
+        const decided = getReportSentAt(c);
+        const overdueDays = getOverdueDays(kdDeadline, decided);
+        points.push({
+          ...base, id: `cp-promo-${c.id}-kd-${it.kmId}`,
+          checkpoint: "Решение КД",
+          responsibleName: "Коммерческий директор", responsibleRole: "Коммерческий директор",
+          deadline: kdDeadline, actualAt: decided,
+          result: overdueDays > 0 ? "Просрочено" : "В срок", overdueDays,
+        });
+      } else if (
+        it.kmStatus === "На согласовании у коммерческого директора" || senior
+      ) {
+        points.push({
+          ...base, id: `cp-promo-${c.id}-kd-${it.kmId}`,
+          checkpoint: "Решение КД",
+          responsibleName: "Коммерческий директор", responsibleRole: "Коммерческий директор",
+          deadline: kdDeadline, actualAt: undefined, ...resolve(kdDeadline, undefined, ref),
+        });
+      }
+
+      // 5) Возврат на корректировку.
+      if (it.kmStatus === "Переотправлено на корректировку КМ") {
+        points.push({
+          ...base, id: `cp-promo-${c.id}-return-${it.kmId}`,
+          checkpoint: "Возврат на корректировку",
+          responsibleName: "Коммерческий директор", responsibleRole: "Коммерческий директор",
+          deadline: submitted, actualAt: submitted, result: "В срок", overdueDays: 0,
+          comment: `КМ: ${km?.name ?? "—"} · набор возвращён на корректировку.`,
+        });
+      }
+    }
+
+    // 6) Отправка первичного отчёта + 7) новые версии.
+    const reportDeadline = getReportDeadline(c);
+    if (isApprovedCampaign(c)) {
+      const sentAt = firstSend?.date ?? getReportSentAt(c);
+      const overdueDays = getOverdueDays(reportDeadline, sentAt);
+      const leadKm = getCategoryManager(c.participatingKmIds[0] ?? "");
+      points.push({
+        ...base, id: `cp-promo-${c.id}-report`,
+        checkpoint: "Отправка первичного отчёта",
+        responsibleName: leadKm?.name ?? "Категорийный менеджер", responsibleRole: KM_ROLE,
+        deadline: reportDeadline, actualAt: sentAt,
+        result: overdueDays > 0 ? "Просрочено" : "В срок", overdueDays,
+        comment: overdueDays > 0 ? "Отчёт отправлен после дедлайна (старт − 17 кал. дн.)." : undefined,
+      });
+      for (const v of versions.filter((vv) => vv.version > 1)) {
+        points.push({
+          ...base, id: `cp-promo-${c.id}-report-v${v.version}`,
+          checkpoint: `Новая версия отчёта (в.${v.version})`,
+          responsibleName: v.author || (leadKm?.name ?? "Категорийный менеджер"),
+          responsibleRole: KM_ROLE,
+          deadline: v.date, actualAt: v.date, result: "В срок", overdueDays: 0,
+          comment: v.summary,
+        });
+      }
+    }
+  }
+  return points;
+}
+
+/** All control points (plan + promo), newest deadline first. */
+export function buildControlPoints(ref: Date = new Date()): ControlPoint[] {
+  return [...buildPlanControlPoints(ref), ...buildPromoControlPoints(ref)].sort(
+    (a, b) => b.deadline.getTime() - a.deadline.getTime()
+  );
 }
