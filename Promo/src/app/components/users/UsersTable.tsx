@@ -43,6 +43,8 @@ interface UsersTableProps {
   allUsers?: PromoUser[];
   /** Dept-admin scoping (E-4) — hides mutating row actions for out-of-scope users. Optional, defaults to allow-all. */
   canManage?: (u: PromoUser) => boolean;
+  /** Global-admin gate (E-4) — only a global admin may grant/revoke the GLOBAL «Администратор» role. Optional, defaults to false (dept admins never see the toggle). */
+  canToggleGlobalAdmin?: boolean;
 }
 
 function RowMenu({
@@ -51,8 +53,9 @@ function RowMenu({
   canRevokeAdmin,
   canDeactivate,
   canManage = () => true,
+  canToggleGlobalAdmin = false,
 }: UsersTableProps & { user: PromoUser }) {
-  const isAdmin = user.role === "Администратор";
+  const isAdmin = rolesOf(user).includes("Администратор");
   const isBlocked = user.status === "blocked";
   const revokeBlocked = isAdmin && !canRevokeAdmin(user.id);
   const deactivateBlocked = !isBlocked && !canDeactivate(user.id);
@@ -73,19 +76,20 @@ function RowMenu({
             <DropdownMenuItem onClick={() => onAction("reset", user)}>
               <KeyRound className="mr-2 size-4" /> Сбросить пароль
             </DropdownMenuItem>
-            {isAdmin ? (
-              <DropdownMenuItem
-                disabled={revokeBlocked}
-                title={revokeBlocked ? "Должно остаться не менее двух администраторов" : undefined}
-                onClick={() => onAction("toggle-admin", user)}
-              >
-                <ShieldOff className="mr-2 size-4" /> Отозвать права администратора
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem onClick={() => onAction("toggle-admin", user)}>
-                <ShieldCheck className="mr-2 size-4" /> Назначить администратором
-              </DropdownMenuItem>
-            )}
+            {canToggleGlobalAdmin &&
+              (isAdmin ? (
+                <DropdownMenuItem
+                  disabled={revokeBlocked}
+                  title={revokeBlocked ? "Должно остаться не менее двух администраторов" : undefined}
+                  onClick={() => onAction("toggle-admin", user)}
+                >
+                  <ShieldOff className="mr-2 size-4" /> Отозвать права администратора
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => onAction("toggle-admin", user)}>
+                  <ShieldCheck className="mr-2 size-4" /> Назначить администратором
+                </DropdownMenuItem>
+              ))}
             {isBlocked ? (
               <DropdownMenuItem onClick={() => onAction("toggle-status", user)}>
                 <UserCheck className="mr-2 size-4" /> Активировать

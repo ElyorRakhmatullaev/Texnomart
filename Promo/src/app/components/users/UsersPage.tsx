@@ -12,12 +12,13 @@ import {
   getUsers,
   createUser,
   resetPassword,
-  setUserRole,
+  setUserRoles,
   setUserStatus,
   canRevokeAdmin,
   canDeactivate,
   effectiveAdminScope,
   canManageUser,
+  rolesOf,
   type PromoUser,
 } from "../../../lib/users-store";
 import { appendAuditEvent } from "../../../lib/audit-store";
@@ -139,16 +140,16 @@ export function UsersPage() {
         return;
       }
       if (action === "toggle-admin") {
-        if (user.role === "Администратор") {
+        if (rolesOf(user).includes("Администратор")) {
           if (!canRevokeAdmin(user.id)) {
             toast.error("Должно остаться не менее двух администраторов");
             return;
           }
-          setUserRole(user.id, "Сотрудник закупа");
+          setUserRoles(user.id, rolesOf(user).filter((r) => r !== "Администратор"));
           audit("отзыв прав", user, "Отозваны права администратора");
           toast.success("Права администратора отозваны");
         } else {
-          setUserRole(user.id, "Администратор");
+          setUserRoles(user.id, Array.from(new Set([...rolesOf(user), "Администратор"])));
           audit("назначение прав", { ...user, role: "Администратор" }, "Назначены права администратора");
           toast.success("Назначены права администратора");
         }
@@ -249,6 +250,7 @@ export function UsersPage() {
         canDeactivate={canDeactivate}
         allUsers={users}
         canManage={canManage}
+        canToggleGlobalAdmin={scope === "global"}
       />
 
       {canCreate && (
