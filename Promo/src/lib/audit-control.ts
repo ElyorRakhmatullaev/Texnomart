@@ -22,6 +22,7 @@ import {
   seniorOverdueInfo,
   stageSlaStart,
   formatPromoNo,
+  CATEGORY_MANAGERS,
   type ReviewItem,
 } from "./promo-mock-data";
 
@@ -319,4 +320,124 @@ export function buildControlPoints(ref: Date = new Date()): ControlPoint[] {
   return [...buildPlanControlPoints(ref), ...buildPromoControlPoints(ref)].sort(
     (a, b) => b.deadline.getTime() - a.deadline.getTime()
   );
+}
+
+export const PARTICIPANT_ROLES: PromoRole[] = [
+  "Категорийный менеджер (КМ)",
+  "Старший КМ",
+  "Коммерческий директор",
+  "Директор маркетинга",
+  "Операционный директор",
+];
+
+/** Which checkpoints each participant role is measured on. */
+const ROLE_CHECKPOINTS: Record<string, string[]> = {
+  "Категорийный менеджер (КМ)": ["Отправка данных КМ"],
+  "Старший КМ": ["Решение старшего КМ", "Авто-передача КД (просрочка старшего КМ)"],
+  "Коммерческий директор": ["Решение КД"],
+  "Директор маркетинга": ["Ознакомление плана (дир. маркетинга)", "Отправка плана на согласование"],
+  "Операционный директор": ["Согласование ОД (план)"],
+};
+
+export type TimelinessBand = "Высокая" | "Средняя" | "Низкая";
+
+export function timelinessBand(pct: number): TimelinessBand {
+  if (pct >= 90) return "Высокая";
+  if (pct >= 70) return "Средняя";
+  return "Низкая";
+}
+
+export interface ParticipantMetricRow {
+  rank: number;
+  name: string;
+  dueCount: number;      // промо/задач с наступившим дедлайном
+  onTime: number;
+  overdue: number;
+  timelinessPct: number; // 0 when dueCount === 0
+  band: TimelinessBand;
+  avgOverdueDays: number;
+  returns: number;       // возвраты на корректировку
+  resends: number;       // повторные отправки
+}
+
+export interface ParticipantTask {
+  campaignId: string;
+  promoNo: string;
+  promoName: string;
+  checkpoint: string;
+  deadline: Date;
+  actualAt?: Date;
+  overdueDays: number;
+  comment?: string;
+}
+
+/** The control points a given role is measured on (across plan + promo). */
+function roleControlPoints(role: PromoRole, ref: Date): ControlPoint[] {
+  const checkpoints = ROLE_CHECKPOINTS[role] ?? [];
+  return buildControlPoints(ref).filter((p) => checkpoints.includes(p.checkpoint));
+}
+
+/** Distinct measured people for a role. КМ → the roster; other roles → single representative row. */
+function participantsFor(role: PromoRole): string[] {
+  if (role === "Категорийный менеджер (КМ)") {
+    return CATEGORY_MANAGERS.filter((m) => !m.senior).map((m) => m.name);
+  }
+  if (role === "Старший КМ") {
+    return [CATEGORY_MANAGERS.find((m) => m.senior)?.name ?? "Старший КМ"];
+  }
+  return [role]; // КД / дир. маркетинга / ОД — role label as the single aggregate row
+}
+
+export function buildParticipantMetrics(
+  role: PromoRole,
+  ref: Date = new Date()
+): ParticipantMetricRow[] {
+  const points = roleControlPoints(role, ref);
+  const returnPoints = buildControlPoints(ref).filter((p) =>
+    p.checkpoint === "Возврат на корректировку" || p.checkpoint === "Возврат плана на корректировку"
+  );
+  const versionPoints = buildControlPoints(ref).filter((p) =>
+    p.checkpoint.startsWith("Новая версия отчёта") || p.checkpoint === "Повторная отправка плана"
+  );
+
+  const rows = participantsFor(role).map((name) => {
+    const mine = points.filter((p) => p.responsibleName === name);
+    const due = mine.filter((p) => p.deadline.getTime() <= ref.getTime());
+    const onTime = due.filter((p) => p.result === "В срок").length;
+    const overdue = due.filter((p) => p.result === "Просрочено").length;
+    const dueCount = due.length;
+    const timelinessPct = dueCount ? Math.round((onTime / dueCount) * 100) : 0;
+    const overdueDaysArr = due.filter((p) => p.overdueDays > 0).map((p) => p.overdueDays);
+    const avgOverdueDays = overdueDaysArr.length
+      ? Math.round(overdueDaysArr.reduce((s, d) => s + d, 0) / overdueDaysArr.length)
+      : 0;
+    // returns/resends: campaigns touching this participant (approximation; documented mock limit).
+    const myCampaigns = new Set(mine.map((p) => p.campaignId));
+    const returns = returnPoints.filter((p) => myCampaigns.has(p.campaignId)).length;
+    const resends = versionPoints.filter((p) => myCampaigns.has(p.campaignId)).length;
+    return {
+      rank: 0, name, dueCount, onTime, overdue, timelinessPct,
+      band: timelinessBand(timelinessPct), avgOverdueDays, returns, resends,
+    };
+  });
+
+  return rows
+    .sort((a, b) => b.timelinessPct - a.timelinessPct || b.dueCount - a.dueCount)
+    .map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
+/** Drill-down: the control points measured for one participant. */
+export function buildParticipantTasks(
+  responsibleName: string,
+  role: PromoRole,
+  ref: Date = new Date()
+): ParticipantTask[] {
+  return roleControlPoints(role, ref)
+    .filter((p) => p.responsibleName === responsibleName)
+    .sort((a, b) => b.deadline.getTime() - a.deadline.getTime())
+    .map((p) => ({
+      campaignId: p.campaignId, promoNo: p.promoNo, promoName: p.promoName,
+      checkpoint: p.checkpoint, deadline: p.deadline, actualAt: p.actualAt,
+      overdueDays: p.overdueDays, comment: p.comment,
+    }));
 }
