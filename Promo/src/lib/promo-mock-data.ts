@@ -3002,7 +3002,10 @@ export interface PromoNotification {
   /**
    * Roles allowed to see this notification (§11.3.1 — availability depends on
    * the user's role/rights). Undefined → visible to everyone. Администратор
-   * always sees all (handled in `notificationsForRole`).
+   * always sees all (handled in `notificationsForRole`). Since E-2b, actual
+   * visibility is governed by the per-role `RoleNotificationConfig`
+   * (`notificationsForRole(role, list, config)` / the notification-settings
+   * store); this field is retained for seed provenance and back-compat only.
    */
   visibleTo?: PromoRole[];
 }
@@ -3240,9 +3243,12 @@ export function notificationLinksFor(n: PromoNotification): NotificationLink[] {
   const promo: NotificationLink = { label: "Открыть промо", href: `/full-calendar?promo=${id}`, kind: "promo" };
   const approval: NotificationLink = { label: "Открыть согласование", href: `/approvals?promo=${id}`, kind: "approval" };
   const report: NotificationLink = { label: "Открыть отчёт", href: `/reports?promo=${id}`, kind: "report" };
+  // The report link only helps when the campaign has a sent report; otherwise
+  // /reports cannot focus it and would silently show a different campaign.
+  const reportAvailable = getSentCampaigns().some((c) => c.id === id);
   switch (n.type) {
     case "data-changed":
-      return [report, promo];
+      return reportAvailable ? [report, promo] : [promo];
     case "campaign-cancelled":
     case "line-removed":
     case "marketing-reapproval":
@@ -3250,7 +3256,7 @@ export function notificationLinksFor(n: PromoNotification): NotificationLink[] {
     case "km-assignment":
       return [promo];
     case "ad-approval":
-      return [report, promo];
+      return reportAvailable ? [report, promo] : [promo];
   }
 }
 
