@@ -252,6 +252,9 @@ export function buildPromoControlPoints(ref: Date = new Date()): ControlPoint[] 
       // 4) Решение КД.
       const kdStart = stageSlaStart(it, ref);
       const kdDeadline = addWorkingDays(kdStart, REVIEW_SLA_WORKING_DAYS);
+      // NOTE: unreachable with current seeds — buildReviewItems excludes terminal
+      // statuses (reviewerForKmStatus("Согласовано КД") === undefined). Kept so that
+      // if a completed-КД review item is ever seeded, it emits a completed point.
       if (it.kmStatus === "Согласовано КД") {
         const decided = getReportSentAt(c);
         const overdueDays = getOverdueDays(kdDeadline, decided);
@@ -333,7 +336,7 @@ export const PARTICIPANT_ROLES: PromoRole[] = [
 const ROLE_CHECKPOINTS: Record<string, string[]> = {
   "Категорийный менеджер (КМ)": ["Отправка данных КМ"],
   "Старший КМ": ["Решение старшего КМ", "Авто-передача КД (просрочка старшего КМ)"],
-  "Коммерческий директор": ["Решение КД"],
+  "Коммерческий директор": ["Решение КД", "Согласование КД (план)"],
   "Директор маркетинга": ["Ознакомление плана (дир. маркетинга)", "Отправка плана на согласование"],
   "Операционный директор": ["Согласование ОД (план)"],
 };
@@ -382,7 +385,7 @@ function participantsFor(role: PromoRole): string[] {
     return CATEGORY_MANAGERS.filter((m) => !m.senior).map((m) => m.name);
   }
   if (role === "Старший КМ") {
-    return [CATEGORY_MANAGERS.find((m) => m.senior)?.name ?? "Старший КМ"];
+    return ["Старший КМ"]; // control points attribute senior decisions to the role label
   }
   return [role]; // КД / дир. маркетинга / ОД — role label as the single aggregate row
 }
@@ -403,7 +406,7 @@ export function buildParticipantMetrics(
     const mine = points.filter((p) => p.responsibleName === name);
     const due = mine.filter((p) => p.deadline.getTime() <= ref.getTime());
     const onTime = due.filter((p) => p.result === "В срок").length;
-    const overdue = due.filter((p) => p.result === "Просрочено").length;
+    const overdue = due.filter((p) => p.overdueDays > 0).length;
     const dueCount = due.length;
     const timelinessPct = dueCount ? Math.round((onTime / dueCount) * 100) : 0;
     const overdueDaysArr = due.filter((p) => p.overdueDays > 0).map((p) => p.overdueDays);

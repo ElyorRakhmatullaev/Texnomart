@@ -22,7 +22,6 @@ const TAB_TRIGGER =
 
 export interface AuditAccess {
   role: PromoRole;
-  canSeeAll: boolean;
   ownKmId: string;
   isAdmin: boolean;
 }
@@ -40,9 +39,7 @@ export function AuditPage() {
 
   const access: AuditAccess = React.useMemo(() => {
     const isAdmin = currentRole === "Администратор";
-    const canSeeAll =
-      isAdmin || currentRole === "Коммерческий директор" || currentRole === "Старший КМ";
-    return { role: currentRole, canSeeAll, ownKmId: OWN_AUDIT_KM_ID, isAdmin };
+    return { role: currentRole, ownKmId: OWN_AUDIT_KM_ID, isAdmin };
   }, [currentRole]);
 
   const patch = (p: Partial<AuditGlobalFilters>) => setGlobals((g) => ({ ...g, ...p }));
@@ -66,7 +63,7 @@ export function AuditPage() {
             <TabsTrigger value="log" className={TAB_TRIGGER}>Аудит-лог</TabsTrigger>
           </TabsList>
 
-          {tab !== "log" && (
+          {(tab === "plan" || tab === "promo") && (
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="date" value={globals.from} onChange={(e) => patch({ from: e.target.value })}
@@ -110,7 +107,7 @@ export function AuditPage() {
           <ParticipantMetricsTab access={access} />
         </TabsContent>
         <TabsContent value="log" className="mt-0">
-          <AuditLogTable access={access} globals={globals} />
+          <AuditLogTable access={access} />
         </TabsContent>
       </Tabs>
     </div>

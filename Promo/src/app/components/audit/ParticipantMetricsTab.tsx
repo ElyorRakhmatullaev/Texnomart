@@ -8,6 +8,7 @@ import {
 import {
   buildParticipantMetrics, PARTICIPANT_ROLES, type ParticipantMetricRow, type TimelinessBand,
 } from "../../../lib/audit-control";
+import { getCategoryManager } from "../../../lib/promo-mock-data";
 import type { PromoRole } from "../../role-context";
 import type { AuditAccess } from "./AuditPage";
 import { ParticipantTasksDrawer } from "./ParticipantTasksDrawer";
@@ -19,10 +20,17 @@ const BAND_TINT: Record<TimelinessBand, string> = {
 };
 
 export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
+  const isKm = access.role === "Категорийный менеджер (КМ)";
+  const ownName = getCategoryManager(access.ownKmId)?.name;
+
   const [role, setRole] = React.useState<PromoRole>("Категорийный менеджер (КМ)");
+  const effectiveRole = isKm ? "Категорийный менеджер (КМ)" : role;
   const [drillName, setDrillName] = React.useState<string | null>(null);
-  const rows = React.useMemo(() => buildParticipantMetrics(role), [role]);
-  const dueLabel = role === "Категорийный менеджер (КМ)" ? "Промо с дедлайном" : "Задач с дедлайном";
+  const rows = React.useMemo(() => {
+    const all = buildParticipantMetrics(effectiveRole);
+    return isKm ? all.filter((r) => r.name === ownName) : all;
+  }, [effectiveRole, isKm, ownName]);
+  const dueLabel = effectiveRole === "Категорийный менеджер (КМ)" ? "Промо с дедлайном" : "Задач с дедлайном";
 
   const th = "border-b border-r border-gray-200 dark:border-border bg-gray-50 dark:bg-muted/40 px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap";
   const td = "border-b border-r border-gray-100 dark:border-border px-3 py-2 text-sm align-top";
@@ -31,7 +39,7 @@ export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-muted-foreground">Роль</span>
-        <Select value={role} onValueChange={(v) => setRole(v as PromoRole)}>
+        <Select value={effectiveRole} onValueChange={(v) => setRole(v as PromoRole)} disabled={isKm}>
           <SelectTrigger className="h-9 w-full max-w-xs bg-white dark:bg-card text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             {PARTICIPANT_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
@@ -46,7 +54,7 @@ export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
             <thead>
               <tr>
                 <th className={th}>№</th>
-                <th className={th}>{role === "Категорийный менеджер (КМ)" ? "ФИО КМ" : "Участник"}</th>
+                <th className={th}>{effectiveRole === "Категорийный менеджер (КМ)" ? "ФИО КМ" : "Участник"}</th>
                 <th className={th}>{dueLabel}</th>
                 <th className={th}>Вовремя</th>
                 <th className={th}>С просрочкой</th>
@@ -92,7 +100,7 @@ export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
 
       <ParticipantTasksDrawer
         name={drillName}
-        role={role}
+        role={effectiveRole}
         open={drillName !== null}
         onOpenChange={(v) => { if (!v) setDrillName(null); }}
       />

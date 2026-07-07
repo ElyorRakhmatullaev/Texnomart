@@ -35,7 +35,7 @@ import {
   hasActiveAuditFilters,
   type AuditFilters,
 } from "./AuditLogFilters";
-import type { AuditAccess, AuditGlobalFilters } from "./AuditPage";
+import type { AuditAccess } from "./AuditPage";
 
 /** Non-key action types — hidden by default; shown only under «Все действия» (Администратор only). */
 const NON_KEY_ACTIONS = new Set<AuditEvent["action"]>([
@@ -96,8 +96,8 @@ function ObjectCell({ event }: { event: AuditEvent }) {
 }
 
 export function AuditLogTable({
-  access, globals,
-}: { access?: AuditAccess; globals?: AuditGlobalFilters } = {}) {
+  access,
+}: { access?: AuditAccess } = {}) {
   const isAdmin = access?.isAdmin ?? false;
   const [showAll, setShowAll] = React.useState(false); // «Все действия» (Администратор only)
 
@@ -121,15 +121,9 @@ export function AuditLogTable({
         if (e.role !== "Категорийный менеджер (КМ)") return false;
         if (myName && e.user !== myName) return false;
       }
-      // page-level date-range + role
-      if (globals) {
-        if (globals.role !== "all" && e.role !== globals.role) return false;
-        if (globals.from && e.at.getTime() < new Date(`${globals.from}T00:00:00`).getTime()) return false;
-        if (globals.to && e.at.getTime() > new Date(`${globals.to}T23:59:59`).getTime()) return false;
-      }
       return true;
     });
-  }, [events, isAdmin, showAll, isKm, access, globals]);
+  }, [events, isAdmin, showAll, isKm, access]);
 
   const users = React.useMemo(
     () => Array.from(new Set(scopedEvents.map((e) => e.user))).sort(),
