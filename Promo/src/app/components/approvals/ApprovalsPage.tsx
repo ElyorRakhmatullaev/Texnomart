@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import { useRole } from "../../role-context";
 import { useCurrentUser } from "../../current-user-context";
 import { useApprovals } from "./ApprovalsProvider";
+import { getActiveSubstitution } from "../../../lib/kd-substitution-store";
 import { ReviewQueueTable } from "./ReviewQueueTable";
 import { MyParticipationsPanel } from "./MyParticipationsPanel";
 import { PromoNoFilter } from "../short-calendar/PromoNoFilter";
@@ -91,6 +92,12 @@ export function ApprovalsPage() {
 
   const isReviewer = REVIEWER_ROLES.includes(currentRole);
   const isKm = currentRole === "Категорийный менеджер (КМ)";
+  // E-4 — a temporary «Уполномоченное лицо КД» (active substitute) sees the review
+  // queue too, even in a non-reviewer god-mode role (e.g. КМ) — otherwise they'd
+  // land on «Мои участия» and never reach the КД queue Task 11 lets them act on.
+  const sub = getActiveSubstitution();
+  const isSubstitute = !!currentUser && sub?.substituteUserId === currentUser.id;
+  const showsQueue = isReviewer || isSubstitute;
 
   // §4 — persist the КМ filter per user so a Старший КМ needn't re-pick their КМ each
   // login. Key by the current user id; hydrate once (guarded so the empty initial
@@ -236,7 +243,7 @@ export function ApprovalsPage() {
           <span className="flex items-center gap-2">
             {deepLinked
               ? "Переход по ссылке из календаря готовности"
-              : isReviewer
+              : showsQueue
                 ? `На согласовании: ${filtered.length.toLocaleString("ru-RU")}`
                 : isKm
                   ? "Ваши участия и заявки о неучастии"
@@ -294,7 +301,7 @@ export function ApprovalsPage() {
             </div>
           )}
         </>
-      ) : isReviewer ? (
+      ) : showsQueue ? (
         <>
           <FilterBar
             filters={FILTERS}
