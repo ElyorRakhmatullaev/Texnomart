@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { MoreVertical, KeyRound, ShieldCheck, ShieldOff, UserX, UserCheck } from "lucide-react";
+import { MoreVertical, Eye, KeyRound, ShieldCheck, ShieldOff, UserX, UserCheck } from "lucide-react";
 import { Badge } from "@texnomart/ui/badge";
 import { Button } from "@texnomart/ui/button";
 import {
@@ -19,9 +19,9 @@ import {
   TableRow,
 } from "@texnomart/ui/table";
 import { cn } from "@texnomart/ui/utils";
-import type { PromoUser } from "../../../lib/users-store";
+import { rolesOf, type PromoUser } from "../../../lib/users-store";
 
-export type UserRowAction = "reset" | "toggle-admin" | "toggle-status";
+export type UserRowAction = "reset" | "toggle-admin" | "toggle-status" | "open";
 
 const STATUS_META: Record<PromoUser["status"], { label: string; cls: string }> = {
   active: { label: "Активен", cls: "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
@@ -39,13 +39,24 @@ interface UsersTableProps {
   onAction: (action: UserRowAction, user: PromoUser) => void;
   canRevokeAdmin: (id: string) => boolean;
   canDeactivate: (id: string) => boolean;
+  /** All users (E-4) — used to resolve «Руководитель» names. Optional, defaults to []. */
+  allUsers?: PromoUser[];
+  /** Dept-admin scoping (E-4) — hides mutating row actions for out-of-scope users. Optional, defaults to allow-all. */
+  canManage?: (u: PromoUser) => boolean;
 }
 
-function RowMenu({ user, onAction, canRevokeAdmin, canDeactivate }: UsersTableProps & { user: PromoUser }) {
+function RowMenu({
+  user,
+  onAction,
+  canRevokeAdmin,
+  canDeactivate,
+  canManage = () => true,
+}: UsersTableProps & { user: PromoUser }) {
   const isAdmin = user.role === "Администратор";
   const isBlocked = user.status === "blocked";
   const revokeBlocked = isAdmin && !canRevokeAdmin(user.id);
   const deactivateBlocked = !isBlocked && !canDeactivate(user.id);
+  const managed = canManage(user);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -54,34 +65,41 @@ function RowMenu({ user, onAction, canRevokeAdmin, canDeactivate }: UsersTablePr
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem onClick={() => onAction("reset", user)}>
-          <KeyRound className="mr-2 size-4" /> Сбросить пароль
+        <DropdownMenuItem onClick={() => onAction("open", user)}>
+          <Eye className="mr-2 size-4" /> Открыть
         </DropdownMenuItem>
-        {isAdmin ? (
-          <DropdownMenuItem
-            disabled={revokeBlocked}
-            title={revokeBlocked ? "Должно остаться не менее двух администраторов" : undefined}
-            onClick={() => onAction("toggle-admin", user)}
-          >
-            <ShieldOff className="mr-2 size-4" /> Отозвать права администратора
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem onClick={() => onAction("toggle-admin", user)}>
-            <ShieldCheck className="mr-2 size-4" /> Назначить администратором
-          </DropdownMenuItem>
-        )}
-        {isBlocked ? (
-          <DropdownMenuItem onClick={() => onAction("toggle-status", user)}>
-            <UserCheck className="mr-2 size-4" /> Активировать
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem
-            disabled={deactivateBlocked}
-            title={deactivateBlocked ? "Должно остаться не менее двух администраторов" : undefined}
-            onClick={() => onAction("toggle-status", user)}
-          >
-            <UserX className="mr-2 size-4" /> Деактивировать
-          </DropdownMenuItem>
+        {managed && (
+          <>
+            <DropdownMenuItem onClick={() => onAction("reset", user)}>
+              <KeyRound className="mr-2 size-4" /> Сбросить пароль
+            </DropdownMenuItem>
+            {isAdmin ? (
+              <DropdownMenuItem
+                disabled={revokeBlocked}
+                title={revokeBlocked ? "Должно остаться не менее двух администраторов" : undefined}
+                onClick={() => onAction("toggle-admin", user)}
+              >
+                <ShieldOff className="mr-2 size-4" /> Отозвать права администратора
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={() => onAction("toggle-admin", user)}>
+                <ShieldCheck className="mr-2 size-4" /> Назначить администратором
+              </DropdownMenuItem>
+            )}
+            {isBlocked ? (
+              <DropdownMenuItem onClick={() => onAction("toggle-status", user)}>
+                <UserCheck className="mr-2 size-4" /> Активировать
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                disabled={deactivateBlocked}
+                title={deactivateBlocked ? "Должно остаться не менее двух администраторов" : undefined}
+                onClick={() => onAction("toggle-status", user)}
+              >
+                <UserX className="mr-2 size-4" /> Деактивировать
+              </DropdownMenuItem>
+            )}
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -89,7 +107,9 @@ function RowMenu({ user, onAction, canRevokeAdmin, canDeactivate }: UsersTablePr
 }
 
 export function UsersTable(props: UsersTableProps) {
-  const { users } = props;
+  const { users, allUsers = [] } = props;
+  const managerName = (u: PromoUser): string =>
+    allUsers.find((a) => a.id === u.managerId)?.fullName ?? "—";
   return (
     <>
       {/* Desktop */}
@@ -97,11 +117,14 @@ export function UsersTable(props: UsersTableProps) {
         <Table>
           <TableHeader className="bg-gray-50 dark:bg-muted/40">
             <TableRow>
-              <TableHead className="min-w-[200px]">ФИО</TableHead>
+              <TableHead className="min-w-[180px]">ФИО</TableHead>
               <TableHead className="min-w-[200px]">Email</TableHead>
-              <TableHead className="min-w-[200px]">Роль</TableHead>
+              <TableHead className="min-w-[180px]">Роли</TableHead>
+              <TableHead className="min-w-[160px]">Подразделение</TableHead>
+              <TableHead className="min-w-[160px]">Должность</TableHead>
+              <TableHead className="min-w-[160px]">Руководитель</TableHead>
               <TableHead className="w-[170px]">Статус</TableHead>
-              <TableHead className="w-[130px]">Создан</TableHead>
+              <TableHead className="w-[110px]">Создан</TableHead>
               <TableHead className="w-[60px]" />
             </TableRow>
           </TableHeader>
@@ -110,7 +133,18 @@ export function UsersTable(props: UsersTableProps) {
               <TableRow key={u.id}>
                 <TableCell className="font-medium text-gray-900 dark:text-gray-100">{u.fullName}</TableCell>
                 <TableCell className="text-gray-700 dark:text-gray-200">{u.email}</TableCell>
-                <TableCell className="text-gray-700 dark:text-gray-200">{u.role}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {rolesOf(u).map((r) => (
+                      <Badge key={r} variant="outline" className="font-normal text-gray-600 dark:text-gray-300">
+                        {r}
+                      </Badge>
+                    ))}
+                  </div>
+                </TableCell>
+                <TableCell className="text-gray-700 dark:text-gray-200">{u.department ?? "—"}</TableCell>
+                <TableCell className="text-gray-700 dark:text-gray-200">{u.position ?? "—"}</TableCell>
+                <TableCell className="text-gray-700 dark:text-gray-200">{managerName(u)}</TableCell>
                 <TableCell>
                   <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", STATUS_META[u.status].cls)}>
                     {STATUS_META[u.status].label}
@@ -134,11 +168,20 @@ export function UsersTable(props: UsersTableProps) {
               <div className="min-w-0">
                 <p className="font-medium text-gray-900 dark:text-gray-100">{u.fullName}</p>
                 <p className="truncate text-sm text-gray-600 dark:text-gray-300">{u.email}</p>
+                {u.department && (
+                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">{u.department}</p>
+                )}
               </div>
               <RowMenu {...props} user={u} />
             </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1">
+              {rolesOf(u).map((r) => (
+                <Badge key={r} variant="outline" className="font-normal text-gray-600 dark:text-gray-300">
+                  {r}
+                </Badge>
+              ))}
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-              <Badge variant="outline" className="font-normal text-gray-600 dark:text-gray-300">{u.role}</Badge>
               <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", STATUS_META[u.status].cls)}>
                 {STATUS_META[u.status].label}
               </span>
