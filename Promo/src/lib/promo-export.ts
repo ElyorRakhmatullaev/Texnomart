@@ -82,11 +82,12 @@ export function buildCalendarCsv(campaigns: PromoCampaign[]): string {
   const rows = campaigns.map((c) => {
     const r = campaignReadiness(c);
     const rs = getReportSendStatus(c);
+    // №4: фактический статус отправки; просрочка «+N дн.» только по факту отправки с опозданием.
     const sendLabel = rs.sent
-      ? `Отправлено ${fmtDate(rs.sentAt!)} (в.${rs.versionNo})`
-      : rs.overdueDays > 0
-        ? `Не отправлено (просрочка +${rs.overdueDays} дн.)`
-        : "Не отправлено";
+      ? `Отправлено ${fmtDate(rs.sentAt!)} (в.${rs.versionNo})${
+          rs.overdueDays > 0 ? ` (+${rs.overdueDays} дн.)` : ""
+        }`
+      : "Не отправлено";
     const dist = (c.categoryDistribution ?? [])
       .map(
         (e) =>

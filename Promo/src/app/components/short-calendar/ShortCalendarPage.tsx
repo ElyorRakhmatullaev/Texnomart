@@ -46,6 +46,7 @@ import {
   getFillDeadline,
   getOverdueDays,
   getReportSendStatus,
+  isPlanApprovedByDirectors,
   kmStatusDeepLink,
   type KmAggregate,
   type PromoCampaign,
@@ -93,6 +94,9 @@ export function ShortCalendarPage() {
   const activeFilterCount = countActiveFilters(filters);
 
   const canCreatePlan = currentRole === "Директор маркетинга";
+  // №5 — a Категорийный менеджер sees a planned campaign only AFTER its plan is
+  // approved by all responsible directors; other roles see the full plan.
+  const isKm = currentRole === "Категорийный менеджер (КМ)";
 
   function setFilter<K extends keyof CalendarFilterValues>(
     key: K,
@@ -107,6 +111,8 @@ export function ShortCalendarPage() {
 
     return PLANNED.filter((c) => {
       if (hideCancelled && c.cancelled) return false;
+      // №5 — КМ видит только полностью утверждённые руководителями планы.
+      if (isKm && !isPlanApprovedByDirectors(c)) return false;
       // Операционные
       if (filters.promoIds.length > 0 && !filters.promoIds.includes(c.id))
         return false;
@@ -140,7 +146,7 @@ export function ShortCalendarPage() {
         return false;
       return true;
     });
-  }, [filters, hideCancelled]);
+  }, [filters, hideCancelled, isKm]);
 
   // A distribution filter implies the block is relevant — auto-expand so the
   // matching rows are visible (§1, §2).
@@ -367,17 +373,18 @@ function MobileCampaignCard({
           <OverdueTag days={overdue} />
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span>Отчёт смежным:</span>
+          <span>Срок отчёта:</span>
+          <RuDate value={report.deadline} />
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span>Отправка смежным:</span>
           {report.sent ? (
-            <span className="font-medium text-emerald-700 dark:text-emerald-300">
+            <span className="flex flex-wrap items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-300">
               отправлено <RuDate value={report.sentAt!} /> · в.{report.versionNo}
+              <OverdueTag days={report.overdueDays} />
             </span>
           ) : (
-            <>
-              <span>срок</span>
-              <RuDate value={report.deadline} />
-              <OverdueTag days={report.overdueDays} />
-            </>
+            <span>Не отправлено</span>
           )}
         </div>
         {kmNames && <div>КМ: {kmNames}</div>}

@@ -1711,6 +1711,82 @@ export function getPlanApproval(campaignId: string): CampaignPlanApproval | unde
 }
 
 /**
+ * Whether a planned campaign's plan has been approved by ALL responsible directors —
+ * Коммерческий + Операционный (client feedback №5). In the mock, the per-campaign
+ * plan-approval record (`PLAN_APPROVALS`) is the signal: both director stages must be
+ * decided (a `decidedAt` / non-«waiting» status); a cancelled campaign never qualifies.
+ * Used to gate what the Категорийный менеджер sees in the short calendar — the КМ must
+ * see the plan only AFTER it is fully approved (before that: «Найдено 0 акций»).
+ */
+export function isPlanApprovedByDirectors(campaign: PromoCampaign): boolean {
+  if (campaign.cancelled) return false;
+  const appr = getPlanApproval(campaign.id);
+  if (!appr) return false;
+  return appr.kd.status !== "waiting" && appr.od.status !== "waiting";
+}
+
+/**
+ * Next plan-row promo number, generated automatically in sequence (client feedback
+ * «6-я часть» №1 — the number must be auto-assigned, not typed by hand). Ids follow
+ * the `PR-2026-0NN` shape; we take the max existing NN and return the next, zero-padded.
+ */
+export function nextPlanPromoNo(existingIds: string[]): string {
+  let max = 0;
+  for (const id of existingIds) {
+    const m = /^PR-2026-(\d+)$/.exec(id);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return `PR-2026-${String(max + 1).padStart(3, "0")}`;
+}
+
+/** An uncovered stretch of calendar days between two promo periods. */
+export interface CoverageGap {
+  start: Date;
+  end: Date;
+  days: number;
+}
+
+/** Local-midnight copy of a date (strips the time so day math is exact). */
+function atMidnight(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Coverage gaps within the min→max span of the given promo periods (client feedback
+ * «6-я часть» №7 — when a plan is sent «на месяц» but some dates are left uncovered, a
+ * hint should list them). Pure date math: merge the periods, then report every run of
+ * ≥1 calendar day that no promo covers between the earliest start and the latest end.
+ */
+export function findCoverageGaps(
+  periods: { start: Date; end: Date }[]
+): CoverageGap[] {
+  const valid = periods
+    .filter((p) => p.start && p.end && p.start <= p.end)
+    .map((p) => ({ start: atMidnight(p.start), end: atMidnight(p.end) }))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+  if (valid.length < 2) return [];
+
+  const gaps: CoverageGap[] = [];
+  let coveredUntil = valid[0].end;
+  for (let i = 1; i < valid.length; i++) {
+    const { start, end } = valid[i];
+    // A gap exists only when the next period starts more than one day after the
+    // furthest day covered so far (adjacent/overlapping periods leave no gap).
+    const gapStartMs = coveredUntil.getTime() + DAY_MS;
+    if (start.getTime() > gapStartMs) {
+      const gapStart = new Date(gapStartMs);
+      const gapEnd = new Date(start.getTime() - DAY_MS);
+      const days = Math.round((gapEnd.getTime() - gapStart.getTime()) / DAY_MS) + 1;
+      gaps.push({ start: gapStart, end: gapEnd, days });
+    }
+    if (end > coveredUntil) coveredUntil = end;
+  }
+  return gaps;
+}
+
+/**
  * Count of approval items awaiting the given role's action — drives the
  * «Согласование» nav badge. Simplified for the bootstrap.
  */
@@ -2855,8 +2931,11 @@ export function getReportVersionNo(campaign: PromoCampaign): number {
  * Whether/when a campaign's report was sent to the adjacent departments, plus its
  * report deadline (§12 — short-calendar «Отправка смежным отделам» + «Срок отчёта»).
  * «Sent» = the campaign is approved/sent and has at least one line (same rule as
- * `getSentCampaigns`). When NOT sent, `overdueDays` counts days past the 17-кал.-дн.
- * report deadline (0 if still within the deadline). Seed-stale (mock report trail).
+ * `getSentCampaigns`). `overdueDays` is the ACTUAL lateness — days the report was
+ * sent past the 17-кал.-дн. deadline — and is **> 0 only when the report was really
+ * sent late** (client feedback №4: no premature просрочка before the fact of sending;
+ * when not sent, `overdueDays` is 0 and only the «Срок отчёта» date is shown).
+ * Seed-stale (mock report trail).
  */
 export interface ReportSendStatus {
   sent: boolean;
@@ -2870,15 +2949,18 @@ export function getReportSendStatus(campaign: PromoCampaign): ReportSendStatus {
   const hasLines = PROMO_LINES.some((l) => l.campaignId === campaign.id);
   const sent = isApprovedCampaign(campaign) && hasLines;
   if (sent) {
+    const sentAt = getReportSentAt(campaign);
     return {
       sent,
-      sentAt: getReportSentAt(campaign),
+      sentAt,
       versionNo: getReportVersionNo(campaign),
       deadline,
-      overdueDays: 0,
+      // Просрочка «+N дн.» отображается только при фактической отправке позже срока (№4).
+      overdueDays: getOverdueDays(deadline, sentAt),
     };
   }
-  return { sent, deadline, overdueDays: getOverdueDays(deadline) };
+  // Отчёт ещё не отправлен → просрочку не показываем (только крайняя дата в «Срок отчёта»).
+  return { sent, deadline, overdueDays: 0 };
 }
 
 /**
@@ -3467,6 +3549,15 @@ export function getPromoTypeSettingsAccess(
         note: "Создание, изменение и утверждение правил обязательных полей.",
       };
     case "Администратор":
+      return {
+        canView: true,
+        canEdit: true,
+        canConfirm: false,
+        note: "Создание и изменение правил; утверждение — за коммерческим директором.",
+      };
+    // Client feedback «6-я часть» №3 — the marketing director may create/edit promo-type
+    // rules; confirmation (§9) stays with the commercial director.
+    case "Директор маркетинга":
       return {
         canView: true,
         canEdit: true,

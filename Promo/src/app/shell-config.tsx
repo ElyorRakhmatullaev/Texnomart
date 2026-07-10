@@ -104,7 +104,8 @@ export function createPromoShellConfig(
             label: "Настройки типов промо",
             icon: SlidersHorizontal,
             href: "/promo-types",
-            roles: ["Коммерческий директор", "Администратор"],
+            // «6-я часть» №3 — the marketing director creates/edits promo-type rules.
+            roles: ["Коммерческий директор", "Администратор", "Директор маркетинга"],
           },
           {
             label: "Матрица прав",

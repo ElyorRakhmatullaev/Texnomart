@@ -352,9 +352,9 @@ export function ShortCalendarTable({
                     <OverdueTag days={overdue} />
                   </div>
 
-                  {/* Срок отчёта (§12) — старт − 17 кал. дн. (срок отправки отчёта
-                      смежным отделам); просрочка показывается только пока отчёт не
-                      отправлен. */}
+                  {/* Срок отчёта (№4) — крайняя дата отправки отчёта смежным отделам
+                      (старт − 17 кал. дн.). Только дата: просрочка живёт в колонке
+                      «Отправка смежным отделам» и только по факту отправки. */}
                   <div
                     className={cn(
                       "flex w-[140px] flex-col justify-center gap-1 px-3",
@@ -364,7 +364,6 @@ export function ShortCalendarTable({
                     <span className="text-sm tabular-nums text-gray-900 dark:text-gray-100">
                       <RuDate value={report.deadline} />
                     </span>
-                    {!report.sent && <OverdueTag days={report.overdueDays} />}
                   </div>
 
                   {/* «Распределение по категориям» — collapsible structured block (§2).
@@ -460,7 +459,9 @@ export function ShortCalendarTable({
                     />
                   </div>
 
-                  {/* Отправка смежным отделам (§12) — отправлен ли отчёт + дата/версия. */}
+                  {/* Отправка смежным отделам (№4) — только фактический статус:
+                      «Не отправлено», либо «Отправлено» + дата/версия. Просрочку «+N дн.»
+                      показываем ТОЛЬКО если отчёт фактически отправлен позже срока. */}
                   <div
                     className={cn(
                       "flex w-[180px] flex-col justify-center gap-1 px-3",
@@ -473,21 +474,15 @@ export function ShortCalendarTable({
                           <CheckCircle2 className="size-3.5 shrink-0" />
                           Отправлено
                         </span>
-                        <span className="text-xs tabular-nums text-muted-foreground">
+                        <span className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
                           <RuDate value={report.sentAt!} /> · в.{report.versionNo}
+                          <OverdueTag days={report.overdueDays} />
                         </span>
                       </>
                     ) : (
-                      <>
-                        <span className="text-sm text-muted-foreground">
-                          Не отправлено
-                        </span>
-                        {report.overdueDays > 0 && (
-                          <span className="text-[11px] font-medium text-red-600 dark:text-red-400">
-                            отчёт просрочен
-                          </span>
-                        )}
-                      </>
+                      <span className="text-sm text-muted-foreground">
+                        Не отправлено
+                      </span>
                     )}
                   </div>
 
