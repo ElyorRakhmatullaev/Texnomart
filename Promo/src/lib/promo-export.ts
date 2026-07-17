@@ -58,8 +58,17 @@ function stageLabel(status: PlanStageStatus, overdueDays?: number): string {
   return `Просрочка +${overdueDays ?? 0} дн.`;
 }
 
-/** Промо-календарь tab → one row per campaign with status, readiness counts, distribution. */
-export function buildCalendarCsv(campaigns: PromoCampaign[]): string {
+/**
+ * Промо-календарь tab → one row per campaign with status, readiness counts, distribution.
+ * «Срок отчёта» + «Отправка смежным отделам» are omitted when `includeReportColumns` is
+ * false — these two columns are role-gated on the page (КД / уполном. лицо КД / Сотрудник
+ * маркетинга / Администратор, V2-12 «строго по ТЗ»); the export must not leak them either.
+ */
+export function buildCalendarCsv(
+  campaigns: PromoCampaign[],
+  opts?: { includeReportColumns?: boolean }
+): string {
+  const includeReportColumns = opts?.includeReportColumns ?? true;
   const header = [
     "№ промо",
     "Тип промо",
@@ -67,9 +76,9 @@ export function buildCalendarCsv(campaigns: PromoCampaign[]): string {
     "Период (начало)",
     "Период (окончание)",
     "Крайний срок заполнения КМ",
-    "Срок отчёта",
+    ...(includeReportColumns ? ["Срок отчёта"] : []),
     "Общий статус акции",
-    "Отправка смежным отделам",
+    ...(includeReportColumns ? ["Отправка смежным отделам"] : []),
     "Согласовано КМ",
     "Всего КМ (без «Не участвует»)",
     "Согласовано КД",
@@ -103,9 +112,9 @@ export function buildCalendarCsv(campaigns: PromoCampaign[]): string {
       fmtDate(c.startDate),
       fmtDate(c.endDate),
       fmtDate(getFillDeadline(c)),
-      fmtDate(rs.deadline),
+      ...(includeReportColumns ? [fmtDate(rs.deadline)] : []),
       c.status,
-      sendLabel,
+      ...(includeReportColumns ? [sendLabel] : []),
       String(r.done),
       String(r.total),
       String(r.accepted),

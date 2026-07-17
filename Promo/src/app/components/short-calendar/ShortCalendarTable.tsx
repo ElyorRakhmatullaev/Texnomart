@@ -113,6 +113,10 @@ interface ShortCalendarTableProps {
   /** Active «Распределение по категориям» filter (§V1-1) — restricts which
    *  sub-rows render inside the expanded block. "all" = no restriction. */
   distFilter?: { weekday: string; category: string; km: string };
+  /** «Срок отчёта» + «Отправка смежным отделам» columns — КД / уполном. лицо
+   *  КД / Сотрудник маркетинга / Администратор only (V2-12, «строго по ТЗ»).
+   *  Default true. */
+  showReportColumns?: boolean;
 }
 
 export function ShortCalendarTable({
@@ -122,6 +126,7 @@ export function ShortCalendarTable({
   kmStatusFilter,
   onKmStatusClick,
   distFilter,
+  showReportColumns = true,
 }: ShortCalendarTableProps) {
   const kmFilterActive = !!kmStatusFilter && kmStatusFilter !== "all";
   const kmColumns: CategoryManager[] = CATEGORY_MANAGERS;
@@ -181,7 +186,7 @@ export function ShortCalendarTable({
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [campaigns, expanded, expandedReadiness, distFilter]);
+  }, [campaigns, expanded, expandedReadiness, distFilter, showReportColumns]);
 
   // Mirror one scroller's scrollLeft onto the other three (§V2-1 adds a sticky-BOTTOM
   // scrollbar alongside the sticky-top one). Writes are idempotent (only when the value
@@ -245,7 +250,9 @@ export function ShortCalendarTable({
             <span className={cn("w-[132px] px-3", CELL)}>
               Крайний срок заполнения КМ
             </span>
-            <span className={cn("w-[120px] px-3", CELL)}>Срок отчёта</span>
+            {showReportColumns && (
+              <span className={cn("w-[120px] px-3", CELL)}>Срок отчёта</span>
+            )}
             {expanded && (
               <>
                 <span className={cn("w-[150px] px-3", CELL)}>День / дата</span>
@@ -258,9 +265,11 @@ export function ShortCalendarTable({
             <span className={cn("w-[340px] px-3", CELL)}>
               Статус готовности акции
             </span>
-            <span className={cn("w-[180px] px-3", CELL)}>
-              Отправка смежным отделам
-            </span>
+            {showReportColumns && (
+              <span className={cn("w-[180px] px-3", CELL)}>
+                Отправка смежным отделам
+              </span>
+            )}
             {kmColumns.map((km) => (
               <Tooltip key={km.id}>
                 <TooltipTrigger asChild>
@@ -382,17 +391,20 @@ export function ShortCalendarTable({
 
                   {/* Срок отчёта (№4) — крайняя дата отправки отчёта смежным отделам
                       (старт − 17 кал. дн.). Только дата: просрочка живёт в колонке
-                      «Отправка смежным отделам» и только по факту отправки. */}
-                  <div
-                    className={cn(
-                      "flex w-[120px] flex-col justify-center gap-1 px-3",
-                      CELL
-                    )}
-                  >
-                    <span className="text-sm tabular-nums text-gray-900 dark:text-gray-100">
-                      <RuDate value={report.deadline} />
-                    </span>
-                  </div>
+                      «Отправка смежным отделам» и только по факту отправки.
+                      Gated per V2-12 — see showReportColumns. */}
+                  {showReportColumns && (
+                    <div
+                      className={cn(
+                        "flex w-[120px] flex-col justify-center gap-1 px-3",
+                        CELL
+                      )}
+                    >
+                      <span className="text-sm tabular-nums text-gray-900 dark:text-gray-100">
+                        <RuDate value={report.deadline} />
+                      </span>
+                    </div>
+                  )}
 
                   {/* «Распределение по категориям» — collapsible structured block (§2).
                       Three columns; each centres a block of identical total height
@@ -489,32 +501,35 @@ export function ShortCalendarTable({
 
                   {/* Отправка смежным отделам (№4) — только фактический статус:
                       «Не отправлено», либо «Отправлено» + дата/версия. Просрочку «+N дн.»
-                      показываем ТОЛЬКО если отчёт фактически отправлен позже срока. */}
-                  <div
-                    className={cn(
-                      "flex w-[180px] flex-col justify-center gap-1 px-3",
-                      CELL
-                    )}
-                  >
-                    {report.sent ? (
-                      <>
-                        <span className="inline-flex w-fit items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-sm font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
-                          Отправлено
-                          {report.overdueDays === 0 && (
-                            <CheckCircle2 className="size-3.5 shrink-0" />
-                          )}
+                      показываем ТОЛЬКО если отчёт фактически отправлен позже срока.
+                      Gated per V2-12 — see showReportColumns. */}
+                  {showReportColumns && (
+                    <div
+                      className={cn(
+                        "flex w-[180px] flex-col justify-center gap-1 px-3",
+                        CELL
+                      )}
+                    >
+                      {report.sent ? (
+                        <>
+                          <span className="inline-flex w-fit items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-sm font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                            Отправлено
+                            {report.overdueDays === 0 && (
+                              <CheckCircle2 className="size-3.5 shrink-0" />
+                            )}
+                          </span>
+                          <span className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
+                            <RuDate value={report.sentAt!} /> · в.{report.versionNo}
+                            <OverdueTag days={report.overdueDays} />
+                          </span>
+                        </>
+                      ) : (
+                        <span className="inline-flex w-fit items-center rounded-md bg-red-50 px-1.5 py-0.5 text-sm font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
+                          Не отправлено
                         </span>
-                        <span className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
-                          <RuDate value={report.sentAt!} /> · в.{report.versionNo}
-                          <OverdueTag days={report.overdueDays} />
-                        </span>
-                      </>
-                    ) : (
-                      <span className="inline-flex w-fit items-center rounded-md bg-red-50 px-1.5 py-0.5 text-sm font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
-                        Не отправлено
-                      </span>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Статусы по КМ (union; §2 order — last). §5: when the «Статус КМ
                       по акции» filter is active, only cells with that status are shown. */}

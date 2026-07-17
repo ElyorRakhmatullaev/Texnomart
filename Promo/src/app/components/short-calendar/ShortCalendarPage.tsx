@@ -27,7 +27,9 @@ import { MobileListCard } from "@texnomart/shared/components/mobile-list-card";
 import { PromoStatusBadge } from "../../../components/PromoStatusBadge";
 import { OverdueTag } from "../../../components/OverdueTag";
 import { RuDate } from "../../../components/RuDate";
-import { useRole } from "../../role-context";
+import { useRole, type PromoRole } from "../../role-context";
+import { useCurrentUser } from "../../current-user-context";
+import { getActiveSubstitution } from "../../../lib/kd-substitution-store";
 import { ShortCalendarTable } from "./ShortCalendarTable";
 import { AggregatedIndicators } from "./AggregatedIndicators";
 import { PlanMode } from "./PlanMode";
@@ -62,6 +64,16 @@ import {
 // Only PLANNED campaigns appear in the short calendar (spec §4.1).
 const PLANNED = CAMPAIGNS.filter((c) => c.planned);
 
+// «Срок отчёта» / «Отправка смежным отделам» (columns + filter) are visible ONLY to
+// these roles, plus the active «уполномоченное лицо КД» (checked separately below) —
+// tracker V2-12, «строго по ТЗ». Администратор is included deliberately, mirroring the
+// app-wide god-mode convention (see permissions.ts ACCESS_MATRIX).
+const REPORT_SEND_ROLES: PromoRole[] = [
+  "Коммерческий директор",
+  "Сотрудник маркетинга",
+  "Администратор",
+];
+
 /** Parse a yyyy-mm-dd input value to a local-tz Date (avoids the UTC day shift). */
 function parseDate(value: string, endOfDay = false): Date | null {
   if (!value) return null;
@@ -83,6 +95,7 @@ function readinessSummary(agg: KmAggregate): string {
 export function ShortCalendarPage() {
   const navigate = useNavigate();
   const { currentRole } = useRole();
+  const { currentUser } = useCurrentUser();
   const [mode, setMode] = React.useState<"calendar" | "plan">("calendar");
   const [filters, setFilters] =
     React.useState<CalendarFilterValues>(DEFAULT_FILTER_VALUES);
@@ -98,6 +111,15 @@ export function ShortCalendarPage() {
   // №5 — a Категорийный менеджер sees a planned campaign only AFTER its plan is
   // approved by all responsible directors; other roles see the full plan.
   const isKm = currentRole === "Категорийный менеджер (КМ)";
+
+  // «Срок отчёта» + «Отправка смежным отделам» (columns, filter, mobile card, CSV) —
+  // gated per V2-12: КД / Сотрудник маркетинга / Администратор by role, or the current
+  // logged-in user acting as the active «уполномоченное лицо КД».
+  const canSeeReportSend = React.useMemo(() => {
+    if (REPORT_SEND_ROLES.includes(currentRole)) return true;
+    const sub = getActiveSubstitution();
+    return !!sub && sub.substituteUserId === currentUser?.id;
+  }, [currentRole, currentUser]);
 
   function setFilter<K extends keyof CalendarFilterValues>(
     key: K,
@@ -128,8 +150,9 @@ export function ShortCalendarPage() {
       // Контрольные — период акции (overlap with the selected range)
       if (from && c.endDate < from) return false;
       if (to && c.startDate > to) return false;
-      // Отправка смежным отделам (§V2-12)
-      if (filters.reportSend !== ALL) {
+      // Отправка смежным отделам (§V2-12) — gated: skip even if somehow set while
+      // the facet is hidden for the current role/substitution (defence-in-depth).
+      if (canSeeReportSend && filters.reportSend !== ALL) {
         const sent = getReportSendStatus(c).sent;
         if (filters.reportSend === "sent" && !sent) return false;
         if (filters.reportSend === "not-sent" && sent) return false;
@@ -153,7 +176,7 @@ export function ShortCalendarPage() {
         return false;
       return true;
     });
-  }, [filters, hideCancelled, isKm]);
+  }, [filters, hideCancelled, isKm, canSeeReportSend]);
 
   // A distribution filter implies the block is relevant — auto-expand so the
   // matching rows are visible (§1, §2).
@@ -184,7 +207,7 @@ export function ShortCalendarPage() {
     if (mode === "calendar") {
       downloadCsv(
         `краткий-промо-календарь_${stamp}.csv`,
-        buildCalendarCsv(filtered)
+        buildCalendarCsv(filtered, { includeReportColumns: canSeeReportSend })
       );
       toast.success(
         `Экспортировано: ${filtered.length} акций (с учётом фильтров)`
@@ -307,6 +330,7 @@ export function ShortCalendarPage() {
               distExpanded={distExpanded}
               onDistExpandedChange={setDistExpanded}
               campaigns={PLANNED}
+              showReportSend={canSeeReportSend}
             />
           )}
 
@@ -325,6 +349,7 @@ export function ShortCalendarPage() {
                 category: filters.distCategory,
                 km: filters.distKm,
               }}
+              showReportColumns={canSeeReportSend}
             />
           </div>
 
@@ -340,6 +365,7 @@ export function ShortCalendarPage() {
                   key={c.id}
                   campaign={c}
                   onClick={() => navigate(`/short-calendar/${c.id}`)}
+                  showReportSend={canSeeReportSend}
                 />
               ))
             )}
@@ -357,9 +383,12 @@ export function ShortCalendarPage() {
 function MobileCampaignCard({
   campaign: c,
   onClick,
+  showReportSend,
 }: {
   campaign: PromoCampaign;
   onClick: () => void;
+  /** Gate «Срок отчёта» / «Отправка смежным» lines per V2-12. */
+  showReportSend: boolean;
 }) {
   const agg = aggregateKmStatuses(c);
   const deadline = getFillDeadline(c);
@@ -384,28 +413,32 @@ function MobileCampaignCard({
           <RuDate value={deadline} />
           <OverdueTag days={overdue} />
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span>Срок отчёта:</span>
-          <RuDate value={report.deadline} />
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span>Отправка смежным:</span>
-          {report.sent ? (
-            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
-              Отправлено
-              {report.overdueDays === 0 && <CheckCircle2 className="size-3 shrink-0" />}
-            </span>
-          ) : (
-            <span className="inline-flex items-center rounded-md bg-red-50 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
-              Не отправлено
-            </span>
-          )}
-        </div>
-        {report.sent && (
-          <div className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums">
-            <RuDate value={report.sentAt!} /> · в.{report.versionNo}
-            <OverdueTag days={report.overdueDays} />
-          </div>
+        {showReportSend && (
+          <>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span>Срок отчёта:</span>
+              <RuDate value={report.deadline} />
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span>Отправка смежным:</span>
+              {report.sent ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                  Отправлено
+                  {report.overdueDays === 0 && <CheckCircle2 className="size-3 shrink-0" />}
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-md bg-red-50 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
+                  Не отправлено
+                </span>
+              )}
+            </div>
+            {report.sent && (
+              <div className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums">
+                <RuDate value={report.sentAt!} /> · в.{report.versionNo}
+                <OverdueTag days={report.overdueDays} />
+              </div>
+            )}
+          </>
         )}
         {kmNames && <div>КМ: {kmNames}</div>}
         <div className="font-medium text-gray-700 dark:text-gray-200">

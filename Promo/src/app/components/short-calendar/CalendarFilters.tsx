@@ -184,6 +184,9 @@ interface CalendarFiltersProps {
   onDistExpandedChange: (v: boolean) => void;
   /** Campaigns the option lists are derived from (distinct categories). */
   campaigns: PromoCampaign[];
+  /** «Отправка смежным отделам» facet — КД / уполном. лицо КД / Сотрудник
+   *  маркетинга / Администратор only (V2-12, «строго по ТЗ»). Default true. */
+  showReportSend?: boolean;
 }
 
 export function CalendarFilters({
@@ -195,6 +198,7 @@ export function CalendarFilters({
   distExpanded,
   onDistExpandedChange,
   campaigns,
+  showReportSend = true,
 }: CalendarFiltersProps) {
   const categoryOptions: Option[] = React.useMemo(() => {
     const set = new Set<string>();
@@ -281,14 +285,16 @@ export function CalendarFilters({
               />
             </div>
           </label>
-          <FilterSelect
-            label="Отправка смежным отделам"
-            placeholder="Все статусы"
-            value={values.reportSend}
-            onChange={(v) => onChange("reportSend", v)}
-            options={REPORT_SEND_OPTIONS}
-            width="w-[210px]"
-          />
+          {showReportSend && (
+            <FilterSelect
+              label="Отправка смежным отделам"
+              placeholder="Все статусы"
+              value={values.reportSend}
+              onChange={(v) => onChange("reportSend", v)}
+              options={REPORT_SEND_OPTIONS}
+              width="w-[210px]"
+            />
+          )}
         </Group>
 
         <div className="hidden self-stretch border-l border-gray-200 lg:block dark:border-border" />
