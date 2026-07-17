@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import type { AppShellConfig } from "@texnomart/shared/types";
 import type { PromoRole } from "./role-context";
-import { countApprovalsAwaiting } from "../lib/promo-mock-data";
+import { countApprovalsAwaiting, formatPromoNo } from "../lib/promo-mock-data";
 
 const TexnomartLogoFull = (
   <svg width="180" height="38" viewBox="0 0 180 38" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-6 w-auto shrink-0">
@@ -124,10 +124,11 @@ export function createPromoShellConfig(
     ],
     breadcrumbRoutes: [
       { path: "/short-calendar", label: "Краткий промо-календарь" },
-      { path: "/short-calendar/:promoId", label: "Акция", parent: "/short-calendar", paramLabel: (id) => `Акция ${id}` },
+      { path: "/short-calendar/:promoId", label: "Акция", parent: "/short-calendar", paramLabel: (id) => `Акция ${formatPromoNo(id)}` },
       { path: "/full-calendar", label: "Полный промо-календарь" },
       { path: "/approvals", label: "Согласование" },
-      { path: "/approvals/:id", label: "Заявка на согласование", parent: "/approvals", paramLabel: (id) => `Заявка ${id}` },
+      // `id` is `${campaignId}~${kmId}` (tracker V2-9 amendment) — only the campaign part is shown.
+      { path: "/approvals/:id", label: "Заявка на согласование", parent: "/approvals", paramLabel: (id) => `Заявка ${formatPromoNo(id.split("~")[0])}` },
       { path: "/reports", label: "Отчёты смежным отделам" },
       { path: "/notifications", label: "Уведомления" },
       { path: "/notification-settings", label: "Настройки уведомлений" },

@@ -24,6 +24,7 @@ import { Button } from "@texnomart/ui/button";
 import {
   MIN_UNPLANNED_LEAD_DAYS,
   PROMO_TYPES,
+  formatPromoNo,
   minUnplannedStartDate,
   validateUnplannedInput,
   type PromoCampaign,
@@ -203,7 +204,7 @@ export function CreateCampaignDialog({
                       <SelectContent>
                         {plannedCampaigns.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
-                            {c.id} · {c.name}
+                            {formatPromoNo(c.id)} · {c.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -140,7 +140,7 @@ export function ApprovalsPage() {
     [currentRole, items]
   );
 
-  // № промо options — the campaigns present in the visible queue (full PR-/UN- format).
+  // № промо options — the campaigns present in the visible queue («26-N» short format, tracker V2-9).
   const promoNoOptions = React.useMemo(() => {
     const seen = new Set<string>();
     const opts: { id: string; no: string; name: string }[] = [];
@@ -148,7 +148,7 @@ export function ApprovalsPage() {
       if (seen.has(it.campaignId)) continue;
       seen.add(it.campaignId);
       const c = getCampaignById(it.campaignId);
-      opts.push({ id: it.campaignId, no: it.campaignId, name: c?.name ?? it.campaignId });
+      opts.push({ id: it.campaignId, no: formatPromoNo(it.campaignId), name: c?.name ?? formatPromoNo(it.campaignId) });
     }
     return opts;
   }, [queue]);
@@ -313,7 +313,7 @@ export function ApprovalsPage() {
             resultCount={filtered.length}
             className="bg-transparent px-0"
           >
-            {/* §2: № промо searchable multi-select (full PR-/UN- format). */}
+            {/* §2: № промо searchable multi-select («26-N» short format). */}
             <PromoNoFilter
               options={promoNoOptions}
               selected={promoIds}

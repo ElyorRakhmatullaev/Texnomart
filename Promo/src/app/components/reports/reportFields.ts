@@ -13,6 +13,7 @@ import {
 } from "../full-calendar/gridFields";
 import {
   formatAvailabilityPct,
+  formatPromoNo,
   getCategoryManager,
   getNomenclatureItem,
   getStoreAvailability,
@@ -80,7 +81,7 @@ const ACCESSORS: Record<string, Accessor> = {
   // report-local identity
   priznak: (_l, c) => (c.planned ? "Плановая" : "Внеплановая"),
   km: (l) => getCategoryManager(l.kmId)?.name ?? l.kmId,
-  promoNo: (_l, c) => c.id,
+  promoNo: (_l, c) => formatPromoNo(c.id),
   type: (_l, c) => c.type,
   name: (_l, c) => c.name,
   start: (_l, c) => ruDate(c.startDate),

@@ -412,10 +412,10 @@ export function FullCalendarPage() {
     });
   }, [visibleCampaigns, ownKmId, linesFor]);
 
-  // № промо filter options (§10) — full PR-/UN- format (§13), КМ-scoped (§7).
+  // № промо filter options (§10) — «26-N» short format (tracker V2-9), КМ-scoped (§7).
   const promoNoOptions = React.useMemo(
     () =>
-      kmVisibleCampaigns.map((c) => ({ id: c.id, no: c.id, name: c.name })),
+      kmVisibleCampaigns.map((c) => ({ id: c.id, no: formatPromoNo(c.id), name: c.name })),
     [kmVisibleCampaigns]
   );
 
@@ -960,7 +960,7 @@ export function FullCalendarPage() {
       setVisibleCampaigns((prev) =>
         prev.some((x) => x.id === c.id) ? prev : [c, ...prev]
       );
-      toast.success(`Встраивание в плановую акцию ${c.id} «${c.name}».`);
+      toast.success(`Встраивание в плановую акцию ${formatPromoNo(c.id)} «${c.name}».`);
       setTimeout(() => setAddCampaignId(campaignId), 0);
     },
     [campaignsById]
@@ -1112,7 +1112,7 @@ export function FullCalendarPage() {
             resultCount={filtered.length}
             className="bg-transparent px-0"
           >
-            {/* §10: № промо searchable multi-select (full PR-/UN- format). */}
+            {/* §10: № промо searchable multi-select («26-N» short format). */}
             <PromoNoFilter
               options={promoNoOptions}
               selected={promoIds}
@@ -1358,7 +1358,7 @@ export function FullCalendarPage() {
         onOpenChange={(open) => !open && setHistoryCampaignId(null)}
         campaignLabel={
           historyCampaign
-            ? `${historyCampaign.id} · ${historyCampaign.name}`
+            ? `${formatPromoNo(historyCampaign.id)} · ${historyCampaign.name}`
             : undefined
         }
         versions={historyVersions}
@@ -1443,10 +1443,10 @@ export function FullCalendarPage() {
                 {pendingDup && (
                   <div className="rounded-md bg-amber-50 dark:bg-amber-500/15 px-3 py-2 text-amber-900 dark:text-amber-200">
                     {pendingDup.hit.samePromo ? (
-                      <span>Уже добавлена в эту акцию ({pendingDup.campaignId}).</span>
+                      <span>Уже добавлена в эту акцию ({formatPromoNo(pendingDup.campaignId)}).</span>
                     ) : (
                       <span>
-                        Уже участвует в акции {pendingDup.hit.promoId} «
+                        Уже участвует в акции {formatPromoNo(pendingDup.hit.promoId)} «
                         {pendingDup.hit.promoName}».
                       </span>
                     )}

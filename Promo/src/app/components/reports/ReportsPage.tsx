@@ -30,6 +30,7 @@ import {
 import {
   DEPARTMENT_SHORT,
   buildCampaignReport,
+  formatPromoNo,
   getCampaignVersions,
   getPromoLines,
   getReportAccess,
@@ -314,7 +315,7 @@ export function ReportsPage() {
                   {sentCampaigns.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       <span className="tabular-nums text-muted-foreground">
-                        {c.id}
+                        {formatPromoNo(c.id)}
                       </span>{" "}
                       · {c.name}
                     </SelectItem>
@@ -421,7 +422,7 @@ export function ReportsPage() {
           <VersionHistoryDrawer
             open={historyOpen}
             onOpenChange={setHistoryOpen}
-            campaignLabel={`${campaign.id} · ${campaign.name}`}
+            campaignLabel={`${formatPromoNo(campaign.id)} · ${campaign.name}`}
             versions={getCampaignVersions(campaign.id)}
             currentReport={buildCampaignReport(lines)}
             snapshotFor={(v) => getReportSnapshot(campaign.id, v)}

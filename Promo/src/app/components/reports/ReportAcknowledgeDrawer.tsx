@@ -14,6 +14,7 @@ import { cn } from "@texnomart/ui/utils";
 import { RuDate } from "../../../components/RuDate";
 import {
   DEPARTMENT_LABELS,
+  formatPromoNo,
   getNomenclatureItem,
   getReportChangeSet,
   getReportRoster,
@@ -99,7 +100,7 @@ export function ReportAcknowledgeDrawer({
             Кто ознакомился с изменениями
           </SheetTitle>
           <SheetDescription className="tabular-nums">
-            {DEPARTMENT_LABELS[department]} · {campaign.id} · Версия {version}
+            {DEPARTMENT_LABELS[department]} · {formatPromoNo(campaign.id)} · Версия {version}
           </SheetDescription>
         </SheetHeader>
 

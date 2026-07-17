@@ -46,6 +46,7 @@ import {
   PROMO_TYPES,
   actorForPlanStatus,
   findCoverageGaps,
+  formatPromoNo,
   getPlanApproval,
   nextPlanPromoNo,
   type PlanStatus,
@@ -767,7 +768,10 @@ function PlanRowDialog({
 
   // №2 — тип промо is OPTIONAL for a draft; only name + valid period are required.
   const valid = Boolean(name.trim() && start && end && start <= end);
+  // The FULL id — persisted as the row's real identifier (`id: displayNo` below); never
+  // shown to the user directly. `displayNoLabel` is the «26-N» text shown in the field.
   const displayNo = mode === "edit" && initial ? initial.id : autoNo;
+  const displayNoLabel = formatPromoNo(displayNo);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -788,7 +792,7 @@ function PlanRowDialog({
               <Label htmlFor="plan-num">№ промо</Label>
               <Input
                 id="plan-num"
-                value={displayNo}
+                value={displayNoLabel}
                 readOnly
                 disabled
                 className="bg-muted/50 tabular-nums"

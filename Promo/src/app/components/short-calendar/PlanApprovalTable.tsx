@@ -5,6 +5,7 @@ import { cn } from "@texnomart/ui/utils";
 import { Checkbox } from "@texnomart/ui/checkbox";
 import { Button } from "@texnomart/ui/button";
 import {
+  formatPromoNo,
   getPlanApproval,
   PLAN_DIRECTOR_SLA_WORKING_DAYS,
   PLAN_MARKETING_REVIEW_LEAD_DAYS,
@@ -343,7 +344,7 @@ export function PlanApprovalTable({
                         <Checkbox
                           checked={checked}
                           onCheckedChange={() => onToggle?.(r.id)}
-                          aria-label={`Выбрать акцию ${r.id}`}
+                          aria-label={`Выбрать акцию ${formatPromoNo(r.id)}`}
                         />
                       ) : null}
                     </td>
@@ -357,7 +358,7 @@ export function PlanApprovalTable({
                       "text-xs font-medium tabular-nums text-muted-foreground"
                     )}
                   >
-                    {r.id}
+                    {formatPromoNo(r.id)}
                   </td>
                   <td className={CELL}>
                     <TypeCell type={r.type} missing={typeMissing?.(r.id)} />
@@ -419,13 +420,13 @@ export function PlanApprovalTable({
                     <Checkbox
                       checked={checked}
                       onCheckedChange={() => onToggle?.(r.id)}
-                      aria-label={`Выбрать акцию ${r.id}`}
+                      aria-label={`Выбрать акцию ${formatPromoNo(r.id)}`}
                     />
                   )}
                   <RowLifecycleBadge send={send} decision={decision} />
                 </div>
                 <span className="text-xs font-medium tabular-nums text-muted-foreground">
-                  {r.id}
+                  {formatPromoNo(r.id)}
                 </span>
               </div>
               <div className="mt-1.5 font-medium text-gray-900 dark:text-gray-100">{r.name}</div>

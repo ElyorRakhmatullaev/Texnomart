@@ -10,6 +10,7 @@ import { OverdueTag } from "../../../components/OverdueTag";
 import { RuDate } from "../../../components/RuDate";
 import {
   displayKmStatus,
+  formatPromoNo,
   getCampaignById,
   getCategoryManager,
   isAutoEscalated,
@@ -211,7 +212,7 @@ export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
                       CELL
                     )}
                   >
-                    {it.campaignId}
+                    {formatPromoNo(it.campaignId)}
                   </span>
                   <span className={cn(COLS.type, "px-3 py-2.5 text-gray-700 dark:text-gray-200", CELL)}>
                     {c?.type ?? "—"}
@@ -253,8 +254,8 @@ export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
             <MobileListCard
               key={it.id}
               onClick={() => onOpen(it.id)}
-              title={c?.name ?? it.campaignId}
-              subtitle={`${it.campaignId} · ${c?.type ?? ""}`}
+              title={c?.name ?? formatPromoNo(it.campaignId)}
+              subtitle={`${formatPromoNo(it.campaignId)} · ${c?.type ?? ""}`}
               status={<PromoStatusBadge status={displayKmStatus(it)} />}
             >
               <div className="mt-2 flex flex-wrap items-center gap-1.5">

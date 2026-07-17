@@ -123,7 +123,8 @@ export function buildCalendarCsv(campaigns: PromoCampaign[]): string {
  * Полный промо-календарь → FLAT export (feedback §13): one row per НОМЕНКЛАТУРА
  * with the № промо repeated on every row, so the file sorts/filters/analyses cleanly
  * in Excel. Reflects the current filters (the caller passes the filtered campaigns +
- * a linesFor accessor returning the visible lines). № промо keeps the PR-/UN- format.
+ * a linesFor accessor returning the visible lines). № промо uses the «26-N» short format
+ * (tracker V2-9) — same as the short-calendar export.
  */
 export function buildFullCalendarCsv(
   campaigns: PromoCampaign[],
@@ -183,7 +184,7 @@ export function buildFullCalendarCsv(
         .map((g) => (getNomenclatureItem(g.nomenclatureId)?.stock ?? 0).toString())
         .join(", ");
       rows.push([
-        c.id, // № промо repeated on every line (§13 flat format)
+        formatPromoNo(c.id), // № промо repeated on every line (§13 flat format)
         c.planned ? "Плановая" : "Внеплановая",
         c.type,
         c.name,
@@ -246,7 +247,7 @@ export function buildPlanCsv(rows: PlanExportRow[]): string {
     const kd = a?.kd;
     const od = a?.od;
     return [
-      r.id,
+      formatPromoNo(r.id),
       r.type,
       r.name,
       fmtDate(r.startDate),

@@ -23,6 +23,7 @@ import {
 import { Money } from "../../../components/Money";
 import { RuDate } from "../../../components/RuDate";
 import {
+  formatPromoNo,
   getCategoryManager,
   getNomenclatureItem,
   installmentTerm,
@@ -635,7 +636,7 @@ export function FullCalendarGrid({
                       aria-label="Выбрать все строки акции"
                     />
                   )}
-                  <span className="tabular-nums">{campaign.id}</span>
+                  <span className="tabular-nums">{formatPromoNo(campaign.id)}</span>
                   <span className="font-normal text-muted-foreground">
                     · {lines.length} {pluralPositions(lines.length)}
                   </span>
@@ -689,7 +690,7 @@ export function FullCalendarGrid({
                         className="flex items-center justify-center px-3 text-xs tabular-nums text-muted-foreground"
                         style={colStyle(FROZEN.promo)}
                       >
-                        {campaign.id}
+                        {formatPromoNo(campaign.id)}
                       </span>
                       <KmCell kmId={line.kmId} width={FROZEN.km} />
                       <div
@@ -1218,7 +1219,7 @@ function LineMarkers({ line }: { line: PromoLine }) {
                 <span className="block font-medium">
                   {line.duplicateInfo.samePromo
                     ? "Уже добавлена в эту акцию."
-                    : `Уже участвует в акции ${line.duplicateInfo.promoId} «${line.duplicateInfo.promoName}».`}
+                    : `Уже участвует в акции ${formatPromoNo(line.duplicateInfo.promoId)} «${line.duplicateInfo.promoName}».`}
                 </span>
                 {line.duplicateInfo.overlap && (
                   <span className="block">

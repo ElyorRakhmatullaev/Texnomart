@@ -1323,7 +1323,7 @@ export function parseImportCsv(
       reason: dup
         ? dup.samePromo
           ? "Дубль: уже в этой акции (импортируется с отметкой «дубль»)."
-          : `Дубль: уже в акции ${dup.promoId} (импортируется с отметкой «дубль»).`
+          : `Дубль: уже в акции ${formatPromoNo(dup.promoId)} (импортируется с отметкой «дубль»).`
         : undefined,
     });
   }

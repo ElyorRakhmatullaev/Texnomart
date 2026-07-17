@@ -24,6 +24,7 @@ import {
   PROMO_TYPES,
   canRequestNonParticipation,
   displayKmStatus,
+  formatPromoNo,
   getCampaignById,
   kmSubmissionSla,
   participationsForKm,
@@ -129,7 +130,7 @@ export function MyParticipationsPanel() {
     return rows.flatMap((r) => {
       if (seen.has(r.campaignId)) return [];
       seen.add(r.campaignId);
-      return [{ id: r.campaignId, no: r.campaignId, name: r.campaign?.name ?? r.campaignId }];
+      return [{ id: r.campaignId, no: formatPromoNo(r.campaignId), name: r.campaign?.name ?? formatPromoNo(r.campaignId) }];
     });
   }, [rows]);
 
@@ -249,13 +250,13 @@ export function MyParticipationsPanel() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-gray-900 dark:text-gray-100">
-                        {c?.name ?? row.campaignId}
+                        {c?.name ?? formatPromoNo(row.campaignId)}
                       </span>
                       <PromoStatusBadge status={row.shownStatus} />
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums">
                       <span className="font-medium text-gray-600 dark:text-gray-300">
-                        {row.campaignId}
+                        {formatPromoNo(row.campaignId)}
                       </span>
                       {c && <span>{c.type}</span>}
                       {c && (

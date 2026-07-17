@@ -11,6 +11,7 @@ import {
   CAMPAIGNS,
   addCalendarDays,
   addWorkingDays,
+  formatPromoNo,
   getOverdueDays,
   getCampaignById,
   getCategoryManager,
@@ -76,7 +77,7 @@ export function buildPlanControlPoints(ref: Date = new Date()): ControlPoint[] {
     const base = {
       scope: "plan" as const,
       campaignId: c.id,
-      promoNo: c.id,
+      promoNo: formatPromoNo(c.id),
       promoName: c.name,
       planPeriod: planPeriodLabel(c.startDate),
     };
@@ -172,7 +173,7 @@ export function buildPromoControlPoints(ref: Date = new Date()): ControlPoint[] 
     const base = {
       scope: "promo" as const,
       campaignId: c.id,
-      promoNo: c.id,
+      promoNo: formatPromoNo(c.id),
       promoName: c.name,
       promoPeriod: { start: c.startDate, end: c.endDate },
     };

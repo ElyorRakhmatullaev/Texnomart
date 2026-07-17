@@ -28,6 +28,7 @@ import {
   AUDIT_ACTION_META,
   AUDIT_OBJECT_LABEL,
   buildAuditLog,
+  formatPromoNo,
   getCategoryManager,
   type AuditEvent,
 } from "../../../lib/promo-mock-data";
@@ -53,7 +54,7 @@ function logExportRows(events: AuditEvent[]): (string | number)[][] {
     e.action,
     AUDIT_OBJECT_LABEL[e.objectType],
     e.objectLabel,
-    e.campaignId ?? "",
+    e.campaignId ? formatPromoNo(e.campaignId) : "",
     e.statusFrom ?? "",
     e.statusTo ?? "",
     e.comment ?? "",
@@ -112,7 +113,7 @@ function ObjectCell({ event }: { event: AuditEvent }) {
         {event.objectLabel}
       </p>
       {event.campaignId && (
-        <p className="font-mono text-[11px] text-gray-400 dark:text-gray-500">{event.campaignId}</p>
+        <p className="font-mono text-[11px] text-gray-400 dark:text-gray-500">{formatPromoNo(event.campaignId)}</p>
       )}
     </div>
   );

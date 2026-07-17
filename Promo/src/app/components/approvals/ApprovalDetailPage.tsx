@@ -27,6 +27,7 @@ import {
   campaignDecisionSummary,
   displayKmStatus,
   effectiveReviewer,
+  formatPromoNo,
   getCampaignById,
   getCategoryManager,
   getPromoLines,
@@ -215,7 +216,7 @@ export function ApprovalDetailPage() {
         title={campaign.name}
         subtitle={
           <span className="tabular-nums">
-            {campaign.id} · {campaign.type} · {km?.name ?? item.kmId}
+            {formatPromoNo(campaign.id)} · {campaign.type} · {km?.name ?? item.kmId}
           </span>
         }
         badges={

@@ -24,6 +24,7 @@ import {
   IMPORT_COLUMNS,
   buildImportSampleCsv,
   buildImportTemplateCsv,
+  formatPromoNo,
   type ImportParseResult,
   type ParsedImportRow,
   type PromoCampaign,
@@ -120,7 +121,7 @@ export function ExcelImportDialog({
                 <SelectContent>
                   {campaigns.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.id} · {c.name}
+                      {formatPromoNo(c.id)} · {c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
