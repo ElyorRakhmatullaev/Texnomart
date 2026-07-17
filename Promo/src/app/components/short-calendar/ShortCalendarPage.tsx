@@ -4,6 +4,7 @@ import * as React from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Download,
@@ -127,6 +128,12 @@ export function ShortCalendarPage() {
       // Контрольные — период акции (overlap with the selected range)
       if (from && c.endDate < from) return false;
       if (to && c.startDate > to) return false;
+      // Отправка смежным отделам (§V2-12)
+      if (filters.reportSend !== ALL) {
+        const sent = getReportSendStatus(c).sent;
+        if (filters.reportSend === "sent" && !sent) return false;
+        if (filters.reportSend === "not-sent" && sent) return false;
+      }
       // Распределение по категориям
       const dist = c.categoryDistribution ?? [];
       if (
@@ -384,14 +391,22 @@ function MobileCampaignCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <span>Отправка смежным:</span>
           {report.sent ? (
-            <span className="flex flex-wrap items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-300">
-              отправлено <RuDate value={report.sentAt!} /> · в.{report.versionNo}
-              <OverdueTag days={report.overdueDays} />
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+              Отправлено
+              {report.overdueDays === 0 && <CheckCircle2 className="size-3 shrink-0" />}
             </span>
           ) : (
-            <span>Не отправлено</span>
+            <span className="inline-flex items-center rounded-md bg-red-50 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
+              Не отправлено
+            </span>
           )}
         </div>
+        {report.sent && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums">
+            <RuDate value={report.sentAt!} /> · в.{report.versionNo}
+            <OverdueTag days={report.overdueDays} />
+          </div>
+        )}
         {kmNames && <div>КМ: {kmNames}</div>}
         <div className="font-medium text-gray-700 dark:text-gray-200">
           Готовность КМ: {readinessSummary(agg)}

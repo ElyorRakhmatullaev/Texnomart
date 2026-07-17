@@ -497,9 +497,11 @@ export function ShortCalendarTable({
                   >
                     {report.sent ? (
                       <>
-                        <span className="flex items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                          <CheckCircle2 className="size-3.5 shrink-0" />
+                        <span className="inline-flex w-fit items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-sm font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
                           Отправлено
+                          {report.overdueDays === 0 && (
+                            <CheckCircle2 className="size-3.5 shrink-0" />
+                          )}
                         </span>
                         <span className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
                           <RuDate value={report.sentAt!} /> · в.{report.versionNo}
@@ -507,7 +509,7 @@ export function ShortCalendarTable({
                         </span>
                       </>
                     ) : (
-                      <span className="text-sm text-muted-foreground">
+                      <span className="inline-flex w-fit items-center rounded-md bg-red-50 px-1.5 py-0.5 text-sm font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
                         Не отправлено
                       </span>
                     )}

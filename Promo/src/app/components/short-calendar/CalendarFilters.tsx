@@ -38,6 +38,7 @@ export interface CalendarFilterValues {
   // Контрольные
   periodFrom: string; // yyyy-mm-dd
   periodTo: string; // yyyy-mm-dd
+  reportSend: string; // "all" | "sent" | "not-sent" (§V2-12)
   // Распределение по категориям
   distWeekday: string; // Date.getDay() as string, or ALL
   distCategory: string;
@@ -51,6 +52,7 @@ export const DEFAULT_FILTER_VALUES: CalendarFilterValues = {
   kmStatus: ALL,
   periodFrom: "",
   periodTo: "",
+  reportSend: ALL,
   distWeekday: ALL,
   distCategory: ALL,
   distKm: ALL,
@@ -75,6 +77,7 @@ export function countActiveFilters(v: CalendarFilterValues): number {
   if (v.km !== ALL) n += 1;
   if (v.kmStatus !== ALL) n += 1;
   if (v.periodFrom !== "" || v.periodTo !== "") n += 1;
+  if (v.reportSend !== ALL) n += 1;
   if (v.distWeekday !== ALL) n += 1;
   if (v.distCategory !== ALL) n += 1;
   if (v.distKm !== ALL) n += 1;
@@ -91,6 +94,11 @@ const KM_STATUSES: string[] = [
   "Согласовано КД",
   "Не участвует",
   "Отменена",
+];
+
+const REPORT_SEND_OPTIONS: Option[] = [
+  { value: "sent", label: "Отправлено" },
+  { value: "not-sent", label: "Не отправлено" },
 ];
 
 // Пн..Вс mapped to Date.getDay() (Sun = 0).
@@ -273,6 +281,14 @@ export function CalendarFilters({
               />
             </div>
           </label>
+          <FilterSelect
+            label="Отправка смежным отделам"
+            placeholder="Все статусы"
+            value={values.reportSend}
+            onChange={(v) => onChange("reportSend", v)}
+            options={REPORT_SEND_OPTIONS}
+            width="w-[210px]"
+          />
         </Group>
 
         <div className="hidden self-stretch border-l border-gray-200 lg:block dark:border-border" />
