@@ -158,6 +158,7 @@ export function ShortCalendarTable({
   const headRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
   const topScrollRef = React.useRef<HTMLDivElement>(null);
+  const bottomScrollRef = React.useRef<HTMLDivElement>(null);
   const frozenHeadRef = React.useRef<HTMLDivElement>(null);
 
   // Width of the frozen identity pane (top-scrollbar spacer) and of the scrollable
@@ -182,22 +183,20 @@ export function ShortCalendarTable({
     };
   }, [campaigns, expanded, expandedReadiness, distFilter]);
 
-  // Mirror one scroller's scrollLeft onto the other two. Writes are idempotent (only
-  // when the value actually differs), so the resulting scroll events self-terminate —
-  // no re-entrancy flag needed, and no dropped frames during fast scrolling.
-  const syncScroll = React.useCallback((from: "top" | "body") => {
-    const src = from === "top" ? topScrollRef.current : bodyRef.current;
+  // Mirror one scroller's scrollLeft onto the other three (§V2-1 adds a sticky-BOTTOM
+  // scrollbar alongside the sticky-top one). Writes are idempotent (only when the value
+  // actually differs), so the resulting scroll events self-terminate — no re-entrancy
+  // flag needed, and no dropped frames during fast scrolling.
+  const syncScroll = React.useCallback((from: "top" | "body" | "bottom") => {
+    const src =
+      from === "top" ? topScrollRef.current
+      : from === "bottom" ? bottomScrollRef.current
+      : bodyRef.current;
     const x = src?.scrollLeft ?? 0;
-    if (headRef.current && headRef.current.scrollLeft !== x)
-      headRef.current.scrollLeft = x;
-    if (
-      from !== "top" &&
-      topScrollRef.current &&
-      topScrollRef.current.scrollLeft !== x
-    )
-      topScrollRef.current.scrollLeft = x;
-    if (from !== "body" && bodyRef.current && bodyRef.current.scrollLeft !== x)
-      bodyRef.current.scrollLeft = x;
+    for (const ref of [topScrollRef, headRef, bodyRef, bottomScrollRef]) {
+      if (ref.current && ref.current !== src && ref.current.scrollLeft !== x)
+        ref.current.scrollLeft = x;
+    }
   }, []);
 
   return (
@@ -313,11 +312,13 @@ export function ShortCalendarTable({
           ))}
         </div>
 
-        {/* Scrolling pane — the BOTTOM scrollbar; drives the header + top scrollbar (§1). */}
+        {/* Scrolling pane — drives the header + top/bottom scrollbars (§1/§V2-1). Its
+            own native horizontal scrollbar is hidden (still scrollable via wheel/drag)
+            so it doesn't visually double up with the sticky-bottom strip below. */}
         <div
           ref={bodyRef}
           onScroll={() => syncScroll("body")}
-          className="min-w-0 flex-1 overflow-x-auto"
+          className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <div className="min-w-max">
             {campaigns.map((c, i) => {
@@ -557,6 +558,21 @@ export function ShortCalendarTable({
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* Sticky-BOTTOM synced horizontal scrollbar (§V2-1): pinned to the bottom of
+          the viewport so the table can be scrolled horizontally from anywhere while
+          the page scrolls vertically (Excel-like). Spacer = frozen-pane width; inner
+          track = scroll-content width so the thumb matches the body's own scrollbar. */}
+      <div className="sticky bottom-0 z-30 flex border-t bg-gray-50 dark:bg-muted/40">
+        <div className="shrink-0" style={{ width: frozenW }} />
+        <div
+          ref={bottomScrollRef}
+          onScroll={() => syncScroll("bottom")}
+          className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+        >
+          <div style={{ width: scrollW, height: 1 }} />
         </div>
       </div>
     </Card>
