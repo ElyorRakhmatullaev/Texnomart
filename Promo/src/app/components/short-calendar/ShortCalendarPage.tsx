@@ -313,6 +313,11 @@ export function ShortCalendarPage() {
               onKmStatusClick={(campaignId, kmId, status) =>
                 navigate(kmStatusDeepLink(campaignId, kmId, status))
               }
+              distFilter={{
+                weekday: filters.distWeekday,
+                category: filters.distCategory,
+                km: filters.distKm,
+              }}
             />
           </div>
 

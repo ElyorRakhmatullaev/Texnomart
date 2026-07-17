@@ -81,6 +81,23 @@ function kmName(id: string): string {
   return CATEGORY_MANAGERS.find((k) => k.id === id)?.name ?? id;
 }
 
+/**
+ * Row-level «Распределение по категориям» filter (tracker V1-1): the page's
+ * `filtered` memo only narrows which CAMPAIGNS render, so the expanded block's
+ * sub-rows must be filtered separately with this predicate, or non-matching
+ * days/categories/КМ leak into a campaign that otherwise matches.
+ */
+function matchesDistFilter(
+  e: CategoryDistributionEntry,
+  f?: { weekday: string; category: string; km: string }
+): boolean {
+  if (!f) return true;
+  if (f.weekday !== "all" && String(e.date.getDay()) !== f.weekday) return false;
+  if (f.category !== "all" && e.category !== f.category) return false;
+  if (f.km !== "all" && e.responsibleKmId !== f.km) return false;
+  return true;
+}
+
 interface ShortCalendarTableProps {
   campaigns: PromoCampaign[];
   onRowClick: (id: string) => void;
@@ -93,6 +110,9 @@ interface ShortCalendarTableProps {
   kmStatusFilter?: string;
   /** Click on a КМ-status cell → deep-link to /approvals or /full-calendar (§10). */
   onKmStatusClick?: (campaignId: string, kmId: string, status: KmStatus) => void;
+  /** Active «Распределение по категориям» filter (§V1-1) — restricts which
+   *  sub-rows render inside the expanded block. "all" = no restriction. */
+  distFilter?: { weekday: string; category: string; km: string };
 }
 
 export function ShortCalendarTable({
@@ -101,6 +121,7 @@ export function ShortCalendarTable({
   expanded,
   kmStatusFilter,
   onKmStatusClick,
+  distFilter,
 }: ShortCalendarTableProps) {
   const kmFilterActive = !!kmStatusFilter && kmStatusFilter !== "all";
   const kmColumns: CategoryManager[] = CATEGORY_MANAGERS;
@@ -121,7 +142,10 @@ export function ShortCalendarTable({
   // Compute each row's height ONCE and apply it to both panes (alignment invariant):
   // the tallest of the base, the expanded distribution block, and an expanded readiness block.
   const rowHeights = campaigns.map((c) => {
-    const n = c.categoryDistribution?.length ?? 0;
+    const entries = (c.categoryDistribution ?? []).filter((e) =>
+      matchesDistFilter(e, distFilter)
+    );
+    const n = entries.length;
     const distH = expanded && n > 0 ? n * SUBROW_H : 0;
     const readinessH = expandedReadiness.has(c.id) ? READINESS_EXPANDED_H : 0;
     return Math.max(BASE_ROW_H, distH, readinessH);
@@ -156,7 +180,7 @@ export function ShortCalendarTable({
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [campaigns, expanded, expandedReadiness]);
+  }, [campaigns, expanded, expandedReadiness, distFilter]);
 
   // Mirror one scroller's scrollLeft onto the other two. Writes are idempotent (only
   // when the value actually differs), so the resulting scroll events self-terminate —
@@ -300,7 +324,10 @@ export function ShortCalendarTable({
               const deadline = getFillDeadline(c);
               const overdue = getOverdueDays(deadline);
               const report = getReportSendStatus(c);
-              const groups = groupDistribution(c.categoryDistribution ?? []);
+              const entries = (c.categoryDistribution ?? []).filter((e) =>
+                matchesDistFilter(e, distFilter)
+              );
+              const groups = groupDistribution(entries);
               const hasDist = groups.length > 0;
 
               return (
