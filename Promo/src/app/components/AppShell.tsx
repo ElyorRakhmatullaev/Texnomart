@@ -150,10 +150,16 @@ export function AppShell() {
   );
 
   // Dense, wide data grids use the full main width (no 1400px cap; §3.4 of the short-
-  // calendar feedback): the full promo-calendar and the short-calendar LIST (its detail
-  // page keeps the centered default). Other Promo screens stay centered.
+  // calendar feedback, extended by tracker V1-3.4 to Reports/Approvals/Audit): the full
+  // promo-calendar, the short-calendar LIST (its detail page keeps the centered default),
+  // Reports, the Approvals LIST (its /approvals/:id detail page stays centered), and Audit.
+  // Other Promo screens (detail pages, profile, settings, users, etc.) stay centered.
   const maxWidth =
-    pathname.startsWith("/full-calendar") || pathname === "/short-calendar"
+    pathname.startsWith("/full-calendar") ||
+    pathname === "/short-calendar" ||
+    pathname === "/reports" ||
+    pathname === "/approvals" ||
+    pathname === "/audit"
       ? "100%"
       : "1400px";
 
