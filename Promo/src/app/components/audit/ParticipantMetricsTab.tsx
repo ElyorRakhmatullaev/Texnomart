@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { Download } from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
+import { Button } from "@texnomart/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@texnomart/ui/select";
@@ -9,6 +11,8 @@ import {
   buildParticipantMetrics, PARTICIPANT_ROLES, type ParticipantMetricRow, type TimelinessBand,
 } from "../../../lib/audit-control";
 import { getCategoryManager } from "../../../lib/promo-mock-data";
+import { exportAuditXlsx } from "../../../lib/audit-xlsx";
+import { exportStamp } from "../../../lib/promo-export";
 import type { PromoRole } from "../../role-context";
 import type { AuditAccess } from "./AuditPage";
 import { ParticipantTasksDrawer } from "./ParticipantTasksDrawer";
@@ -35,16 +39,45 @@ export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
   const th = "border-b border-r border-gray-200 dark:border-border bg-gray-50 dark:bg-muted/40 px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap";
   const td = "border-b border-r border-gray-100 dark:border-border px-3 py-2 text-sm align-top";
 
+  const handleExport = () => {
+    const participantLabel = effectiveRole === "Категорийный менеджер (КМ)" ? "ФИО КМ" : "Участник";
+    const header = [
+      "№", participantLabel, dueLabel, "Вовремя", "С просрочкой",
+      "Своевременность, %", "Уровень своевременности", "Ср. просрочка, дн.", "Возвраты", "Повторные отправки",
+    ];
+    const exportRows: (string | number)[][] = rows.map((r) => [
+      r.rank, r.name, r.dueCount, r.onTime, r.overdue,
+      r.timelinessPct, r.band, r.avgOverdueDays, r.returns, r.resends,
+    ]);
+    exportAuditXlsx({
+      sheetName: "Показатели участников",
+      header,
+      rows: exportRows,
+      filename: `Показатели_участников_${exportStamp()}.xlsx`,
+    });
+  };
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Роль</span>
-        <Select value={effectiveRole} onValueChange={(v) => setRole(v as PromoRole)} disabled={isKm}>
-          <SelectTrigger className="h-9 w-full max-w-xs bg-white dark:bg-card text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {PARTICIPANT_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Роль</span>
+          <Select value={effectiveRole} onValueChange={(v) => setRole(v as PromoRole)} disabled={isKm}>
+            <SelectTrigger className="h-9 w-full max-w-xs bg-white dark:bg-card text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PARTICIPANT_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-9 gap-1.5"
+          disabled={rows.length === 0}
+          onClick={handleExport}
+        >
+          <Download className="size-4" /> Экспорт
+        </Button>
       </div>
 
       {/* Desktop rating table */}

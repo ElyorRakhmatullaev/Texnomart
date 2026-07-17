@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRight, FileSearch, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Download, FileSearch, SlidersHorizontal } from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
 import { Button } from "@texnomart/ui/button";
 import { Badge } from "@texnomart/ui/badge";
@@ -22,6 +22,8 @@ import {
 import { PromoStatusBadge } from "../../../components/PromoStatusBadge";
 import { RuDate } from "../../../components/RuDate";
 import { getLiveAuditEvents } from "../../../lib/audit-store";
+import { exportAuditXlsx, fmtAuditDate } from "../../../lib/audit-xlsx";
+import { exportStamp } from "../../../lib/promo-export";
 import {
   AUDIT_ACTION_META,
   AUDIT_OBJECT_LABEL,
@@ -36,6 +38,27 @@ import {
   type AuditFilters,
 } from "./AuditLogFilters";
 import type { AuditAccess } from "./AuditPage";
+
+const LOG_EXPORT_HEADER = [
+  "ID", "Дата и время", "Пользователь", "Роль", "Действие",
+  "Тип объекта", "Объект", "№ промо", "Статус до", "Статус после", "Комментарий",
+];
+
+function logExportRows(events: AuditEvent[]): (string | number)[][] {
+  return events.map((e) => [
+    e.id,
+    fmtAuditDate(e.at, true),
+    e.user,
+    e.role,
+    e.action,
+    AUDIT_OBJECT_LABEL[e.objectType],
+    e.objectLabel,
+    e.campaignId ?? "",
+    e.statusFrom ?? "",
+    e.statusTo ?? "",
+    e.comment ?? "",
+  ]);
+}
 
 /** Non-key action types — hidden by default; shown only under «Все действия» (Администратор only). */
 const NON_KEY_ACTIONS = new Set<AuditEvent["action"]>([
@@ -155,6 +178,15 @@ export function AuditLogTable({
 
   const activeCount = hasActiveAuditFilters(filters);
 
+  const handleExport = () => {
+    exportAuditXlsx({
+      sheetName: "Аудит-лог",
+      header: LOG_EXPORT_HEADER,
+      rows: logExportRows(filtered),
+      filename: `Аудит-лог_${exportStamp()}.xlsx`,
+    });
+  };
+
   return (
     <div className="flex flex-col gap-3">
       {isAdmin && (
@@ -175,8 +207,19 @@ export function AuditLogTable({
             users={users}
             roles={roles}
           />
-          <div className="ml-auto pb-0.5 text-xs text-gray-500 dark:text-gray-400">
-            Записей: {filtered.length.toLocaleString("ru-RU")}
+          <div className="ml-auto flex items-center gap-3 pb-0.5">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              Записей: {filtered.length.toLocaleString("ru-RU")}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-9 gap-1.5"
+              disabled={filtered.length === 0}
+              onClick={handleExport}
+            >
+              <Download className="size-4" /> Экспорт
+            </Button>
           </div>
         </div>
       </div>
@@ -195,9 +238,21 @@ export function AuditLogTable({
             <span className="ml-0.5 size-2 rounded-full bg-primary" />
           )}
         </Button>
-        <span className="text-xs text-gray-500 dark:text-gray-400">
-          Записей: {filtered.length.toLocaleString("ru-RU")}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            Записей: {filtered.length.toLocaleString("ru-RU")}
+          </span>
+          <Button
+            variant="secondary"
+            size="icon"
+            className="h-9 w-9"
+            disabled={filtered.length === 0}
+            onClick={handleExport}
+            aria-label="Экспорт"
+          >
+            <Download className="size-4" />
+          </Button>
+        </div>
       </div>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>

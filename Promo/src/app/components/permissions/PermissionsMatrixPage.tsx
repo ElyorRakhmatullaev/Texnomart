@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { ShieldAlert, Info } from "lucide-react";
+import { ShieldAlert, Info, Download } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@texnomart/ui/tabs";
 import { Card } from "@texnomart/ui/card";
+import { Button } from "@texnomart/ui/button";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { useRole } from "../../role-context";
 import { getPermissionsScreenAccess, FINAL_APPROVAL_NOTE } from "../../../lib/permissions";
+import { exportPermissionsXlsx } from "../../../lib/permissions-xlsx";
 import { AccessMatrixTable, AccessLevelLegend } from "./AccessMatrixTable";
 import { CapabilityList } from "./CapabilityList";
 
@@ -41,13 +43,23 @@ export function PermissionsMatrixPage() {
         </Card>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
-            Активная роль:{" "}
-            <span className="font-medium text-gray-900 dark:text-gray-100">
-              {currentRole}
-            </span>{" "}
-            — выделена в матрице.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Активная роль:{" "}
+              <span className="font-medium text-gray-900 dark:text-gray-100">
+                {currentRole}
+              </span>{" "}
+              — выделена в матрице.
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-9 gap-1.5"
+              onClick={() => exportPermissionsXlsx()}
+            >
+              <Download className="size-4" /> Экспорт
+            </Button>
+          </div>
 
           <Tabs value={tab} onValueChange={setTab} className="gap-4">
             <TabsList className="h-auto justify-start gap-1 rounded-none border-b bg-transparent p-0">

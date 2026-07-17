@@ -1,13 +1,38 @@
 "use client";
 
 import * as React from "react";
-import { buildPromoControlPoints } from "../../../lib/audit-control";
+import { Download } from "lucide-react";
+import { Button } from "@texnomart/ui/button";
+import { buildPromoControlPoints, type ControlPoint } from "../../../lib/audit-control";
 import { getCategoryManager } from "../../../lib/promo-mock-data";
+import { exportAuditXlsx, fmtAuditDate } from "../../../lib/audit-xlsx";
+import { exportStamp } from "../../../lib/promo-export";
 import type { AuditAccess, AuditGlobalFilters } from "./AuditPage";
 import {
   ControlDeadlinesFilters, EMPTY_CONTROL_FILTERS, applyControlFilters, type ControlFilters,
 } from "./ControlDeadlinesFilters";
 import { ControlDeadlinesTable } from "./ControlDeadlinesTable";
+
+const PROMO_EXPORT_HEADER = [
+  "№ промо", "Название промо", "Период (начало)", "Период (окончание)",
+  "Контрольная точка", "Ответственный · роль", "Дедлайн", "Факт", "Результат", "Просрочка", "Комментарий",
+];
+
+function promoExportRows(points: ControlPoint[]): (string | number)[][] {
+  return points.map((p) => [
+    p.promoNo,
+    p.promoName,
+    p.promoPeriod ? fmtAuditDate(p.promoPeriod.start) : "",
+    p.promoPeriod ? fmtAuditDate(p.promoPeriod.end) : "",
+    p.checkpoint,
+    `${p.responsibleName} · ${p.responsibleRole}`,
+    fmtAuditDate(p.deadline, true),
+    p.actualAt ? fmtAuditDate(p.actualAt, true) : "—",
+    p.result,
+    p.overdueDays > 0 ? `+${p.overdueDays} дн.` : "—",
+    p.comment ?? "",
+  ]);
+}
 
 export function PromoDeadlinesTab({
   access, globals,
@@ -26,6 +51,15 @@ export function PromoDeadlinesTab({
     [scoped, filters, globals]
   );
 
+  const handleExport = () => {
+    exportAuditXlsx({
+      sheetName: "Сроки по промо",
+      header: PROMO_EXPORT_HEADER,
+      rows: promoExportRows(shownPoints),
+      filename: `Сроки_по_промо_и_отчётам_${exportStamp()}.xlsx`,
+    });
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <ControlDeadlinesFilters
@@ -35,6 +69,17 @@ export function PromoDeadlinesTab({
         points={scoped}
         shown={shownPoints.length}
       />
+      <div className="flex justify-end">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-9 gap-1.5"
+          disabled={shownPoints.length === 0}
+          onClick={handleExport}
+        >
+          <Download className="size-4" /> Экспорт
+        </Button>
+      </div>
       <ControlDeadlinesTable points={shownPoints} lead="promo" />
     </div>
   );
