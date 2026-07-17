@@ -52,6 +52,14 @@ import {
   type PlanStatus,
   type PromoCampaign,
 } from "../../../lib/promo-mock-data";
+import {
+  getPlanState,
+  persistPlanState,
+  reviveOverrides,
+  reviveRows,
+  serializeOverrides,
+  serializeRows,
+} from "../../../lib/plan-store";
 
 interface PlanRow {
   id: string;
@@ -80,20 +88,30 @@ export function PlanMode({ campaigns }: PlanModeProps) {
   const { currentRole } = useRole();
   const isMarketing = currentRole === PLAN_EDITOR;
 
+  // A11 — persisted lifecycle snapshot, read once on mount. Every slice below hydrates
+  // lazily from it (or falls back to the seed-derived default) so nothing flashes seed
+  // values before hydration; absent/malformed storage → `null` (seed defaults apply).
+  const [initialStored] = React.useState(() => getPlanState());
+
   // The plan-level status drives the reviewer stepper + which stage is active. It starts
   // at «На согл. с КД» so the review chain is visible immediately (seed rows are sent).
-  const [planStatus, setPlanStatus] = React.useState<PlanStatus>("На согл. с КД");
+  const [planStatus, setPlanStatus] = React.useState<PlanStatus>(
+    () => initialStored?.planStatus ?? "На согл. с КД"
+  );
   // Which reviewer stage rejected the plan — so the stepper marks THAT stage (№4).
-  const [rejectedStage, setRejectedStage] =
-    React.useState<ReviewerStage | undefined>();
+  const [rejectedStage, setRejectedStage] = React.useState<
+    ReviewerStage | undefined
+  >(() => initialStored?.rejectedStage);
 
   // Rows created this session + per-row field edits + deletions (№6).
-  const [extraRows, setExtraRows] = React.useState<PlanRow[]>([]);
+  const [extraRows, setExtraRows] = React.useState<PlanRow[]>(() =>
+    initialStored ? reviveRows(initialStored.extraRows) : []
+  );
   const [overrides, setOverrides] = React.useState<
     Record<string, Partial<PlanRow>>
-  >({});
+  >(() => (initialStored ? reviveOverrides(initialStored.overrides) : {}));
   const [deletedIds, setDeletedIds] = React.useState<Set<string>>(
-    () => new Set()
+    () => new Set(initialStored?.deletedIds ?? [])
   );
 
   // Per-row send lifecycle (№2/№5/№7): seed rows that already carry a director-approval
@@ -102,13 +120,16 @@ export function PlanMode({ campaigns }: PlanModeProps) {
   const [sendStatus, setSendStatus] = React.useState<
     Record<string, PlanRowSend>
   >(() => {
+    if (initialStored) return initialStored.sendStatus;
     const m: Record<string, PlanRowSend> = {};
     for (const c of campaigns) m[c.id] = getPlanApproval(c.id) ? "sent" : "draft";
     return m;
   });
 
   // Per-row reviewer decisions (№3) + the current selection.
-  const [decisions, setDecisions] = React.useState<DecisionMap>({});
+  const [decisions, setDecisions] = React.useState<DecisionMap>(
+    () => initialStored?.decisions ?? {}
+  );
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
     () => new Set()
   );
@@ -122,6 +143,30 @@ export function PlanMode({ campaigns }: PlanModeProps) {
   React.useEffect(() => {
     setSelectedIds(new Set());
   }, [currentRole]);
+
+  // A11 — persist the assembled lifecycle snapshot on any slice change. Resets
+  // («Вернуть на доработку», delete, edit-sent-row→Черновик) persist naturally here
+  // too, since they only ever mutate the slices below. Derived values (rows, coverage
+  // gaps, readiness) are recomputed on load — never persisted.
+  React.useEffect(() => {
+    persistPlanState({
+      planStatus,
+      rejectedStage,
+      extraRows: serializeRows(extraRows),
+      overrides: serializeOverrides(overrides),
+      deletedIds: [...deletedIds],
+      sendStatus,
+      decisions,
+    });
+  }, [
+    planStatus,
+    rejectedStage,
+    extraRows,
+    overrides,
+    deletedIds,
+    sendStatus,
+    decisions,
+  ]);
 
   const sendOf = (id: string): PlanRowSend => sendStatus[id] ?? "draft";
 
