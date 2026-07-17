@@ -243,8 +243,14 @@ function StageHeader({ title, note }: { title: string; note: string }) {
   );
 }
 
+// Sticky header (tracker V2-13): `sticky` is applied per-`<th>` (not `<thead>`/`<tr>`,
+// unreliable across browsers) with a SOLID background so scrolling rows don't bleed
+// through. `top-[-16px]` cancels the AppShell `<main>`'s `p-4` (16px) so the header sits
+// flush at the content top — same trick as `ShortCalendarTable`'s `-top-4`. This only
+// works because the desktop wrapper below no longer has `overflow-x-auto` (that inner
+// scroll container would otherwise trap the sticky offset instead of the page).
 const HEAD =
-  "px-3 py-2 text-left align-bottom border-b bg-gray-50 text-[13px] font-semibold text-gray-700 dark:bg-muted/40 dark:text-gray-200";
+  "sticky top-[-16px] z-20 px-3 py-2 text-left align-bottom border-b bg-gray-100 dark:bg-muted text-[13px] font-semibold text-gray-700 dark:text-gray-200";
 const CELL = "px-3 py-3 align-top border-b border-gray-100 dark:border-border";
 
 export function PlanApprovalTable({
@@ -279,8 +285,12 @@ export function PlanApprovalTable({
 
   return (
     <>
-      {/* Desktop: table */}
-      <div className="hidden overflow-x-auto md:block">
+      {/* Desktop: table. No `overflow-x-auto` here on purpose — that inner scroll
+          container would trap `position:sticky` on the header (CSS one-axis quirk:
+          `overflow-x-auto` silently sets `overflow-y:auto` too). A wide table now
+          overflows into the PAGE's own horizontal scrollbar instead, so the `<thead>`
+          can stick to the page's vertical scroll (tracker V2-13, plan Option 2). */}
+      <div className="hidden md:block">
         <table className="w-full min-w-[1200px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
