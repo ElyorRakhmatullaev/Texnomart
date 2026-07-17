@@ -157,9 +157,9 @@ export function ShortCalendarTable({
   });
 
   // The header is sticky to the PAGE scroll (§3.2/§13) so vertical scrolling stays on
-  // the main page. Three horizontal scrollers are kept in sync (client feedback §1): a
-  // STICKY TOP scrollbar, the header band, and the body's bottom scrollbar — scrolling
-  // any one moves the others. `syncing` guards against the scroll-event feedback loop.
+  // the main page. Four horizontal scrollers are kept in sync (client feedback §1 +
+  // tracker V2-1): the STICKY TOP scrollbar, the header band, the body pane, and the
+  // STICKY BOTTOM scrollbar — idempotent scrollLeft writes prevent feedback loops.
   const headRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
   const topScrollRef = React.useRef<HTMLDivElement>(null);

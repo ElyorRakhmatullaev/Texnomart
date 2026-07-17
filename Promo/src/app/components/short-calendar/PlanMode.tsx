@@ -358,7 +358,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     setPlanStatus("Отклонён");
     setRejectedStage(reviewerStage); // №4 — mark the rejecting stage
     toast.success(
-      `Отклонено акций: ${ids.length}. Причина сохранена, план возвращён директору маркетинга`
+      `Отклонено акций: ${ids.length}. План возвращён директору маркетинга`
     );
   }
 
@@ -658,7 +658,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
         open={rejectOpen}
         onOpenChange={setRejectOpen}
         title="Отклонить выбранные акции"
-        description="Укажите причину — она будет сохранена в истории и направлена директору маркетинга."
+        description="Укажите причину отклонения — план будет возвращён директору маркетинга на доработку."
         confirmLabel="Отклонить"
         destructive
         onConfirm={rejectSelected}
