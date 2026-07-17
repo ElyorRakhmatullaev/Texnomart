@@ -232,8 +232,8 @@ export function ShortCalendarTable({
             )}
           >
             <span className="w-[104px]">№ промо</span>
-            <span className="w-[120px]">Тип промо</span>
-            <span className="w-[200px]">Название акции</span>
+            <span className="w-[132px]">Тип промо</span>
+            <span className="w-[240px]">Название акции</span>
           </div>
           <div ref={headRef} className="min-w-0 flex-1 overflow-hidden">
             <div
@@ -242,11 +242,11 @@ export function ShortCalendarTable({
                 HEADER_H
               )}
             >
-            <span className={cn("w-[170px] px-3", CELL)}>Период акции</span>
-            <span className={cn("w-[160px] px-3", CELL)}>
+            <span className={cn("w-[150px] px-3", CELL)}>Период акции</span>
+            <span className={cn("w-[132px] px-3", CELL)}>
               Крайний срок заполнения КМ
             </span>
-            <span className={cn("w-[140px] px-3", CELL)}>Срок отчёта</span>
+            <span className={cn("w-[120px] px-3", CELL)}>Срок отчёта</span>
             {expanded && (
               <>
                 <span className={cn("w-[150px] px-3", CELL)}>День / дата</span>
@@ -298,12 +298,12 @@ export function ShortCalendarTable({
               <span className="w-[104px] text-xs font-medium tabular-nums text-muted-foreground">
                 {formatPromoNo(c.id)}
               </span>
-              <span className="w-[120px] truncate text-sm text-gray-700 dark:text-gray-200">
+              <span className="w-[132px] text-sm leading-tight text-gray-700 dark:text-gray-200 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
                 {c.type}
               </span>
               <span
                 className={cn(
-                  "w-[200px] truncate text-sm font-semibold text-gray-900 dark:text-gray-100",
+                  "w-[240px] text-sm font-semibold leading-tight text-gray-900 dark:text-gray-100 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden",
                   c.cancelled && "text-red-700 line-through dark:text-red-300"
                 )}
               >
@@ -353,7 +353,7 @@ export function ShortCalendarTable({
                   {/* Период + day-of-week strip */}
                   <div
                     className={cn(
-                      "flex w-[170px] flex-col justify-center px-3",
+                      "flex w-[150px] flex-col justify-center px-3",
                       CELL
                     )}
                   >
@@ -369,7 +369,7 @@ export function ShortCalendarTable({
                   {/* Крайний срок заполнения КМ */}
                   <div
                     className={cn(
-                      "flex w-[160px] flex-col justify-center gap-1 px-3",
+                      "flex w-[132px] flex-col justify-center gap-1 px-3",
                       CELL
                     )}
                   >
@@ -384,7 +384,7 @@ export function ShortCalendarTable({
                       «Отправка смежным отделам» и только по факту отправки. */}
                   <div
                     className={cn(
-                      "flex w-[140px] flex-col justify-center gap-1 px-3",
+                      "flex w-[120px] flex-col justify-center gap-1 px-3",
                       CELL
                     )}
                   >
