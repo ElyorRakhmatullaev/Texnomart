@@ -18,6 +18,7 @@ import {
   type PromoCampaign,
   type PromoLine,
 } from "./promo-mock-data";
+import { getPlanState } from "./plan-store";
 
 function csvCell(v: string): string {
   return /[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
@@ -234,10 +235,29 @@ export interface PlanExportRow {
   endDate: Date;
 }
 
-/** План акций tab → one row per campaign with the three directors' approval stages. */
+/**
+ * План акций tab → one row per campaign with the three directors' approval stages
+ * PLUS the row's live lifecycle + rejection details from the persisted plan state
+ * («7-я часть» §9.5 — the reject comment goes into the выгрузка). Reads
+ * `promo:plan-state` directly so the CSV matches what the plan tab shows.
+ */
 export function buildPlanCsv(rows: PlanExportRow[]): string {
+  const state = getPlanState();
+
+  const sendOf = (id: string): "draft" | "sent" =>
+    state?.sendStatus?.[id] ?? (getPlanApproval(id) ? "sent" : "draft");
+
+  const lifecycleOf = (id: string): string => {
+    const d = state?.decisions?.[id];
+    if (d?.kd === "rejected" || d?.od === "rejected") return "Отклонено";
+    if (sendOf(id) === "draft") return "Черновик";
+    if (state?.planStatus === "Утверждён") return "Согласовано";
+    return "Отправлено";
+  };
+
   const header = [
     "Код акции",
+    "Статус строки",
     "Тип акции",
     "Наименование акции",
     "Период (начало)",
@@ -249,14 +269,24 @@ export function buildPlanCsv(rows: PlanExportRow[]): string {
     "КД: статус",
     "ОД: согласование",
     "ОД: статус",
+    "Отклонил",
+    "Роль согласующего",
+    "Дата и время отклонения",
+    "Комментарий отклонения",
   ];
   const out = rows.map((r) => {
     const a = getPlanApproval(r.id);
     const m = a?.marketing;
     const kd = a?.kd;
     const od = a?.od;
+    // Latest ACTUAL rejection (returns are history entries, not the headline).
+    const rejection = (state?.rejectionLog?.[r.id] ?? []).find(
+      (e) => e.kind !== "return"
+    );
+    const rejectionAt = rejection ? new Date(rejection.at) : undefined;
     return [
       formatPromoNo(r.id),
+      lifecycleOf(r.id),
       r.type,
       r.name,
       fmtDate(r.startDate),
@@ -268,6 +298,12 @@ export function buildPlanCsv(rows: PlanExportRow[]): string {
       kd ? stageLabel(kd.status, kd.overdueDays) : "—",
       od?.decidedAt ? fmtDateTime(od.decidedAt) : "—",
       od ? stageLabel(od.status, od.overdueDays) : "—",
+      rejection?.by ?? "—",
+      rejection?.role ?? "—",
+      rejectionAt && !Number.isNaN(rejectionAt.getTime())
+        ? fmtDateTime(rejectionAt)
+        : "—",
+      rejection?.comment || "—",
     ];
   });
   return toCsv([header, ...out]);

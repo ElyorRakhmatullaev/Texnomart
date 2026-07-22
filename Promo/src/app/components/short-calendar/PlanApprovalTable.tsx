@@ -61,6 +61,11 @@ interface PlanApprovalTableProps {
   canManage?: boolean;
   onEditRow?: (id: string) => void;
   onDeleteRow?: (id: string) => void;
+  /**
+   * «7-я часть» §9 — makes the «Отклонено» badge clickable: opens the right-side
+   * rejection-details panel for the row (кто отклонил · роль · дата · комментарий).
+   */
+  onShowRejection?: (id: string) => void;
 }
 
 function formatDateTime(d: Date): string {
@@ -112,9 +117,12 @@ function StageStatusBadge({
 function RowLifecycleBadge({
   send,
   decision,
+  onRejectedClick,
 }: {
   send?: PlanRowSend;
   decision?: RowDecision;
+  /** When provided, the «Отклонено» pill becomes a button opening the details panel (§9). */
+  onRejectedClick?: () => void;
 }) {
   if (send === "sent" && decision === "approved") {
     return (
@@ -125,6 +133,19 @@ function RowLifecycleBadge({
     );
   }
   if (send === "sent" && decision === "rejected") {
+    if (onRejectedClick) {
+      return (
+        <button
+          type="button"
+          onClick={onRejectedClick}
+          title="Показать детали отклонения"
+          className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 underline decoration-red-300 decoration-dotted underline-offset-2 transition-colors hover:bg-red-100 dark:bg-red-500/15 dark:text-red-300 dark:decoration-red-500/50 dark:hover:bg-red-500/25"
+        >
+          <X className="size-3" />
+          Отклонено
+        </button>
+      );
+    }
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
         <X className="size-3" />
@@ -269,6 +290,7 @@ export function PlanApprovalTable({
   canManage = false,
   onEditRow,
   onDeleteRow,
+  onShowRejection,
 }: PlanApprovalTableProps) {
   const marketingNote = `ознакомление: за ${PLAN_MARKETING_REVIEW_LEAD_DAYS} кал. дн · отправка на согл.: за ${PLAN_MARKETING_SUBMIT_LEAD_DAYS} кал. дн`;
   const directorNote = `согласование: ${PLAN_DIRECTOR_SLA_WORKING_DAYS} раб. дн`;
@@ -350,7 +372,13 @@ export function PlanApprovalTable({
                     </td>
                   )}
                   <td className={cn(CELL, "align-middle")}>
-                    <RowLifecycleBadge send={send} decision={decision} />
+                    <RowLifecycleBadge
+                      send={send}
+                      decision={decision}
+                      onRejectedClick={
+                        onShowRejection ? () => onShowRejection(r.id) : undefined
+                      }
+                    />
                   </td>
                   <td
                     className={cn(
@@ -423,7 +451,13 @@ export function PlanApprovalTable({
                       aria-label={`Выбрать акцию ${formatPromoNo(r.id)}`}
                     />
                   )}
-                  <RowLifecycleBadge send={send} decision={decision} />
+                  <RowLifecycleBadge
+                    send={send}
+                    decision={decision}
+                    onRejectedClick={
+                      onShowRejection ? () => onShowRejection(r.id) : undefined
+                    }
+                  />
                 </div>
                 <span className="text-xs font-medium tabular-nums text-muted-foreground">
                   {formatPromoNo(r.id)}

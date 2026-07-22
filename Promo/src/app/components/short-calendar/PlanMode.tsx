@@ -40,7 +40,9 @@ import {
   type PlanRowSend,
   type RowDecision,
 } from "./PlanApprovalTable";
+import { PlanRejectionDrawer } from "./PlanRejectionDrawer";
 import { useRole } from "../../role-context";
+import { useCurrentUser } from "../../current-user-context";
 import {
   PLAN_APPROVAL_CHAIN,
   PROMO_TYPES,
@@ -59,6 +61,7 @@ import {
   reviveRows,
   serializeOverrides,
   serializeRows,
+  type PlanRejectionEvent,
 } from "../../../lib/plan-store";
 
 interface PlanRow {
@@ -86,6 +89,7 @@ const hasType = (r: PlanRow) => Boolean(r.type && r.type.trim());
 
 export function PlanMode({ campaigns }: PlanModeProps) {
   const { currentRole } = useRole();
+  const { currentUser } = useCurrentUser();
   const isMarketing = currentRole === PLAN_EDITOR;
 
   // A11 — persisted lifecycle snapshot, read once on mount. Every slice below hydrates
@@ -134,6 +138,16 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     () => new Set()
   );
 
+  // «7-я часть» §9 — per-row rejection/return history (newest first). Survives
+  // «Вернуть на доработку» + re-sends: it IS the history the side panel shows.
+  const [rejectionLog, setRejectionLog] = React.useState<
+    Record<string, PlanRejectionEvent[]>
+  >(() => initialStored?.rejectionLog ?? {});
+  // Which row's rejection details are open in the side panel (null = closed).
+  const [rejectionRowId, setRejectionRowId] = React.useState<string | null>(
+    null
+  );
+
   const [rejectOpen, setRejectOpen] = React.useState(false);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   // null → create a new draft; an id → edit that row.
@@ -157,6 +171,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       deletedIds: [...deletedIds],
       sendStatus,
       decisions,
+      rejectionLog,
     });
   }, [
     planStatus,
@@ -166,6 +181,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     deletedIds,
     sendStatus,
     decisions,
+    rejectionLog,
   ]);
 
   const sendOf = (id: string): PlanRowSend => sendStatus[id] ?? "draft";
@@ -293,8 +309,11 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     });
     setSelectedIds(new Set());
 
-    // Sending reopens the review chain if the plan was terminal.
-    if (isApproved || isRejected) {
+    // Sending (re)opens the review chain when the plan isn't already at a reviewer
+    // stage: terminal states AND the post-return «На обсуждении»/«На ознакомлении»
+    // (7-я часть §9.3 — повторная отправка после возврата снова уходит к КД; before
+    // this the plan got stuck at «На обсуждении» and the КД never saw the rows).
+    if (isApproved || isRejected || currentActor === PLAN_EDITOR) {
       setDecisions({});
       setRejectedStage(undefined);
       setPlanStatus("На согл. с КД");
@@ -348,7 +367,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     }
   }
 
-  function rejectSelected() {
+  function rejectSelected(reason: string) {
     if (!reviewerStage || selectedIds.size === 0) return;
     const ids = [...selectedIds];
     const next: DecisionMap = { ...decisions };
@@ -357,6 +376,22 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     setSelectedIds(new Set());
     setPlanStatus("Отклонён");
     setRejectedStage(reviewerStage); // №4 — mark the rejecting stage
+
+    // «7-я часть» §9 — record WHO rejected, the role, when, and the comment,
+    // so the clickable «Отклонено» badge can show the details + history.
+    const event: PlanRejectionEvent = {
+      kind: reviewerStage,
+      by: currentUser?.fullName ?? currentActor ?? currentRole,
+      role: currentActor ?? currentRole,
+      at: new Date().toISOString(),
+      comment: reason,
+    };
+    setRejectionLog((prev) => {
+      const out = { ...prev };
+      for (const id of ids) out[id] = [event, ...(out[id] ?? [])];
+      return out;
+    });
+
     toast.success(
       `Отклонено акций: ${ids.length}. План возвращён директору маркетинга`
     );
@@ -364,14 +399,33 @@ export function PlanMode({ campaigns }: PlanModeProps) {
 
   /** Marketing «Вернуть на доработку» — rejected rows drop to draft for edit + re-send. */
   function returnForRework() {
+    const rejectedIds = rows
+      .filter((r) => {
+        const d = decisions[r.id];
+        return d?.kd === "rejected" || d?.od === "rejected";
+      })
+      .map((r) => r.id);
+
     setSendStatus((prev) => {
       const next = { ...prev };
-      for (const r of rows) {
-        const d = decisions[r.id];
-        if (d?.kd === "rejected" || d?.od === "rejected") next[r.id] = "draft";
-      }
+      for (const id of rejectedIds) next[id] = "draft";
       return next;
     });
+
+    // §9.3 — the return is part of each row's rejection history (no comment field).
+    const event: PlanRejectionEvent = {
+      kind: "return",
+      by: currentUser?.fullName ?? PLAN_EDITOR,
+      role: PLAN_EDITOR,
+      at: new Date().toISOString(),
+      comment: "",
+    };
+    setRejectionLog((prev) => {
+      const out = { ...prev };
+      for (const id of rejectedIds) out[id] = [event, ...(out[id] ?? [])];
+      return out;
+    });
+
     resetReview();
     setPlanStatus("На обсуждении");
     toast.success("План возвращён на доработку");
@@ -650,6 +704,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
             canManage={isMarketing}
             onEditRow={openEdit}
             onDeleteRow={handleDelete}
+            onShowRejection={setRejectionRowId}
           />
         </CardContent>
       </Card>
@@ -659,9 +714,19 @@ export function PlanMode({ campaigns }: PlanModeProps) {
         onOpenChange={setRejectOpen}
         title="Отклонить выбранные акции"
         description="Укажите причину отклонения — план будет возвращён директору маркетинга на доработку."
+        reasonLabel="Комментарий"
         confirmLabel="Отклонить"
         destructive
         onConfirm={rejectSelected}
+      />
+
+      {/* «7-я часть» §9 — rejection details behind the clickable «Отклонено» badge. */}
+      <PlanRejectionDrawer
+        open={rejectionRowId !== null}
+        onOpenChange={(o) => !o && setRejectionRowId(null)}
+        rowId={rejectionRowId}
+        rowName={rejectionRowId ? rowById(rejectionRowId)?.name : undefined}
+        events={rejectionRowId ? rejectionLog[rejectionRowId] ?? [] : []}
       />
 
       <PlanRowDialog

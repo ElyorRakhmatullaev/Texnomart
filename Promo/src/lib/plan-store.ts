@@ -41,6 +41,24 @@ export interface LivePlanRow {
   endDate: Date;
 }
 
+/**
+ * One rejection / return-for-rework event of a plan row («7-я часть» §9).
+ * The reject comment is the client's единое поле «Комментарий» (no separate
+ * «Причина»); `at` is an ISO date-time string (JSON-safe, formatted at render).
+ */
+export interface PlanRejectionEvent {
+  /** "kd" | "od" — the rejecting stage; "return" — «Вернуть на доработку». */
+  kind: ReviewerStage | "return";
+  /** Who acted (ФИО of the logged-in user, or the role label as a fallback). */
+  by: string;
+  /** The acting role label («Коммерческий директор» / «Операционный директор» / «Директор маркетинга»). */
+  role: string;
+  /** ISO date-time of the action. */
+  at: string;
+  /** Единое поле «Комментарий» (§9.2); empty for system entries (returns). */
+  comment: string;
+}
+
 /** JSON-safe snapshot of PlanMode's session lifecycle state. */
 export interface PersistedPlanState {
   planStatus: PlanStatus;
@@ -50,6 +68,11 @@ export interface PersistedPlanState {
   deletedIds: string[];
   sendStatus: Record<string, PlanRowSend>;
   decisions: Record<string, Partial<Record<ReviewerStage, RowDecision>>>;
+  /**
+   * Per-row rejection/return history, newest first («7-я часть» §9). Survives
+   * «Вернуть на доработку» resets — it IS the history the side panel shows.
+   */
+  rejectionLog: Record<string, PlanRejectionEvent[]>;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -84,6 +107,10 @@ export function getPlanState(): PersistedPlanState | null {
             string,
             Partial<Record<ReviewerStage, RowDecision>>
           >)
+        : {},
+      // Absent in pre-«7-я часть» snapshots → default {} (backward-compatible).
+      rejectionLog: isRecord(parsed.rejectionLog)
+        ? (parsed.rejectionLog as Record<string, PlanRejectionEvent[]>)
         : {},
     };
   } catch {
