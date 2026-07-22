@@ -59,6 +59,13 @@ const ROW_H = "h-14"; // empty-line placeholder rows
 const ROW_H_PX = 56; // default line height (matches h-14)
 const GIFT_SUBROW_H = 44; // per gift sub-row for «подарок на выбор»
 
+// 7-я часть §3 — text cells wrap onto 2 lines instead of truncating (no cut-off),
+// like the short calendar's Тип/Название. Fits the FIXED row heights (Pattern-F
+// invariant): 2 × ~17px text-sm leading-tight ≈ 35px within the 56px row (44px
+// gift sub-row / header). The webkit-box idiom matches ShortCalendarTable.
+const CLAMP2 =
+  "[display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden leading-tight";
+
 function isGift1Col(id: string): boolean {
   return id.startsWith("gift1");
 }
@@ -189,9 +196,9 @@ function CellValue({
         </span>
       );
     case "type":
-      return <span className="truncate">{campaign.type}</span>;
+      return <span className={CLAMP2}>{campaign.type}</span>;
     case "name":
-      return <span className="truncate">{campaign.name}</span>;
+      return <span className={CLAMP2}>{campaign.name}</span>;
     case "period":
       return (
         <span
@@ -220,7 +227,7 @@ function CellValue({
     case "brand":
       // Бренд из 1С (§6) — read-only, подтягивается по номенклатуре.
       return nom?.brand ? (
-        <span className="truncate">{nom.brand}</span>
+        <span className={CLAMP2}>{nom.brand}</span>
       ) : (
         <Dash />
       );
@@ -478,10 +485,11 @@ export function FullCalendarGrid({
   // Sticky header + synced horizontal scroll (feedback §1/§2). A horizontal-overflow
   // container traps `position:sticky`, so — like the short calendar — the table is a
   // non-scrolling STICKY header band over a BODY band, with three horizontal scrollers
-  // (a synced TOP scrollbar + the header + the body's bottom scrollbar) kept in sync.
+  // (the header + the body pane + a single STICKY BOTTOM viewport scrollbar, 7-я часть
+  // §4 — the former top strip is removed) kept in sync.
   const headRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
-  const topScrollRef = React.useRef<HTMLDivElement>(null);
+  const bottomScrollRef = React.useRef<HTMLDivElement>(null);
   const frozenHeadRef = React.useRef<HTMLDivElement>(null);
   const [frozenW, setFrozenW] = React.useState(0);
   const [scrollW, setScrollW] = React.useState(0);
@@ -504,15 +512,13 @@ export function FullCalendarGrid({
 
   // Mirror one scroller's scrollLeft onto the other two. Idempotent writes → the
   // resulting scroll events self-terminate (no re-entrancy flag needed).
-  const syncScroll = React.useCallback((from: "top" | "body") => {
-    const src = from === "top" ? topScrollRef.current : bodyRef.current;
+  const syncScroll = React.useCallback((from: "body" | "bottom") => {
+    const src = from === "bottom" ? bottomScrollRef.current : bodyRef.current;
     const x = src?.scrollLeft ?? 0;
-    if (headRef.current && headRef.current.scrollLeft !== x)
-      headRef.current.scrollLeft = x;
-    if (from !== "top" && topScrollRef.current && topScrollRef.current.scrollLeft !== x)
-      topScrollRef.current.scrollLeft = x;
-    if (from !== "body" && bodyRef.current && bodyRef.current.scrollLeft !== x)
-      bodyRef.current.scrollLeft = x;
+    for (const ref of [headRef, bodyRef, bottomScrollRef]) {
+      if (ref.current && ref.current !== src && ref.current.scrollLeft !== x)
+        ref.current.scrollLeft = x;
+    }
   }, []);
 
   if (groups.length === 0) {
@@ -529,23 +535,10 @@ export function FullCalendarGrid({
     // `overflow-clip` rounds the corners without becoming a scroll container, so it
     // does NOT trap the page-sticky header (feedback §2).
     <Card className="overflow-clip p-0">
-      {/* ── STICKY header band — pinned to the page scroll (§1/§2). Stacks a synced
-            TOP horizontal scrollbar over the darker-gray, bold column-title row. ── */}
+      {/* ── STICKY header band — pinned to the page scroll (§1/§2): the darker-gray,
+            bold column-title row. The former top scrollbar strip is removed (7-я часть
+            §4 — один нижний закреплённый скролл). ─────────────────────────────────── */}
       <div className="sticky top-0 z-30 border-b bg-gray-100 dark:bg-muted">
-        {/* Top scrollbar — synced with the body's bottom scrollbar (§1). A spacer the
-            width of the frozen pane aligns it with the scroll area; the inner track
-            width = the scroll content width so the thumb matches the bottom one. */}
-        <div className="flex">
-          <div className="shrink-0" style={{ width: frozenW }} />
-          <div
-            ref={topScrollRef}
-            onScroll={() => syncScroll("top")}
-            className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
-          >
-            <div style={{ width: scrollW, height: 1 }} />
-          </div>
-        </div>
-
         {/* Column-title row */}
         <div className="flex">
           <div
@@ -579,7 +572,7 @@ export function FullCalendarGrid({
                   className={cn("flex items-center gap-1 px-3", CELL, cellJustify(col))}
                   style={colStyle(col.width)}
                 >
-                  <span className="truncate">{col.label}</span>
+                  <span className={CLAMP2}>{col.label}</span>
                   {col.required && (
                     <span className="text-red-500 dark:text-red-400">*</span>
                   )}
@@ -699,7 +692,12 @@ export function FullCalendarGrid({
                       >
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                            <span
+                              className={cn(
+                                "min-w-0 text-sm font-medium text-gray-900 dark:text-gray-100",
+                                CLAMP2
+                              )}
+                            >
                               {nom?.name ?? line.nomenclatureId}
                             </span>
                           </TooltipTrigger>
@@ -771,11 +769,12 @@ export function FullCalendarGrid({
           })}
         </div>
 
-        {/* Scrolling pane — the BOTTOM scrollbar; drives the header + top scrollbar. */}
+        {/* Scrolling pane — its native h-scrollbar is hidden (still scrollable via
+            wheel/drag) so it doesn't double up with the sticky-bottom strip below. */}
         <div
           ref={bodyRef}
           onScroll={() => syncScroll("body")}
-          className="min-w-0 flex-1 overflow-x-auto"
+          className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <div className="min-w-max">
             {/* groups */}
@@ -944,6 +943,21 @@ export function FullCalendarGrid({
           </div>
         </div>
       </div>
+
+      {/* Sticky-BOTTOM synced horizontal scrollbar (7-я часть §4): pinned to the
+          bottom of the visible area (the page's own scroll container), Excel-like —
+          reachable from any vertical position. Spacer = frozen-pane width; inner
+          track = scroll-content width so the thumb matches the body pane. */}
+      <div className="sticky bottom-0 z-30 flex border-t bg-gray-50 dark:bg-muted/40">
+        <div className="shrink-0" style={{ width: frozenW }} />
+        <div
+          ref={bottomScrollRef}
+          onScroll={() => syncScroll("bottom")}
+          className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+        >
+          <div style={{ width: scrollW, height: 1 }} />
+        </div>
+      </div>
     </Card>
   );
 }
@@ -1102,7 +1116,7 @@ function GiftSubCell({
   // field === "nom"
   const nom = g ? getNomenclatureItem(g.nomenclatureId) : undefined;
   if (!editable) {
-    if (nom) return <span className="truncate">{nom.name}</span>;
+    if (nom) return <span className={CLAMP2}>{nom.name}</span>;
     return required ? (
       <span className="text-xs font-medium text-red-500 dark:text-red-400">
         не заполнено
@@ -1117,12 +1131,12 @@ function GiftSubCell({
         type="button"
         onClick={() => ctx.onGiftPick(lineId, index)}
         className={cn(
-          "min-w-0 flex-1 truncate rounded px-1 text-left text-sm hover:bg-gray-100 dark:hover:bg-accent",
+          "min-w-0 flex-1 rounded px-1 text-left text-sm hover:bg-gray-100 dark:hover:bg-accent",
           nom ? "text-gray-900 dark:text-gray-100" : "text-muted-foreground"
         )}
       >
         {nom ? (
-          <span className="truncate">{nom.name}</span>
+          <span className={CLAMP2}>{nom.name}</span>
         ) : (
           <span
             className={cn(
@@ -1156,7 +1170,7 @@ function KmCell({ kmId, width }: { kmId: string; width: number }) {
       {km ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="truncate text-xs text-gray-700 dark:text-gray-200">
+            <span className={cn("text-xs text-gray-700 dark:text-gray-200", CLAMP2)}>
               {lastName(km.name)}
             </span>
           </TooltipTrigger>

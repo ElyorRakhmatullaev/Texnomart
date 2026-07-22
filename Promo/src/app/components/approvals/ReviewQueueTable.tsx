@@ -31,15 +31,20 @@ const HEADER_H = "h-10";
 /** Divider between columns — matches the calendars' unified line treatment (§6/§9). */
 const CELL = "border-r border-gray-100 dark:border-border";
 
-/** Column widths — one source of truth so the header band and body rows stay aligned. */
+// 7-я часть §3/§6.3 — long text (Название/КМ) wraps onto 2 lines instead of truncating.
+const CLAMP2 =
+  "[display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden leading-tight";
+
+/** Column widths — one source of truth so the header band and body rows stay aligned.
+    Compacted per 7-я часть §6.2 (short-value columns narrowed, like the short calendar). */
 const COLS = {
-  no: "w-[130px]",
-  type: "w-[140px]",
+  no: "w-[104px]",
+  type: "w-[132px]",
   name: "w-[280px]",
   km: "w-[170px]",
-  sent: "w-[160px]",
+  sent: "w-[150px]",
   status: "w-[240px]",
-  sla: "w-[230px]",
+  sla: "w-[200px]",
   chevron: "w-[44px]",
 };
 
@@ -104,12 +109,13 @@ interface ReviewQueueTableProps {
 }
 
 export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
-  // Three synced horizontal scrollers (§6) — a sticky top scrollbar, the header band,
-  // and the body's bottom scrollbar. `syncScroll` mirrors one onto the other two;
-  // idempotent writes make the resulting scroll events self-terminate (no loop flag).
+  // Three synced horizontal scrollers (§6 + 7-я часть §4) — the header band, the body
+  // pane, and a single STICKY BOTTOM viewport scrollbar (the former top strip is
+  // removed). `syncScroll` mirrors one onto the other two; idempotent writes make the
+  // resulting scroll events self-terminate (no loop flag).
   const headRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
-  const topScrollRef = React.useRef<HTMLDivElement>(null);
+  const bottomScrollRef = React.useRef<HTMLDivElement>(null);
   const [scrollW, setScrollW] = React.useState(0);
 
   React.useLayoutEffect(() => {
@@ -126,15 +132,13 @@ export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
     };
   }, [items]);
 
-  const syncScroll = React.useCallback((from: "top" | "body") => {
-    const src = from === "top" ? topScrollRef.current : bodyRef.current;
+  const syncScroll = React.useCallback((from: "body" | "bottom") => {
+    const src = from === "bottom" ? bottomScrollRef.current : bodyRef.current;
     const x = src?.scrollLeft ?? 0;
-    if (headRef.current && headRef.current.scrollLeft !== x)
-      headRef.current.scrollLeft = x;
-    if (from !== "top" && topScrollRef.current && topScrollRef.current.scrollLeft !== x)
-      topScrollRef.current.scrollLeft = x;
-    if (from !== "body" && bodyRef.current && bodyRef.current.scrollLeft !== x)
-      bodyRef.current.scrollLeft = x;
+    for (const ref of [headRef, bodyRef, bottomScrollRef]) {
+      if (ref.current && ref.current !== src && ref.current.scrollLeft !== x)
+        ref.current.scrollLeft = x;
+    }
   }, []);
 
   if (items.length === 0) {
@@ -151,16 +155,9 @@ export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
           `overflow-clip` rounds the corners like `overflow-hidden` but is NOT a scroll
           container, so it doesn't trap the sticky header below. */}
       <Card className="hidden overflow-clip p-0 md:block">
-        {/* Sticky header band — pinned to the page scroll; `-top-4` cancels <main>'s p-4. */}
+        {/* Sticky header band — pinned to the page scroll; `-top-4` cancels <main>'s p-4.
+            The former top scrollbar strip is removed (7-я часть §4). */}
         <div className="sticky -top-4 z-30 border-b bg-gray-50 dark:bg-muted/40">
-          {/* Synced TOP horizontal scrollbar (§6) — track width = the body scroll width. */}
-          <div
-            ref={topScrollRef}
-            onScroll={() => syncScroll("top")}
-            className="overflow-x-auto overflow-y-hidden"
-          >
-            <div style={{ width: scrollW, height: 1 }} />
-          </div>
           {/* Column-title row (driven — mirrors the body scrollLeft). */}
           <div ref={headRef} className="overflow-hidden">
             <div
@@ -181,11 +178,13 @@ export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
           </div>
         </div>
 
-        {/* Body — the MAIN PAGE handles vertical scroll; this band scrolls horizontally. */}
+        {/* Body — the MAIN PAGE handles vertical scroll; this band scrolls horizontally.
+            Its native h-scrollbar is hidden (still scrollable via wheel/drag) so it
+            doesn't double up with the sticky-bottom strip below. */}
         <div
           ref={bodyRef}
           onScroll={() => syncScroll("body")}
-          className="overflow-x-auto"
+          className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <div className="min-w-max">
             {items.map((it) => {
@@ -217,11 +216,12 @@ export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
                   <span className={cn(COLS.type, "px-3 py-2.5 text-gray-700 dark:text-gray-200", CELL)}>
                     {c?.type ?? "—"}
                   </span>
-                  <span className={cn(COLS.name, "truncate px-3 py-2.5 text-gray-700 dark:text-gray-200", CELL)}>
-                    {c?.name ?? "—"}
+                  {/* 7-я часть §3/§6.3 — 2-line wrap instead of truncation. */}
+                  <span className={cn(COLS.name, "px-3 py-2.5 text-gray-700 dark:text-gray-200", CELL)}>
+                    <span className={CLAMP2}>{c?.name ?? "—"}</span>
                   </span>
-                  <span className={cn(COLS.km, "truncate px-3 py-2.5 text-gray-700 dark:text-gray-200", CELL)}>
-                    {km?.name ?? it.kmId}
+                  <span className={cn(COLS.km, "px-3 py-2.5 text-gray-700 dark:text-gray-200", CELL)}>
+                    <span className={CLAMP2}>{km?.name ?? it.kmId}</span>
                   </span>
                   <span className={cn(COLS.sent, "whitespace-nowrap px-3 py-2.5 text-gray-700 dark:text-gray-200", CELL)}>
                     <RuDate value={new Date(it.submittedAt)} withTime />
@@ -241,6 +241,18 @@ export function ReviewQueueTable({ items, onOpen }: ReviewQueueTableProps) {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Sticky-BOTTOM synced horizontal scrollbar (7-я часть §4): pinned to the
+            bottom of the viewport, Excel-like — reachable from any scroll position. */}
+        <div className="sticky bottom-0 z-30 border-t bg-gray-50 dark:bg-muted/40">
+          <div
+            ref={bottomScrollRef}
+            onScroll={() => syncScroll("bottom")}
+            className="overflow-x-auto overflow-y-hidden"
+          >
+            <div style={{ width: scrollW, height: 1 }} />
           </div>
         </div>
       </Card>

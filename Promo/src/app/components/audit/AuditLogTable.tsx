@@ -290,10 +290,12 @@ export function AuditLogTable({
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-gray-50 dark:bg-muted/40">
                   <TableRow>
-                    <TableHead className="w-[88px]">ID</TableHead>
-                    <TableHead className="w-[150px]">Дата и время</TableHead>
-                    <TableHead className="w-[180px]">Пользователь</TableHead>
-                    <TableHead className="w-[170px]">Действие</TableHead>
+                    {/* 7-я часть §6.2 — short-value columns kept compact; the
+                        min-w text columns take the remaining full-bleed width. */}
+                    <TableHead className="w-[84px]">ID</TableHead>
+                    <TableHead className="w-[140px]">Дата и время</TableHead>
+                    <TableHead className="w-[170px]">Пользователь</TableHead>
+                    <TableHead className="w-[150px]">Действие</TableHead>
                     <TableHead className="min-w-[200px]">Объект</TableHead>
                     <TableHead className="min-w-[220px]">Статус до → после</TableHead>
                     <TableHead className="min-w-[200px]">Комментарий</TableHead>

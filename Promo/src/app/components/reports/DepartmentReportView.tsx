@@ -423,6 +423,12 @@ const GROUP_H = "h-7";
 const CHANGE_COL_W = 130;
 const ACK_COL_W = 150;
 
+// 7-я часть §3/§6.3 — text cells wrap onto 2 lines instead of truncating (no
+// cut-off) within the fixed 52px row (Pattern-F invariant), like the short and
+// full calendars.
+const CLAMP2 =
+  "[display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden leading-tight";
+
 interface ReportBandTableProps {
   campaign: PromoCampaign;
   lines: PromoLine[];
@@ -479,11 +485,12 @@ function ReportBandTable({
 
   // Sticky header + synced horizontal scroll (Pattern F, ported verbatim from
   // ShortCalendarTable) — the header is sticky to the PAGE scroll; three
-  // horizontal scrollers are kept in sync: a STICKY TOP scrollbar, the header
-  // band, and the body's bottom scrollbar.
+  // horizontal scrollers are kept in sync: the header band, the body pane, and a
+  // single STICKY BOTTOM viewport scrollbar (7-я часть §4 — the former top strip
+  // is removed).
   const headRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
-  const topScrollRef = React.useRef<HTMLDivElement>(null);
+  const bottomScrollRef = React.useRef<HTMLDivElement>(null);
   const frozenHeadRef = React.useRef<HTMLDivElement>(null);
 
   const [frozenW, setFrozenW] = React.useState(0);
@@ -507,19 +514,13 @@ function ReportBandTable({
 
   // Mirror one scroller's scrollLeft onto the other two (idempotent writes, so
   // the resulting scroll events self-terminate — no re-entrancy flag needed).
-  const syncScroll = React.useCallback((from: "top" | "body") => {
-    const src = from === "top" ? topScrollRef.current : bodyRef.current;
+  const syncScroll = React.useCallback((from: "body" | "bottom") => {
+    const src = from === "bottom" ? bottomScrollRef.current : bodyRef.current;
     const x = src?.scrollLeft ?? 0;
-    if (headRef.current && headRef.current.scrollLeft !== x)
-      headRef.current.scrollLeft = x;
-    if (
-      from !== "top" &&
-      topScrollRef.current &&
-      topScrollRef.current.scrollLeft !== x
-    )
-      topScrollRef.current.scrollLeft = x;
-    if (from !== "body" && bodyRef.current && bodyRef.current.scrollLeft !== x)
-      bodyRef.current.scrollLeft = x;
+    for (const ref of [headRef, bodyRef, bottomScrollRef]) {
+      if (ref.current && ref.current !== src && ref.current.scrollLeft !== x)
+        ref.current.scrollLeft = x;
+    }
   }, []);
 
   if (lines.length === 0) {
@@ -529,23 +530,9 @@ function ReportBandTable({
   return (
     <>
       {/* ── STICKY TOP band — pinned to the page scroll. `-top-4` cancels
-            <main>'s p-4 (16px) so it sits flush at the content top. ─────────── */}
+            <main>'s p-4 (16px) so it sits flush at the content top. The former
+            top scrollbar strip is removed (7-я часть §4). ────────────────────── */}
       <div className="sticky -top-4 z-30 border-b bg-gray-50 dark:bg-muted/40">
-        {/* Top horizontal scrollbar — synced with the body's bottom scrollbar. A
-            spacer the width of the frozen pane keeps it aligned with the scroll
-            area; the inner track width = the scroll content width so the thumb
-            matches. */}
-        <div className="flex">
-          <div className="shrink-0" style={{ width: frozenW }} />
-          <div
-            ref={topScrollRef}
-            onScroll={() => syncScroll("top")}
-            className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
-          >
-            <div style={{ width: scrollW, height: 1 }} />
-          </div>
-        </div>
-
         {/* Group header (marketing only) + column-title rows */}
         <div className="flex">
           <div
@@ -596,13 +583,13 @@ function ReportBandTable({
                     key={f.id}
                     style={{ width: f.width }}
                     className={cn(
-                      "flex h-full shrink-0 items-center px-3 text-xs font-semibold text-gray-700 dark:text-gray-200 truncate",
+                      "flex h-full shrink-0 items-center overflow-hidden px-3 text-xs font-semibold text-gray-700 dark:text-gray-200",
                       CELL,
                       isNumericKind(f.kind) && "justify-end",
                       f.kind === "check" && "justify-center"
                     )}
                   >
-                    {f.label}
+                    <span className={CLAMP2}>{f.label}</span>
                   </div>
                 ))}
                 <div
@@ -657,18 +644,19 @@ function ReportBandTable({
                   )}
                   style={{ width: nomWidth }}
                 >
-                  <span className="truncate">{nomValue}</span>
+                  <span className={CLAMP2}>{nomValue}</span>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Scrolling pane — the BOTTOM scrollbar; drives the header + top scrollbar. */}
+        {/* Scrolling pane — its native h-scrollbar is hidden (still scrollable via
+            wheel/drag) so it doesn't double up with the sticky-bottom strip below. */}
         <div
           ref={bodyRef}
           onScroll={() => syncScroll("body")}
-          className="min-w-0 flex-1 overflow-x-auto"
+          className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <div className="min-w-max">
             {lines.map((line) => {
@@ -687,7 +675,7 @@ function ReportBandTable({
                         key={f.id}
                         style={{ width: f.width }}
                         className={cn(
-                          "flex h-full shrink-0 items-center px-3 text-sm text-gray-800 dark:text-gray-100 truncate",
+                          "flex h-full shrink-0 items-center overflow-hidden px-3 text-sm text-gray-800 dark:text-gray-100",
                           CELL,
                           isNumericKind(f.kind) && "justify-end tabular-nums",
                           f.kind === "check" && "justify-center",
@@ -719,6 +707,18 @@ function ReportBandTable({
                               </div>
                             </TooltipContent>
                           </Tooltip>
+                        ) : f.kind === "text" ? (
+                          // §3/§6.3 — long text values wrap onto 2 lines, no cut-off.
+                          <span className={CLAMP2}>
+                            <CellValue
+                              field={f}
+                              line={line}
+                              campaign={campaign}
+                              canEditMarketingFlag={canEditMarketingFlag}
+                              flagFor={flagFor}
+                              onToggleFlag={onToggleFlag}
+                            />
+                          </span>
                         ) : (
                           <CellValue
                             field={f}
@@ -754,6 +754,20 @@ function ReportBandTable({
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* Sticky-BOTTOM synced horizontal scrollbar (7-я часть §4): pinned to the
+          bottom of the viewport, Excel-like — reachable from any scroll position.
+          Spacer = frozen-pane width; track = scroll-content width. */}
+      <div className="sticky bottom-0 z-30 flex border-t bg-gray-50 dark:bg-muted/40">
+        <div className="shrink-0" style={{ width: frozenW }} />
+        <div
+          ref={bottomScrollRef}
+          onScroll={() => syncScroll("bottom")}
+          className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+        >
+          <div style={{ width: scrollW, height: 1 }} />
         </div>
       </div>
     </>

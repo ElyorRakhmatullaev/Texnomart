@@ -122,15 +122,17 @@ const ACCESSORS: Record<string, Accessor> = {
 };
 
 // Report-local identity/extra columns not present (or not 1:1) in gridFields.
+// Widths compacted per 7-я часть §6.2 (short values → narrow, like the short
+// calendar); long-text columns keep width — their values now wrap onto 2 lines.
 const LOCAL_COLUMNS: Record<string, Omit<ReportColumn, "value">> = {
-  priznak: { id: "priznak", label: "Признак", kind: "text", group: "Идентификация", width: 130 },
-  km: { id: "km", label: "ФИО КМ", kind: "text", group: "Идентификация", width: 180 },
-  promoNo: { id: "promoNo", label: "№ промо", kind: "text", group: "Идентификация", width: 130 },
-  start: { id: "start", label: "Начало", kind: "date", group: "Идентификация", width: 120 },
-  end: { id: "end", label: "Окончание", kind: "date", group: "Идентификация", width: 120 },
+  priznak: { id: "priznak", label: "Признак", kind: "text", group: "Идентификация", width: 110 },
+  km: { id: "km", label: "ФИО КМ", kind: "text", group: "Идентификация", width: 160 },
+  promoNo: { id: "promoNo", label: "№ промо", kind: "text", group: "Идентификация", width: 104 },
+  start: { id: "start", label: "Начало", kind: "date", group: "Идентификация", width: 110 },
+  end: { id: "end", label: "Окончание", kind: "date", group: "Идентификация", width: 110 },
   nomenclature: { id: "nomenclature", label: "Номенклатура", kind: "text", group: "Товар", width: 260 },
-  giftNomenclature: { id: "giftNomenclature", label: "Номенклатура по подаркам", kind: "text", group: "Товар", width: 220 },
-  giftStock: { id: "giftStock", label: "Остаток подарка", kind: "number", group: "Подарки", width: 150 },
+  giftNomenclature: { id: "giftNomenclature", label: "Номенклатура по подаркам", kind: "text", group: "Товар", width: 200 },
+  giftStock: { id: "giftStock", label: "Остаток подарка", kind: "number", group: "Подарки", width: 130 },
 };
 
 const GRID_BY_ID = new Map<string, ColumnDef>(GRID_COLUMNS.map((c) => [c.id, c]));

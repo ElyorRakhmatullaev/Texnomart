@@ -40,23 +40,26 @@ export function ControlDeadlinesTable({
       {/* Desktop table */}
       <div className="hidden overflow-hidden rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:block">
         <div className="max-h-[calc(100vh-320px)] overflow-auto [scrollbar-gutter:stable]">
+          {/* 7-я часть §6.2 — explicit compact widths on the short-value columns so a
+              full-width table doesn't pad them with dead space; the remaining width
+              goes to «Комментарий» (long text stays readable, §6.3). */}
           <table className="w-full border-collapse">
             <thead className="sticky top-0 z-10">
               <tr>
                 {lead === "plan" ? (
-                  <th className={th}>Период плана</th>
+                  <th className={cn(th, "w-[130px]")}>Период плана</th>
                 ) : (
                   <>
-                    <th className={th}>№ и название промо</th>
-                    <th className={th}>Период акции</th>
+                    <th className={cn(th, "w-[240px]")}>№ и название промо</th>
+                    <th className={cn(th, "w-[200px]")}>Период акции</th>
                   </>
                 )}
-                <th className={th}>Контрольная точка</th>
-                <th className={th}>Ответственный · роль</th>
-                <th className={th}>Дедлайн</th>
-                <th className={th}>Факт</th>
-                <th className={th}>Результат</th>
-                <th className={th}>Просрочка</th>
+                <th className={cn(th, "w-[210px]")}>Контрольная точка</th>
+                <th className={cn(th, "w-[180px]")}>Ответственный · роль</th>
+                <th className={cn(th, "w-[140px]")}>Дедлайн</th>
+                <th className={cn(th, "w-[140px]")}>Факт</th>
+                <th className={cn(th, "w-[110px]")}>Результат</th>
+                <th className={cn(th, "w-[90px]")}>Просрочка</th>
                 <th className={th}>Комментарий</th>
               </tr>
             </thead>
