@@ -385,8 +385,9 @@ export const CAMPAIGNS: PromoCampaign[] = [
     planStatus: "Утверждён",
   },
   {
-    // Near-term planned campaign: its «заполнение КМ» deadline (start − 21 кал. дн.)
-    // has already passed relative to today, so the short calendar shows an OverdueTag.
+    // 7-я часть §1.3: the on-time-sent example — report first sent 30.05, i.e.
+    // BEFORE the report deadline (start − 17 = 05.06), so the short calendar
+    // shows the green «Отправлено ✓» plashka (versions seeded below).
     id: "PR-2026-007",
     type: "Рассрочка 0-0-6",
     name: "Летняя рассрочка на смартфоны",
@@ -394,11 +395,11 @@ export const CAMPAIGNS: PromoCampaign[] = [
     cancelled: false,
     startDate: new Date(2026, 5, 22),
     endDate: new Date(2026, 6, 5),
-    status: "На согласовании у старшего КМ",
+    status: "Согласовано и отправлено смежным отделам",
     participatingKmIds: ["km-3", "km-5"],
     kmStatuses: {
-      "km-3": "Не заполнено",
-      "km-5": "На согласовании у старшего КМ",
+      "km-3": "Согласовано КД",
+      "km-5": "Согласовано КД",
     },
     categoryDistribution: [
       { date: new Date(2026, 5, 22), category: "Смартфоны и гаджеты", responsibleKmId: "km-3" },
@@ -1000,7 +1001,7 @@ const LINE_SEED: LineSeed[] = [
   // PR-2026-006 km-6 (at Старший КМ) — Климатическая; L-0013 missing forecast → red required marker.
   { id: "L-0012", campaignId: "PR-2026-006", kmId: "km-6", nomenclatureId: "1C-10027", off: 0.15, forecast: 55, advKm: true },
   { id: "L-0013", campaignId: "PR-2026-006", kmId: "km-6", nomenclatureId: "1C-10029", off: 0.2 },
-  // PR-2026-007 km-5 (at Старший КМ) — Ноутбуки.
+  // PR-2026-007 km-5 (sent on time, 7-я часть §1.3) — Ноутбуки.
   { id: "L-0014", campaignId: "PR-2026-007", kmId: "km-5", nomenclatureId: "1C-10023", off: 0.07, forecast: 40 },
 
   // S4 Phase 3 — cancellation demos.
@@ -1967,8 +1968,8 @@ const REVIEW_SUBMIT_OFFSET: Record<string, { days: number; escalatedToKD?: boole
     kind: "non-participation",
     reason: "Поставщик не подтвердил объём — категория не участвует в этой акции.",
   },
-  // PR-2026-007 km-5: at Старший КМ, breached (campaign also fill-overdue).
-  "PR-2026-007~km-5": { days: 3 },
+  // (PR-2026-007 was seeded here while pending review — now sent on time,
+  // 7-я часть §1.3, so it no longer yields review items.)
 };
 
 /**
@@ -2216,7 +2217,6 @@ export type KmSubmissionSla =
   | { state: "none" };
 
 const KM_SUBMISSION_OVERDUE: Record<string, number> = {
-  "PR-2026-007~km-5": 3,
   "PR-2026-002~km-5": 2,
 };
 
@@ -2462,6 +2462,23 @@ const CAMPAIGN_VERSIONS: Record<string, CampaignVersion[]> = {
       role: "Категорийный менеджер (КМ)",
       changeType: "Первичная отправка",
       summary: "Первичная отправка данных на согласование.",
+      changes: [],
+    },
+  ],
+  // PR-2026-007 «Летняя рассрочка на смартфоны»: sent ON TIME — 30.05 is before
+  // both the КМ-fill deadline (start − 21 = 01.06) and the report deadline
+  // (start − 17 = 05.06) → the short calendar's green «Отправлено ✓» example
+  // (7-я часть §1.3).
+  "PR-2026-007": [
+    {
+      id: "PR-2026-007-v1",
+      campaignId: "PR-2026-007",
+      version: 1,
+      date: new Date(2026, 4, 30, 16, 20),
+      author: "Каримов Шерзод",
+      role: "Категорийный менеджер (КМ)",
+      changeType: "Первичная отправка",
+      summary: "Первичная отправка данных смежным отделам.",
       changes: [],
     },
   ],

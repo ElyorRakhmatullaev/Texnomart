@@ -13,7 +13,6 @@ import {
   CATEGORY_MANAGERS,
   formatPromoNo,
   getFillDeadline,
-  getOverdueDays,
   getReportSendStatus,
   type CategoryDistributionEntry,
   type CategoryManager,
@@ -157,18 +156,17 @@ export function ShortCalendarTable({
   });
 
   // The header is sticky to the PAGE scroll (§3.2/§13) so vertical scrolling stays on
-  // the main page. Four horizontal scrollers are kept in sync (client feedback §1 +
-  // tracker V2-1): the STICKY TOP scrollbar, the header band, the body pane, and the
-  // STICKY BOTTOM scrollbar — idempotent scrollLeft writes prevent feedback loops.
+  // the main page. Three horizontal scrollers are kept in sync: the header band, the
+  // body pane, and the single STICKY BOTTOM viewport scrollbar (7-я часть §4 — the
+  // former sticky-top strip is removed; one Excel-style bottom scroller remains).
   const headRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
-  const topScrollRef = React.useRef<HTMLDivElement>(null);
   const bottomScrollRef = React.useRef<HTMLDivElement>(null);
   const frozenHeadRef = React.useRef<HTMLDivElement>(null);
 
-  // Width of the frozen identity pane (top-scrollbar spacer) and of the scrollable
-  // content (top-scrollbar track) — measured so the top scrollbar lines up exactly with
-  // the bottom one and its thumb has the same proportions.
+  // Width of the frozen identity pane (bottom-scrollbar spacer) and of the scrollable
+  // content (bottom-scrollbar track) — measured so the sticky scrollbar lines up
+  // exactly with the scroll area and its thumb has the same proportions.
   const [frozenW, setFrozenW] = React.useState(0);
   const [scrollW, setScrollW] = React.useState(0);
 
@@ -188,17 +186,13 @@ export function ShortCalendarTable({
     };
   }, [campaigns, expanded, expandedReadiness, distFilter, showReportColumns]);
 
-  // Mirror one scroller's scrollLeft onto the other three (§V2-1 adds a sticky-BOTTOM
-  // scrollbar alongside the sticky-top one). Writes are idempotent (only when the value
-  // actually differs), so the resulting scroll events self-terminate — no re-entrancy
-  // flag needed, and no dropped frames during fast scrolling.
-  const syncScroll = React.useCallback((from: "top" | "body" | "bottom") => {
-    const src =
-      from === "top" ? topScrollRef.current
-      : from === "bottom" ? bottomScrollRef.current
-      : bodyRef.current;
+  // Mirror one scroller's scrollLeft onto the others. Writes are idempotent (only
+  // when the value actually differs), so the resulting scroll events self-terminate —
+  // no re-entrancy flag needed, and no dropped frames during fast scrolling.
+  const syncScroll = React.useCallback((from: "body" | "bottom") => {
+    const src = from === "bottom" ? bottomScrollRef.current : bodyRef.current;
     const x = src?.scrollLeft ?? 0;
-    for (const ref of [topScrollRef, headRef, bodyRef, bottomScrollRef]) {
+    for (const ref of [headRef, bodyRef, bottomScrollRef]) {
       if (ref.current && ref.current !== src && ref.current.scrollLeft !== x)
         ref.current.scrollLeft = x;
     }
@@ -209,23 +203,10 @@ export function ShortCalendarTable({
     // scroll container, so it does NOT trap the page-sticky header below.
     <Card className="overflow-clip p-0">
       {/* ── STICKY TOP band — pinned to the page scroll (§13). `-top-4` cancels
-            <main>'s p-4 (16px) so it sits flush at the content top. It stacks a synced
-            top horizontal scrollbar (§1) over the column-title row. ───────────────── */}
+            <main>'s p-4 (16px) so it sits flush at the content top. Holds only the
+            column-title row — the former top scrollbar strip is removed (7-я часть §4:
+            один нижний закреплённый скролл). ─────────────────────────────────────── */}
       <div className="sticky -top-4 z-30 border-b bg-gray-50 dark:bg-muted/40">
-        {/* Top horizontal scrollbar — synced with the body's bottom scrollbar (§1).
-            A spacer the width of the frozen pane keeps it aligned with the scroll area;
-            the inner track width = the scroll content width so the thumb matches. */}
-        <div className="flex">
-          <div className="shrink-0" style={{ width: frozenW }} />
-          <div
-            ref={topScrollRef}
-            onScroll={() => syncScroll("top")}
-            className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
-          >
-            <div style={{ width: scrollW, height: 1 }} />
-          </div>
-        </div>
-
         {/* Column-title row */}
         <div className="flex">
           <div
@@ -332,7 +313,6 @@ export function ShortCalendarTable({
           <div className="min-w-max">
             {campaigns.map((c, i) => {
               const deadline = getFillDeadline(c);
-              const overdue = getOverdueDays(deadline);
               const report = getReportSendStatus(c);
               const entries = (c.categoryDistribution ?? []).filter((e) =>
                 matchesDistFilter(e, distFilter)
@@ -376,7 +356,8 @@ export function ShortCalendarTable({
                     </div>
                   </div>
 
-                  {/* Крайний срок заполнения КМ */}
+                  {/* Крайний срок заполнения КМ — только дата (7-я часть §1.2):
+                      просрочка здесь не показывается. */}
                   <div
                     className={cn(
                       "flex w-[132px] flex-col justify-center gap-1 px-3",
@@ -386,7 +367,6 @@ export function ShortCalendarTable({
                     <span className="text-sm tabular-nums text-gray-900 dark:text-gray-100">
                       <RuDate value={deadline} />
                     </span>
-                    <OverdueTag days={overdue} />
                   </div>
 
                   {/* Срок отчёта (№4) — крайняя дата отправки отчёта смежным отделам

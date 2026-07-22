@@ -47,7 +47,6 @@ import {
   formatPromoNo,
   getCategoryManager,
   getFillDeadline,
-  getOverdueDays,
   getReportSendStatus,
   isPlanApprovedByDirectors,
   kmStatusDeepLink,
@@ -60,6 +59,11 @@ import {
   downloadCsv,
   exportStamp,
 } from "../../../lib/promo-export";
+import {
+  getPlanState,
+  reviveOverrides,
+  reviveRows,
+} from "../../../lib/plan-store";
 
 // Only PLANNED campaigns appear in the short calendar (spec §4.1).
 const PLANNED = CAMPAIGNS.filter((c) => c.planned);
@@ -182,19 +186,25 @@ export function ShortCalendarPage() {
   // matching rows are visible (§1, §2).
   const effectiveExpanded = distExpanded || hasDistributionFilter(filters);
 
-  // Plan-tab export rows = the same non-cancelled planned campaigns the plan shows
-  // (session-added plan rows live inside PlanMode and aren't reflected here — mock).
-  const planRows = React.useMemo(
-    () =>
-      PLANNED.filter((c) => !c.cancelled).map((c) => ({
-        id: c.id,
-        type: c.type,
-        name: c.name,
-        startDate: c.startDate,
-        endDate: c.endDate,
-      })),
-    []
-  );
+  // Plan-tab export: seed rows + the persisted plan lifecycle (`promo:plan-state`) —
+  // created drafts, edits and deletions are reflected, so the CSV matches the tab
+  // («7-я часть» §9.5). Read fresh at export time (not memoized).
+  function effectivePlanRows() {
+    const base = PLANNED.filter((c) => !c.cancelled).map((c) => ({
+      id: c.id,
+      type: c.type,
+      name: c.name,
+      startDate: c.startDate,
+      endDate: c.endDate,
+    }));
+    const state = getPlanState();
+    if (!state) return base;
+    const overrides = reviveOverrides(state.overrides);
+    const deleted = new Set(state.deletedIds);
+    return [...base, ...reviveRows(state.extraRows)]
+      .filter((r) => !deleted.has(r.id))
+      .map((r) => ({ ...r, ...overrides[r.id] }));
+  }
 
   // Export by the CURRENT tab, respecting the active filters (§8). Mock: client-side
   // CSV; «Excel» reuses the CSV (opens in Excel); PDF isn't rendered in the prototype.
@@ -213,8 +223,9 @@ export function ShortCalendarPage() {
         `Экспортировано: ${filtered.length} акций (с учётом фильтров)`
       );
     } else {
-      downloadCsv(`план-акций_${stamp}.csv`, buildPlanCsv(planRows));
-      toast.success(`Экспортировано: план акций (${planRows.length} строк)`);
+      const rows = effectivePlanRows();
+      downloadCsv(`план-акций_${stamp}.csv`, buildPlanCsv(rows));
+      toast.success(`Экспортировано: план акций (${rows.length} строк)`);
     }
   }
 
@@ -392,7 +403,6 @@ function MobileCampaignCard({
 }) {
   const agg = aggregateKmStatuses(c);
   const deadline = getFillDeadline(c);
-  const overdue = getOverdueDays(deadline);
   const report = getReportSendStatus(c);
   const kmNames = c.participatingKmIds
     .map((id) => getCategoryManager(id)?.name)
@@ -411,7 +421,6 @@ function MobileCampaignCard({
           <RuDate value={c.startDate} /> — <RuDate value={c.endDate} />
           <span>· срок КМ:</span>
           <RuDate value={deadline} />
-          <OverdueTag days={overdue} />
         </div>
         {showReportSend && (
           <>

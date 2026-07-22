@@ -9,7 +9,6 @@ import { Badge } from "@texnomart/ui/badge";
 import { Button } from "@texnomart/ui/button";
 import { cn } from "@texnomart/ui/utils";
 import { PromoStatusBadge } from "../../../components/PromoStatusBadge";
-import { OverdueTag } from "../../../components/OverdueTag";
 import { RuDate } from "../../../components/RuDate";
 import { DeadlineChips } from "../../../components/DeadlineChips";
 import { AggregatedIndicators } from "./AggregatedIndicators";
@@ -19,7 +18,6 @@ import {
   getCampaignById,
   getCategoryManager,
   getFillDeadline,
-  getOverdueDays,
 } from "../../../lib/promo-mock-data";
 
 export function ShortCalendarDetailPage() {
@@ -49,7 +47,6 @@ export function ShortCalendarDetailPage() {
   }
 
   const deadline = getFillDeadline(campaign);
-  const overdue = getOverdueDays(deadline);
   const agg = aggregateKmStatuses(campaign);
 
   return (
@@ -95,14 +92,12 @@ export function ShortCalendarDetailPage() {
               </span>
             }
           />
+          {/* Только дата (7-я часть §1.2) — просрочка не показывается. */}
           <InfoRow
             label="Крайний срок КМ"
             value={
-              <span className="flex items-center gap-1.5">
-                <span className="tabular-nums">
-                  <RuDate value={deadline} />
-                </span>
-                <OverdueTag days={overdue} />
+              <span className="tabular-nums">
+                <RuDate value={deadline} />
               </span>
             }
           />
