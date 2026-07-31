@@ -82,13 +82,14 @@ function giftField(id: string): GiftField {
   return "stock";
 }
 
-/** Height of one line (choice lines grow to fit their gift sub-rows + add row). */
+/** Height of one line (choice lines grow to fit their caption + gift sub-rows + add row). */
 function lineHeightPx(line: PromoLine, isChoice: boolean, editable: boolean): number {
   if (!isChoice) return ROW_H_PX;
   const giftCount = line.gifts?.length ?? 0;
   const contentRows = Math.max(giftCount, 1);
   const addRow = editable ? 1 : 0;
-  return Math.max(ROW_H_PX, (contentRows + addRow) * GIFT_SUBROW_H);
+  const captionRow = 1; // «Подарок на выбор» caption (R44)
+  return Math.max(ROW_H_PX, (captionRow + contentRows + addRow) * GIFT_SUBROW_H);
 }
 
 // Unified styling with the short calendar (feedback §9): a darker-gray, bold header
@@ -805,6 +806,16 @@ export function FullCalendarGrid({
                       campaign.cancelled && "bg-red-50 dark:bg-red-500/15"
                     )}
                   >
+                    {/* R44: gift-mechanic indicator so «на выбор» vs «2 фиксированных»
+                        is obvious without opening the gift columns. */}
+                    {isGiftType(campaign.type) && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-500/15 dark:text-purple-300">
+                        <Gift className="size-2.5" />
+                        {isGiftChoiceType(campaign.type)
+                          ? "Подарки: на выбор"
+                          : "Подарки: 2 фиксированных"}
+                      </span>
+                    )}
                     {changeBadges?.get(campaign.id) && (
                       <ChangeBadge info={changeBadges.get(campaign.id)!} />
                     )}
@@ -1012,6 +1023,21 @@ function GiftCell({
     const rows: (GiftItem | null)[] = gifts.length > 0 ? gifts : [null];
     return (
       <div className={cn("flex flex-col", CELL)} style={colStyle(width)}>
+        {/* R44: caption the choice block so the mechanic is unmistakable. */}
+        {field === "nom" ? (
+          <div
+            className="flex items-center gap-1 border-b border-gray-100 px-3 text-[11px] font-semibold text-orange-700 dark:border-border dark:text-orange-300"
+            style={{ height: GIFT_SUBROW_H }}
+          >
+            <Gift className="size-3" />
+            Подарок на выбор
+          </div>
+        ) : (
+          <div
+            className="border-b border-gray-100 dark:border-border"
+            style={{ height: GIFT_SUBROW_H }}
+          />
+        )}
         {rows.map((g, i) => (
           <div
             key={i}

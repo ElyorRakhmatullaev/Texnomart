@@ -126,15 +126,17 @@ export const COLUMNS: ColumnDef[] = [
   { id: "t36full", label: "36 мес: полная цена (новая)", width: 190, group: "installments", source: "calc", kind: "money" },
 
   // ── Маркетинг ──
-  // Подарки (feedback §8): «Подарок №1» / «Подарок №2», каждый — номенклатура (КМ
-  // выбирает из 1С) + наличие в магазинах, % и остаток (из 1С, read-only). Для
-  // «Подарок на выбор» столбцы «Подарок №1» показывают по одному подарку на подстроку.
-  { id: "gift1Nomenclature", label: "Подарок №1", width: 220, group: "marketing", source: "km", kind: "text", giftOnly: true },
-  { id: "gift1Availability", label: "Подарок №1: наличие, %", width: 160, group: "marketing", source: "1c", kind: "percent", giftOnly: true },
-  { id: "gift1Stock", label: "Подарок №1: остаток", width: 150, group: "marketing", source: "1c", kind: "number", giftOnly: true },
-  { id: "gift2Nomenclature", label: "Подарок №2", width: 220, group: "marketing", source: "km", kind: "text", giftOnly: true },
-  { id: "gift2Availability", label: "Подарок №2: наличие, %", width: 160, group: "marketing", source: "1c", kind: "percent", giftOnly: true },
-  { id: "gift2Stock", label: "Подарок №2: остаток", width: 150, group: "marketing", source: "1c", kind: "number", giftOnly: true },
+  // Подарки (10-я часть R44): «Подарок (1)» / «Подарок (2)» — два фиксированных подарка
+  // по одной акции («Товар в подарок» / «1+1»), каждый = номенклатура (КМ выбирает из 1С)
+  // + наличие в магазинах, % и остаток (из 1С, read-only). Для механики «Подарок на выбор»
+  // блок «Подарок (1)» показывает варианты списком (подпись «Подарок на выбор», по одному на
+  // подстроку); «Подарок (2)» не используется.
+  { id: "gift1Nomenclature", label: "Подарок (1)", width: 220, group: "marketing", source: "km", kind: "text", giftOnly: true },
+  { id: "gift1Availability", label: "Подарок (1): наличие, %", width: 160, group: "marketing", source: "1c", kind: "percent", giftOnly: true },
+  { id: "gift1Stock", label: "Подарок (1): остаток", width: 150, group: "marketing", source: "1c", kind: "number", giftOnly: true },
+  { id: "gift2Nomenclature", label: "Подарок (2)", width: 220, group: "marketing", source: "km", kind: "text", giftOnly: true },
+  { id: "gift2Availability", label: "Подарок (2): наличие, %", width: 160, group: "marketing", source: "1c", kind: "percent", giftOnly: true },
+  { id: "gift2Stock", label: "Подарок (2): остаток", width: 150, group: "marketing", source: "1c", kind: "number", giftOnly: true },
   { id: "supplierCompensation", label: "Компенсация поставщика", width: 180, group: "marketing", source: "km", kind: "money" },
   { id: "compensationLimit", label: "Лимит компенс. кол-ва", width: 170, group: "marketing", source: "km", kind: "number" },
   { id: "utp", label: "УТП", width: 200, group: "marketing", source: "km", kind: "text" },
