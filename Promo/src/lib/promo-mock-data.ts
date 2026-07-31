@@ -852,6 +852,27 @@ export interface GiftItem {
   nomenclatureId: string;
 }
 
+/**
+ * An unapproved repeat action on an already-approved line (10-я часть, Блоки 2/4):
+ * the main table keeps showing the last APPROVED values; the new values live only here
+ * + in the «Детали изменений» side panel until re-approval. `rejected` set → the repeat
+ * action was declined → status «Отклонённые изменения» + red КМ indicator.
+ */
+export interface LinePendingChange {
+  action: "change" | "addition";
+  /** For action==="change": per-field diff vs the approved value (panel «Поле/Было/Стало»). */
+  fields?: { field: keyof PromoLine; label: string; was: string; now: string }[];
+  /** Role label (no per-person identity in the mock). */
+  by: string;
+  /** ISO date the repeat action was sent for approval. */
+  at: string;
+  comment?: string;
+  /** «Тип запроса» shown in the panel, e.g. «Изменение цен и прогноза» / «Добавлена номенклатура». */
+  requestType: string;
+  /** Set when the repeat action was rejected (→ «Отклонённые изменения» + КМ indicator). */
+  rejected?: { by: string; at: string; reason: string };
+}
+
 export interface PromoLine {
   id: string;
   campaignId: string;
@@ -914,6 +935,8 @@ export interface PromoLine {
   removalReason?: string;
   /** Actor who requested removal — role label (no per-person identity in the mock). */
   removalRequestedBy?: string;
+  /** Unapproved repeat action (10-я часть, Блоки 2/4) — table still shows approved data. */
+  pending?: LinePendingChange;
 }
 
 /** A single line-history record (§8.2.1 stores {what, which promo, overlap, user, date/time}). */
@@ -950,7 +973,9 @@ type LineSeed = {
   removalPending?: boolean;
   removed?: boolean;
   removalReason?: string;
-  /** Single gift nomenclature id (fixed «Подарок №1»). */
+  /** Unapproved repeat action (10-я часть) — see LinePendingChange. */
+  pending?: LinePendingChange;
+  /** Single gift nomenclature id (fixed «Подарок (1)»). */
   gift?: string;
   /** Multiple gift nomenclature ids — fixed №1/№2 or «подарок на выбор» options (§8). */
   gifts?: string[];
@@ -1055,6 +1080,7 @@ export const PROMO_LINES: PromoLine[] = LINE_SEED.map((s) => {
     removed: s.removed,
     removalReason: s.removalReason,
     removalRequestedBy: s.removalPending || s.removed ? "Категорийный менеджер (КМ)" : undefined,
+    pending: s.pending,
   };
 });
 
