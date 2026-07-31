@@ -660,6 +660,7 @@ export function FullCalendarGrid({
                   // (Блок 1.3/1.4); cancelled/excluded → gray + strikethrough (Блок 5.5).
                   const status = lineDisplayStatus(campaign, line);
                   const repeatPending = isRepeatActionPending(line);
+                  const isCancelled = status === "Отменена / Удалена";
                   const showRejectDot = rejectionLineIds?.has(line.id) ?? false;
                   return (
                     <div
@@ -670,7 +671,7 @@ export function FullCalendarGrid({
                         selectedIds.has(line.id) &&
                           "bg-primary/5 dark:bg-primary/10",
                         repeatPending && "bg-orange-50/70 dark:bg-orange-500/10",
-                        line.removed &&
+                        isCancelled &&
                           "text-gray-400 line-through opacity-70 dark:text-gray-500"
                       )}
                     >
@@ -721,11 +722,13 @@ export function FullCalendarGrid({
                             Черновик
                           </span>
                         )}
-                        {/* Пометка отменённой/удалённой позиции (10-я Блок 5.5). */}
-                        {line.removed && (
+                        {/* Пометка отменённой/удалённой позиции (10-я Блок 5.5):
+                            «Удалено» для исключённой строки, «Отменено» для строки
+                            отменённой акции. */}
+                        {isCancelled && (
                           <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-muted dark:text-gray-300">
                             <Ban className="size-2.5" />
-                            Удалено
+                            {line.removed ? "Удалено" : "Отменено"}
                           </span>
                         )}
                         <span className="ml-auto flex shrink-0 items-center gap-0.5">
@@ -918,6 +921,8 @@ export function FullCalendarGrid({
                     const h = lineHeightPx(line, choice, lineEditable);
                     // 10-я часть: подсветка строки по состоянию (см. frozen pane).
                     const repeatPending = isRepeatActionPending(line);
+                    const isCancelled =
+                      lineDisplayStatus(campaign, line) === "Отменена / Удалена";
                     return (
                       <div
                         key={line.id}
@@ -927,7 +932,7 @@ export function FullCalendarGrid({
                           selectedIds.has(line.id) &&
                             "bg-primary/5 dark:bg-primary/10",
                           repeatPending && "bg-orange-50/70 dark:bg-orange-500/10",
-                          line.removed &&
+                          isCancelled &&
                             "text-gray-400 line-through opacity-70 dark:text-gray-500"
                         )}
                       >

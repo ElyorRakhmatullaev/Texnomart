@@ -135,7 +135,9 @@ const FILTERS: FilterConfig[] = [
   },
   {
     key: "status",
-    label: "Все статусы",
+    // FilterBar renders the all-option as «Все {label.toLowerCase()}» → «Все статусы»
+    // (10-я Блок 7.1 wording); a selected value shows that status.
+    label: "Статусы",
     options: STATUS_FILTER_OPTIONS.map((s) => ({ value: s, label: s })),
   },
   {
