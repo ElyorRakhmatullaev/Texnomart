@@ -3,7 +3,7 @@
 import * as React from "react";
 import { MoreVertical, Eye, KeyRound, ShieldCheck, ShieldOff, UserX, UserCheck } from "lucide-react";
 import { Badge } from "@texnomart/ui/badge";
-import { Button } from "@texnomart/ui/button";
+import { buttonVariants } from "@texnomart/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,10 +62,19 @@ function RowMenu({
   const managed = canManage(user);
   return (
     <DropdownMenu>
+      {/* R69.2: native <button> under asChild — the shared Button forwards no ref,
+          so Radix rendered this menu off-screen and «Сбросить пароль» looked
+          missing (see tasks/lessons.md). */}
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-8" aria-label="Действия">
+        <button
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "icon" }),
+            "size-8"
+          )}
+          aria-label="Действия"
+        >
           <MoreVertical className="size-4" />
-        </Button>
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem onClick={() => onAction("open", user)}>

@@ -194,9 +194,16 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       startDate: c.startDate,
       endDate: c.endDate,
     }));
+    // R29.7 (10-я часть): the plan reads in period order — nearest start date first —
+    // so незакрытые промежутки between promos are easy to eyeball.
     return [...base, ...extraRows]
       .filter((r) => !deletedIds.has(r.id))
-      .map((r) => ({ ...r, ...overrides[r.id] }));
+      .map((r) => ({ ...r, ...overrides[r.id] }))
+      .sort(
+        (a, b) =>
+          a.startDate.getTime() - b.startDate.getTime() ||
+          a.id.localeCompare(b.id)
+      );
   }, [campaigns, extraRows, deletedIds, overrides]);
 
   const rowById = (id: string) => rows.find((r) => r.id === id);
@@ -333,7 +340,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
         .join(", ");
       toast.warning(
         `Отправлено на согласование: ${ids.length}. В плане есть незакрытые даты: ${list}`,
-        { duration: 9000 }
+        { duration: 6000 }
       );
     } else {
       toast.success(`Отправлено на согласование акций: ${ids.length}`);
@@ -432,17 +439,30 @@ export function PlanMode({ campaigns }: PlanModeProps) {
   }
 
   // ── Row management (№1/№2/№6) ─────────────────────────────────────────────────
+  // The dialog is controlled and opened from plain buttons (no DialogTrigger), so the
+  // open is deferred past the opening pointer event — otherwise Radix DismissableLayer
+  // treats that same click as an outside interaction and closes the dialog immediately
+  // (see tasks/lessons.md, S2 Phase 3). R31.4: this made «Создать строку плана» look
+  // like it did nothing.
   function openCreate() {
     setEditId(null);
-    setDialogOpen(true);
+    setTimeout(() => setDialogOpen(true), 0);
   }
   function openEdit(id: string) {
     setEditId(id);
-    setDialogOpen(true);
+    setTimeout(() => setDialogOpen(true), 0);
   }
 
   function handleCreate(row: PlanRow) {
     setExtraRows((prev) => [...prev, row]);
+    // R31.4 — defensive: if this id was ever deleted (persisted tombstone), clear it,
+    // otherwise the freshly created row would be filtered out and never show up.
+    setDeletedIds((prev) => {
+      if (!prev.has(row.id)) return prev;
+      const next = new Set(prev);
+      next.delete(row.id);
+      return next;
+    });
     setSendStatus((prev) => ({ ...prev, [row.id]: "draft" }));
     toast.success(
       hasType(row)
@@ -496,9 +516,12 @@ export function PlanMode({ campaigns }: PlanModeProps) {
   }
 
   const editingRow = editId ? rowById(editId) : undefined;
+  // R31.4 — the number pool must include tombstoned (deleted) ids: `rows` excludes
+  // them, so without this a new row could REUSE a deleted id and be instantly
+  // filtered out by `deletedIds` («создал строку — а её не видно в таблице»).
   const autoNo = React.useMemo(
-    () => nextPlanPromoNo(rows.map((r) => r.id)),
-    [rows]
+    () => nextPlanPromoNo([...rows.map((r) => r.id), ...deletedIds]),
+    [rows, deletedIds]
   );
 
   return (
@@ -578,7 +601,8 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       </Card>
 
       {/* ── Plan rows ───────────────────────────────────────────────────── */}
-      <Card>
+      {/* overflow-clip rounds the sticky strip's corners without trapping sticky. */}
+      <Card className="overflow-clip">
         <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
           <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             Строки плана
@@ -628,67 +652,6 @@ export function PlanMode({ campaigns }: PlanModeProps) {
             </div>
           )}
 
-          {/* Selection strip — send mode (marketing) or review mode (КД/ОД). */}
-          {sendMode && (
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-y bg-primary/5 px-4 py-2.5">
-              <span className="text-sm text-gray-700 dark:text-gray-200">
-                Выбрано:{" "}
-                <b className="tabular-nums">{selectedIds.size}</b>
-                {sendableDrafts.length > 0 && (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    из {sendableDrafts.length}
-                  </span>
-                )}
-              </span>
-              <div className="ml-auto">
-                <Button
-                  size="sm"
-                  disabled={selectedIds.size === 0}
-                  onClick={sendSelected}
-                >
-                  <Send className="size-4" />
-                  Отправить на согласование
-                  {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
-                </Button>
-              </div>
-            </div>
-          )}
-          {reviewMode && (
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-y bg-primary/5 px-4 py-2.5">
-              <span className="text-sm text-gray-700 dark:text-gray-200">
-                Выбрано:{" "}
-                <b className="tabular-nums">{selectedIds.size}</b>
-                {selectablePool.length > 0 && (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    из {selectablePool.length}
-                  </span>
-                )}
-              </span>
-              <div className="ml-auto flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  disabled={selectedIds.size === 0}
-                  onClick={() => setRejectOpen(true)}
-                >
-                  <ThumbsDown className="size-4" />
-                  Отклонить выбранные
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={selectedIds.size === 0}
-                  onClick={approveSelected}
-                >
-                  <ThumbsUp className="size-4" />
-                  Согласовать выбранные
-                </Button>
-              </div>
-            </div>
-          )}
-
           <PlanApprovalTable
             rows={rows}
             selectable={selectable}
@@ -706,6 +669,62 @@ export function PlanMode({ campaigns }: PlanModeProps) {
             onDeleteRow={handleDelete}
             onShowRejection={setRejectionRowId}
           />
+
+          {/* Selection strip — send mode (marketing) or review mode (КД/ОД).
+              R29.2 (10-я часть): pinned to the viewport bottom while the table
+              scrolls (sticky; negative offset cancels <main>'s bottom padding),
+              so a decision never requires scrolling back up. Solid bg-card layer
+              under the brand tint — content must not show through while pinned. */}
+          {(sendMode || reviewMode) && (
+            <div className="sticky bottom-[-0.75rem] z-30 border-t bg-card md:bottom-[-1rem]">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-primary/5 px-4 py-2.5">
+                <span className="text-sm text-gray-700 dark:text-gray-200">
+                  Выбрано:{" "}
+                  <b className="tabular-nums">{selectedIds.size}</b>
+                  {selectablePool.length > 0 && (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      из {selectablePool.length}
+                    </span>
+                  )}
+                </span>
+                {sendMode ? (
+                  <div className="ml-auto">
+                    <Button
+                      size="sm"
+                      disabled={selectedIds.size === 0}
+                      onClick={sendSelected}
+                    >
+                      <Send className="size-4" />
+                      Отправить на согласование
+                      {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      disabled={selectedIds.size === 0}
+                      onClick={() => setRejectOpen(true)}
+                    >
+                      <ThumbsDown className="size-4" />
+                      Отклонить выбранные
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={selectedIds.size === 0}
+                      onClick={approveSelected}
+                    >
+                      <ThumbsUp className="size-4" />
+                      Согласовать выбранные
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -8,7 +8,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@texnomart/ui/dropdown-menu";
-import { Button } from "@texnomart/ui/button";
+import { buttonVariants } from "@texnomart/ui/button";
+import { cn } from "@texnomart/ui/utils";
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -67,10 +68,14 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         {/* Language selector top-right */}
         <div className="flex justify-end p-6">
           <DropdownMenu>
+            {/* Native <button> under asChild — the shared Button forwards no ref,
+                so the language menu portalled off-screen (see tasks/lessons.md). */}
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
+              <button
+                className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+              >
                 {language === "ru" ? "RU" : "O'zbek"}
-              </Button>
+              </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setLanguage("ru")}>

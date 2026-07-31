@@ -14,7 +14,8 @@ import {
   X,
 } from "lucide-react";
 import { PageHeader } from "@texnomart/shared/components/page-header";
-import { Button } from "@texnomart/ui/button";
+import { Button, buttonVariants } from "@texnomart/ui/button";
+import { cn } from "@texnomart/ui/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -294,11 +295,19 @@ export function ShortCalendarPage() {
             {/* Export rendered here (PageHeader's built-in export is disabled) so it
                 sits AFTER «Фильтры». */}
             <DropdownMenu>
+              {/* R29.3: native <button> under asChild — the shared Button has no
+                  forwardRef, so Radix couldn't measure the anchor and the menu
+                  portalled off-screen («Экспорт» looked dead; see tasks/lessons.md). */}
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary" size="sm" className="h-9">
+                <button
+                  className={cn(
+                    buttonVariants({ variant: "secondary", size: "sm" }),
+                    "h-9"
+                  )}
+                >
                   <Download className="mr-2 size-4" />
                   Экспорт
-                </Button>
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => handleExport("xlsx")}>
@@ -443,7 +452,7 @@ function MobileCampaignCard({
             </div>
             {report.sent && (
               <div className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums">
-                <RuDate value={report.sentAt!} /> · в.{report.versionNo}
+                <RuDate value={report.sentAt!} />
                 <OverdueTag days={report.overdueDays} />
               </div>
             )}
