@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronRight, Clock, UserMinus, Zap } from "lucide-react";
+import { ChevronRight, Clock, Forward, UserMinus } from "lucide-react";
 import { Card } from "@texnomart/ui/card";
 import { cn } from "@texnomart/ui/utils";
 import { MobileListCard } from "@texnomart/shared/components/mobile-list-card";
@@ -15,6 +15,7 @@ import {
   getCategoryManager,
   isAutoEscalated,
   itemSla,
+  reviewSla,
   type ReviewItem,
 } from "../../../lib/promo-mock-data";
 
@@ -50,6 +51,12 @@ const COLS = {
 
 /** Small inline tags shown next to an item — non-participation kind + auto-escalation. */
 function ItemTags({ item }: { item: ReviewItem }) {
+  // R54 (10-я часть): the tooltip spells out the senior-stage overdue in plain words
+  // (the old «(§8)» spec reference read as a cryptic «(58)» to users), and the icon is
+  // a forward arrow (передача), not a lightning bolt (urgency).
+  const seniorOverdue = isAutoEscalated(item)
+    ? reviewSla(new Date(item.submittedAt)).overdue
+    : 0;
   return (
     <>
       {item.kind === "non-participation" && (
@@ -61,9 +68,13 @@ function ItemTags({ item }: { item: ReviewItem }) {
       {isAutoEscalated(item) && (
         <span
           className="inline-flex items-center gap-0.5 rounded bg-amber-100 dark:bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300"
-          title="Авто-передано: просрочка у старшего КМ (§8)"
+          title={
+            seniorOverdue > 0
+              ? `Авто-передано: просрочка у старшего КМ на ${seniorOverdue} раб. дн.`
+              : "Авто-передано: просрочка у старшего КМ"
+          }
         >
-          <Zap className="size-3" />
+          <Forward className="size-3" />
           Авто-передано
         </span>
       )}

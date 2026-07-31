@@ -54,7 +54,7 @@ function fmtDateTime(d: Date): string {
 }
 
 function stageLabel(status: PlanStageStatus, overdueDays?: number): string {
-  if (status === "waiting") return "Ожидает этапа";
+  if (status === "waiting") return "Ожидает согласования";
   if (status === "onTime") return "В срок";
   return `Просрочка +${overdueDays ?? 0} дн.`;
 }
@@ -93,8 +93,10 @@ export function buildCalendarCsv(
     const r = campaignReadiness(c);
     const rs = getReportSendStatus(c);
     // №4: фактический статус отправки; просрочка «+N дн.» только по факту отправки с опозданием.
+    // R25 (10-я часть): «в.N» убран и из CSV краткого календаря — версия отчёта
+    // отображается в разделе «Отчёты смежным отделам» и в «Истории версий».
     const sendLabel = rs.sent
-      ? `Отправлено ${fmtDate(rs.sentAt!)} (в.${rs.versionNo})${
+      ? `Отправлено ${fmtDate(rs.sentAt!)}${
           rs.overdueDays > 0 ? ` (+${rs.overdueDays} дн.)` : ""
         }`
       : "Не отправлено";

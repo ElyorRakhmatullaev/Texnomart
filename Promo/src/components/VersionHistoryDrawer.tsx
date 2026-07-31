@@ -8,13 +8,13 @@ import {
   Check,
   FileClock,
   FilePlus2,
+  Forward,
   History,
   Info,
   MessageSquare,
   Minus,
   Plus,
   Send,
-  Zap,
 } from "lucide-react";
 import {
   Sheet,
@@ -335,7 +335,7 @@ export function VersionHistoryDrawer({
 
             {autoForward && (
               <div className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 p-3">
-                <Zap className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <Forward className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                 <div>
                   <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
                     Авто-передано коммерческому директору

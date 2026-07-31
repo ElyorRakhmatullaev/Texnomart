@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
-import { AlertTriangle, Clock, FileX2, History, UserCog, Zap } from "lucide-react";
+import { AlertTriangle, Clock, FileX2, Forward, History, UserCog } from "lucide-react";
 import { DetailPageHero } from "@texnomart/shared/components/detail-page-hero";
 import { InfoRow } from "@texnomart/shared/components/info-row";
 import { Badge } from "@texnomart/ui/badge";
@@ -232,7 +232,7 @@ export function ApprovalDetailPage() {
             )}
             {autoEscalated && (
               <Badge className="border-0 bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300">
-                <Zap className="mr-1 size-3" />
+                <Forward className="mr-1 size-3" />
                 Авто-передано: просрочка у старшего КМ
               </Badge>
             )}
@@ -298,7 +298,7 @@ export function ApprovalDetailPage() {
           КД, whose SLA restarts from the auto-forward moment. */}
       {senior && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 px-4 py-3">
-          <Zap className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <Forward className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <p className="text-sm text-amber-800 dark:text-amber-300">
             Авто-передано коммерческому директору: старший КМ не отреагировал за{" "}
             {senior.seniorSlaDays} раб. дн. Срок согласования КД отсчитывается заново с{" "}

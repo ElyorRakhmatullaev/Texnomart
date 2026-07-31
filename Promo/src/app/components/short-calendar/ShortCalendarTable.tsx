@@ -498,8 +498,10 @@ export function ShortCalendarTable({
                               <CheckCircle2 className="size-3.5 shrink-0" />
                             )}
                           </span>
+                          {/* R25 (10-я часть): «в.N» убран из краткого календаря — номер
+                              версии живёт в /reports и «Истории версий». */}
                           <span className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
-                            <RuDate value={report.sentAt!} /> · в.{report.versionNo}
+                            <RuDate value={report.sentAt!} />
                             <OverdueTag days={report.overdueDays} />
                           </span>
                         </>

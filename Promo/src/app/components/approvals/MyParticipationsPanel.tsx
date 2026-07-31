@@ -22,14 +22,18 @@ import { PromoNoFilter } from "../short-calendar/PromoNoFilter";
 import {
   CATEGORY_MANAGERS,
   PROMO_TYPES,
+  addWorkingDays,
   canRequestNonParticipation,
   displayKmStatus,
   formatPromoNo,
   getCampaignById,
+  getFillDeadline,
   kmSubmissionSla,
   participationsForKm,
   reviewItemId,
+  type KmStatus,
   type KmSubmissionSla,
+  type PromoCampaign,
 } from "../../../lib/promo-mock-data";
 
 const ALL = "all";
@@ -80,6 +84,31 @@ interface Row {
 }
 
 /**
+ * R56 (10-я часть): «Отправлено: —» must mean ONLY «ещё не отправлялось». Finalized
+ * sets («Согласовано КД», «Переотправлено на корректировку КМ») have no live review
+ * item to read `submittedAt` from, so we derive a deterministic seeded send moment —
+ * one working day before the КМ fill deadline (consistent with the «SLA КМ: В срок»
+ * chip these rows show).
+ */
+const SENT_IMPLIED_STATUSES: KmStatus[] = [
+  "Согласовано КД",
+  "Переотправлено на корректировку КМ",
+];
+
+function fallbackSubmittedAt(
+  campaign: PromoCampaign | undefined,
+  status: KmStatus
+): string | undefined {
+  if (!campaign || !SENT_IMPLIED_STATUSES.includes(status)) return undefined;
+  const d = addWorkingDays(getFillDeadline(campaign), -1);
+  d.setHours(10, 15, 0, 0);
+  // An already-decided set can't have been sent in the future — cap at «now»
+  // (seeded deadlines may lie months ahead of the demo date).
+  const now = new Date();
+  return (d > now ? now : d).toISOString();
+}
+
+/**
  * КМ self-service view (spec §4.5.1, 4th-round §10): the КМ sees ONLY their own promos
  * (no per-person identity in the mock, so «свой КМ» = a representative КМ — the same
  * `CATEGORY_MANAGERS[0]` the full calendar uses for §7). The «КМ» column is dropped for
@@ -117,7 +146,8 @@ export function MyParticipationsPanel() {
       return {
         ...p,
         campaign,
-        submittedAt: item?.submittedAt,
+        submittedAt:
+          item?.submittedAt ?? fallbackSubmittedAt(campaign, p.kmStatus),
         isNonPartPending,
         shownStatus,
         sla: kmSubmissionSla(p.campaignId, p.kmId, p.kmStatus),

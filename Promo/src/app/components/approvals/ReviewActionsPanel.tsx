@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, Info, MessageSquare, UserMinus, X, Zap } from "lucide-react";
+import { AlertTriangle, Check, Forward, Info, MessageSquare, UserMinus, X } from "lucide-react";
 import { Button } from "@texnomart/ui/button";
 import { cn } from "@texnomart/ui/utils";
 import { RuDate } from "../../../components/RuDate";
@@ -158,10 +158,10 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
 
         {autoEscalated && (
           <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/15 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300">
-            <Zap className="mt-0.5 size-3.5 shrink-0" />
+            <Forward className="mt-0.5 size-3.5 shrink-0" />
             Авто-передано: просрочка у старшего КМ (не отреагировал за 2 раб. дн.).
             Решение принимает коммерческий директор — старший КМ больше не может
-            согласовать это промо (§8).
+            согласовать это промо.
           </p>
         )}
 

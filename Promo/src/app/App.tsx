@@ -8,7 +8,17 @@ import { router } from "./routes";
 
 function ThemedToaster() {
   const { theme } = useTheme();
-  return <Toaster position="top-right" richColors theme={theme} />;
+  // R73 (10-я часть): every toast is manually closable via the «×» and auto-hides
+  // after a short time — so a toast can never sit over the working area/buttons.
+  return (
+    <Toaster
+      position="top-right"
+      richColors
+      closeButton
+      duration={5000}
+      theme={theme}
+    />
+  );
 }
 
 export default function App() {
