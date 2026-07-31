@@ -1004,8 +1004,46 @@ const LINE_SEED: LineSeed[] = [
   // as edit-after-approval corrections (§5.1) — the values match Phase-1 версии.
   // Enriched (УТП / компенсация / advMkt) so the S5 department reports (M/P/A
   // field subsets) render populated cells rather than «—».
-  { id: "L-0015", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10017", off: 0.16, forecast: 40, regular: 14, gifts: ["1C-10018", "1C-10019"], utp: "Гарантия 3 года", advKm: true, advMkt: true, supplierCompensation: 400000, compensationLimit: 50 },
+  // 10-я часть демо (Блок 4.1): изменение согласованной позиции → «Изменения на согласовании»
+  // (светло-оранжевая), в таблице по-прежнему согласованные данные, новые — в панели.
+  { id: "L-0015", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10017", off: 0.16, forecast: 40, regular: 14, gifts: ["1C-10018", "1C-10019"], utp: "Гарантия 3 года", advKm: true, advMkt: true, supplierCompensation: 400000, compensationLimit: 50,
+    pending: {
+      action: "change",
+      requestType: "Изменение цены и прогноза",
+      by: "Категорийный менеджер (КМ)",
+      at: new Date(2026, 6, 28, 11, 40).toISOString(),
+      comment: "Просим снизить цену для увеличения продаж в период подготовки к акции.",
+      fields: [
+        { field: "salesForecast", label: "Прогноз продаж", was: "40", now: "55" },
+        { field: "discountPct", label: "Скидка", was: "16%", now: "18%" },
+      ],
+    } },
   { id: "L-0016", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10016", off: 0.14, forecast: 25, gift: "1C-10018", advKm: true, supplierCompensation: 250000, compensationLimit: 30 },
+  // 10-я часть демо (Блок 4.4): новая позиция после согласования → светло-оранжевая, у КМ km-1.
+  { id: "L-0022", campaignId: "PR-2026-003", kmId: "km-1", nomenclatureId: "1C-10002", off: 0.12, forecast: 30, advKm: true,
+    pending: {
+      action: "addition",
+      requestType: "Добавлена номенклатура",
+      by: "Категорийный менеджер (КМ)",
+      at: new Date(2026, 6, 29, 9, 20).toISOString(),
+      comment: "Добавляю позицию в уже согласованную акцию — прошу согласовать.",
+    } },
+  // 10-я часть демо (Блок 6.6): отклонённые повторные изменения → «Отклонённые изменения»
+  // + красный индикатор у КМ km-1 (гаснет после открытия панели).
+  { id: "L-0023", campaignId: "PR-2026-003", kmId: "km-1", nomenclatureId: "1C-10005", off: 0.14, forecast: 45, regular: 20,
+    pending: {
+      action: "change",
+      requestType: "Изменение цены",
+      by: "Категорийный менеджер (КМ)",
+      at: new Date(2026, 6, 27, 15, 5).toISOString(),
+      comment: "Снижение цены под конкурента.",
+      fields: [{ field: "discountPct", label: "Скидка", was: "14%", now: "20%" }],
+      rejected: {
+        by: "Коммерческий директор",
+        at: new Date(2026, 6, 28, 10, 15).toISOString(),
+        reason: "Скидка ниже минимальной маржи по категории — верните к 16%.",
+      },
+    } },
 
   // PR-2026-005 «Cashback на смартфоны» (Переотправлено на корректировку) — km-3
   { id: "L-0008", campaignId: "PR-2026-005", kmId: "km-3", nomenclatureId: "1C-10013", off: 0.16, forecast: 300, rejected: true, rejectComment: "Уточните остаток — расходится с данными 1С." },
