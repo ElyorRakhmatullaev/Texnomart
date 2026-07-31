@@ -553,7 +553,14 @@ export function FullCalendarPage() {
     (id: string, patch: Partial<PromoLine>) => {
       const line = lines.get(id);
       const c = line ? campaignsById.get(line.campaignId) : undefined;
-      if (line && c && isApprovedCampaign(c)) {
+      // Only genuine КМ DATA-field edits become a pending repeat action (Блок 2/4).
+      // The «В рекламу» / «рекомендация КМ» flags and gift picks are NOT repeat data
+      // changes — they apply directly even on an approved campaign (§7.2 marketing
+      // selection must keep working).
+      const isDataFieldEdit = Object.keys(patch).some(
+        (k) => k in TRACKED_FIELD_LABEL
+      );
+      if (line && c && isApprovedCampaign(c) && isDataFieldEdit) {
         const pending = mergePendingChange(
           line,
           patch,
