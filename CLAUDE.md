@@ -39,6 +39,8 @@ Texnomart/
 │   ├── AI_CONTEXT.md           # Current project state snapshot
 │   ├── dashboard_prompt_pack_part2.md  # Broker Dashboard page specs
 │   ├── promo_prompt_pack.md    # Texnomart Promo prompt pack (Foundation + Master + S1–S8)
+│   ├── promo_feedback_tracker.md  # Внутренний gap-анализ клиентского трекера комментариев
+│   ├── feedback-tracker/       # Генератор клиентского сводного трекера (xlsx на Desktop) + README
 │   └── superpowers/            # Brainstorm specs (specs/) + implementation plans (plans/)
 ├── tasks/
 │   └── lessons.md              # Shared lessons & gotchas

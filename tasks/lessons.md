@@ -859,3 +859,17 @@ Documented mistakes, gotchas, and learnings from project work. Never remove old 
 
 ### Seed-Flip Ripple Audit: Changing One Campaign's Status Touches Every Derivation — Grep the Id, Then Walk Each Consumer Class
 - Flipping PR-2026-007 to «Согласовано и отправлено» (to make the on-time green plashka reachable) rippled into: the review queue (its `kmStatuses` had to become «Согласовано КД» → item leaves the queue, counts 16→15), `/reports` (`getSentCampaigns` picks it up → needs a `CAMPAIGN_VERSIONS` chain or the generic 2026-09-01 fallback poisons `getReportSentAt`), audit control points (uses ONLY seeded version chains — the new chain adds clean on-time points), and two stale lookup seeds keyed `PR-2026-007~km-5` (review-overdue + «SLA КМ») that silently became dead/misleading. Lesson: before flipping a seed campaign's status, `grep` its id across the seed file and classify every hit (queue derivation / report derivation / audit derivation / keyed lookup maps) — the keyed maps are the silent ones, they don't break the build, they just lie later.
+
+---
+
+## 2026-07-22 — Клиентские документы → Excel-deliverable (офисная автоматизация на этой машине)
+
+### .docx/.xlsx парсятся без спец-библиотек: zip + `word/document.xml` regex; SheetJS уже есть в workspace
+- `.docx` = zip: `System.IO.Compression.ZipFile` → `word/document.xml` → `</w:p>`→`\n`, strip tags, `HtmlDecode` — этого достаточно для дословного извлечения клиентских комментариев (картинки не нужны). Для `.xlsx` не искать внешние тулзы: SheetJS уже стоит в Promo workspace — из любого node-скрипта `createRequire('d:/Texnomart/Promo/package.json')('xlsx')` (скрипт может лежать вне workspace, например в scratchpad).
+- Генерация `.xlsx` тем же SheetJS (CE): стили ячеек НЕ пишутся (только `!cols`/`!autofilter`/merges) — форматирование (перенос, закреп шапки, заливка) добавлять вторым шагом через Excel COM из PowerShell (см. `docs/feedback-tracker/format-tracker.ps1`); в конце обязательно `Quit()` + `ReleaseComObject`, и проверить `Get-Process EXCEL`.
+
+### PS 5.1 читает .ps1 в ANSI-кодировке — кириллический скрипт обязан быть UTF-8 **с BOM**
+- Write-инструмент пишет UTF-8 без BOM → Windows PowerShell 5.1 парсит такой файл как cp1251-мусор и падает с `Unexpected token` на строках с кириллицей (пути, имена листов «Трекер»). Лечение одной командой перед запуском: `[System.IO.File]::WriteAllText($p, [System.IO.File]::ReadAllText($p,[Text.Encoding]::UTF8), (New-Object System.Text.UTF8Encoding($true)))`.
+
+### Клиентский трекер-«единая вкладка» содержит ДВА слоя комментариев — исходные и follow-up'ы БА; deliverable-строки берутся из docx, статусы/дубли — из трекера
+- В листе «Все комментарии» колонка «Комментарий после редактирования Б/А» — это НОВЫЕ комментарии (уточнения после проверки 08.07), а не правки старых: в сводный трекер они вошли отдельными строками с собственными статусами. Отметки «дубль, уже отметила в v.2» — подтверждение клиента, что строку можно вести один раз. А в «7-й части» структура перевёрнута: комментарии клиента — блоки «Ответ от Texnomart» под пунктами НАШЕЙ поставки (сам пункт — лишь контекст строки).
