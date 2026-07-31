@@ -6,12 +6,12 @@ import { Card } from "@texnomart/ui/card";
 import { Checkbox } from "@texnomart/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import {
-  AlertCircle,
   Ban,
   CalendarClock,
   Check,
   Clock,
   Copy,
+  Eye,
   Gift,
   History,
   Lock,
@@ -45,6 +45,10 @@ import {
   type ColumnDef,
   type ColumnGroupKey,
 } from "./gridFields";
+import {
+  isRepeatActionPending,
+  lineDisplayStatus,
+} from "../../../lib/full-calendar-status";
 import { EditableCell } from "./EditableCell";
 import { WarehousePopover } from "./WarehousePopover";
 import { StoreAvailabilityCell } from "./StoreAvailabilityCell";
@@ -435,10 +439,10 @@ interface FullCalendarGridProps {
   /** Approve/reject a pending line exclusion (§5.3; provided only for КД). */
   onApproveRemoval?: (lineId: string) => void;
   onRejectRemoval?: (lineId: string) => void;
-  /** `${lineId}:${field}` keys of cells changed after approval — amber highlight. */
-  changedCells?: Set<string>;
-  /** Per-campaign change-after-approval badge (count + awaiting-marketing). */
-  changeBadges?: Map<string, { count: number; awaitingMarketing: boolean }>;
+  /** Open the «Детали изменений» panel for a line — иконка-глаз (10-я Блок 1.1). */
+  onOpenDetails?: (lineId: string) => void;
+  /** Lines with an unread rejection (КМ red indicator, 10-я Блок 6). */
+  rejectionLineIds?: Set<string>;
   /** Bulk-select state (shown only for editor roles). */
   selectedIds: Set<string>;
   onToggleSelect: (lineId: string) => void;
@@ -463,8 +467,8 @@ export function FullCalendarGrid({
   onRequestRemoval,
   onApproveRemoval,
   onRejectRemoval,
-  changedCells,
-  changeBadges,
+  onOpenDetails,
+  rejectionLineIds,
   selectedIds,
   onToggleSelect,
   onToggleGroup,
@@ -652,6 +656,11 @@ export function FullCalendarGrid({
                   // Merged height for a «подарок на выбор» line — the main nomenclature
                   // shows once, centered, spanning all its gift sub-rows (§8).
                   const h = lineHeightPx(line, choice, lineEditable);
+                  // 10-я часть: light-orange ONLY for repeat actions awaiting approval
+                  // (Блок 1.3/1.4); cancelled/excluded → gray + strikethrough (Блок 5.5).
+                  const status = lineDisplayStatus(campaign, line);
+                  const repeatPending = isRepeatActionPending(line);
+                  const showRejectDot = rejectionLineIds?.has(line.id) ?? false;
                   return (
                     <div
                       key={line.id}
@@ -660,12 +669,9 @@ export function FullCalendarGrid({
                         "group/row flex items-stretch border-b transition-colors hover:bg-gray-50 dark:hover:bg-accent",
                         selectedIds.has(line.id) &&
                           "bg-primary/5 dark:bg-primary/10",
-                        line.pending1CCheck && "bg-amber-50/50 dark:bg-amber-500/10",
-                        line.rejected &&
-                          "bg-red-50/70 dark:bg-red-500/10 hover:bg-red-50 dark:hover:bg-red-500/15",
-                        line.removalPending && "bg-orange-50/60 dark:bg-orange-500/10",
+                        repeatPending && "bg-orange-50/70 dark:bg-orange-500/10",
                         line.removed &&
-                          "bg-red-50/70 dark:bg-red-500/10 opacity-70 hover:bg-red-50 dark:hover:bg-red-500/15"
+                          "text-gray-400 line-through opacity-70 dark:text-gray-500"
                       )}
                     >
                       {editorMode && (
@@ -709,7 +715,40 @@ export function FullCalendarGrid({
                           </TooltipContent>
                         </Tooltip>
                         <LineMarkers line={line} />
+                        {/* Компактная пометка «Черновик» (10-я Блок 3.1). */}
+                        {status === "Черновик" && (
+                          <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-muted dark:text-gray-300">
+                            Черновик
+                          </span>
+                        )}
+                        {/* Пометка отменённой/удалённой позиции (10-я Блок 5.5). */}
+                        {line.removed && (
+                          <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-muted dark:text-gray-300">
+                            <Ban className="size-2.5" />
+                            Удалено
+                          </span>
+                        )}
                         <span className="ml-auto flex shrink-0 items-center gap-0.5">
+                          {/* Иконка-глаз «просмотр деталей» (10-я Блок 1.1) + красный
+                              индикатор отклонения для КМ (Блок 6). */}
+                          {onOpenDetails && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenDetails(line.id)}
+                                  aria-label="Просмотр деталей"
+                                  className="relative inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-accent dark:hover:text-gray-100"
+                                >
+                                  <Eye className="size-4" />
+                                  {showRejectDot && (
+                                    <span className="absolute right-0.5 top-0.5 size-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-card" />
+                                  )}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Просмотр деталей</TooltipContent>
+                            </Tooltip>
+                          )}
                           <LineRowActions
                             line={line}
                             campaign={campaign}
@@ -816,9 +855,6 @@ export function FullCalendarGrid({
                           : "Подарки: 2 фиксированных"}
                       </span>
                     )}
-                    {changeBadges?.get(campaign.id) && (
-                      <ChangeBadge info={changeBadges.get(campaign.id)!} />
-                    )}
                     <div className="ml-auto flex shrink-0 items-center gap-1">
                       {onEditPeriod &&
                         campaign.planned &&
@@ -880,6 +916,8 @@ export function FullCalendarGrid({
                   {lines.map((line) => {
                     const nom = getNomenclatureItem(line.nomenclatureId);
                     const h = lineHeightPx(line, choice, lineEditable);
+                    // 10-я часть: подсветка строки по состоянию (см. frozen pane).
+                    const repeatPending = isRepeatActionPending(line);
                     return (
                       <div
                         key={line.id}
@@ -888,14 +926,9 @@ export function FullCalendarGrid({
                           "flex items-stretch border-b text-sm transition-colors hover:bg-gray-50 dark:hover:bg-accent",
                           selectedIds.has(line.id) &&
                             "bg-primary/5 dark:bg-primary/10",
-                          line.pending1CCheck &&
-                            "bg-amber-50/50 dark:bg-amber-500/10",
-                          line.rejected &&
-                            "bg-red-50/70 dark:bg-red-500/10 hover:bg-red-50 dark:hover:bg-red-500/15",
-                          line.removalPending &&
-                            "bg-orange-50/60 dark:bg-orange-500/10",
+                          repeatPending && "bg-orange-50/70 dark:bg-orange-500/10",
                           line.removed &&
-                            "bg-red-50/70 dark:bg-red-500/10 opacity-70 hover:bg-red-50 dark:hover:bg-red-500/15"
+                            "text-gray-400 line-through opacity-70 dark:text-gray-500"
                         )}
                       >
                         {cols.map((col) =>
@@ -917,9 +950,7 @@ export function FullCalendarGrid({
                                 cellJustify(col),
                                 isNumericKind(col) && "tabular-nums",
                                 isLocked(col.source) &&
-                                  "text-gray-500 dark:text-gray-400",
-                                changedCells?.has(`${line.id}:${col.id}`) &&
-                                  "bg-amber-50 dark:bg-amber-500/15 ring-1 ring-inset ring-amber-300 dark:ring-amber-500/40"
+                                  "text-gray-500 dark:text-gray-400"
                               )}
                               style={colStyle(col.width)}
                             >
@@ -1212,36 +1243,11 @@ function KmCell({ kmId, width }: { kmId: string; width: number }) {
   );
 }
 
-/** Band badge for a campaign with un-sent changes after approval (§5.1 / §11.8). */
-function ChangeBadge({
-  info,
-}: {
-  info: { count: number; awaitingMarketing: boolean };
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
-        <Pencil className="size-2.5" />
-        {info.count} изм. после согл.
-      </span>
-      {info.awaitingMarketing && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-500/20 px-2 py-0.5 text-[10px] font-medium text-orange-800 dark:text-orange-300">
-              Ожидает маркетинга
-            </span>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-[260px]">
-            Изменения (кроме добавления новых товаров) требуют повторного
-            согласования маркетинга перед отправкой смежным отделам (§11.8).
-          </TooltipContent>
-        </Tooltip>
-      )}
-    </span>
-  );
-}
-
-/** Compact review/state markers shown next to the nomenclature name. */
+/**
+ * Compact DATA-QUALITY markers next to the nomenclature name (10-я Блок 1.2 — status
+ * / version plashки are removed; only genuine data warnings stay). Status/exclusion/
+ * rejection now read from the row state + the «Детали изменений» eye panel.
+ */
 function LineMarkers({ line }: { line: PromoLine }) {
   return (
     <span className="flex shrink-0 items-center gap-1">
@@ -1282,46 +1288,6 @@ function LineMarkers({ line }: { line: PromoLine }) {
             <Clock className="size-3.5 text-orange-500 dark:text-orange-400" />
           </TooltipTrigger>
           <TooltipContent>Ожидает проверки 1С</TooltipContent>
-        </Tooltip>
-      )}
-      {line.rejected && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <AlertCircle className="size-3.5 text-red-500 dark:text-red-400" />
-          </TooltipTrigger>
-          <TooltipContent className="max-w-[260px]">
-            {line.rejectComment ?? "Строка отклонена проверяющим"}
-          </TooltipContent>
-        </Tooltip>
-      )}
-      {line.removalPending && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex items-center gap-0.5 rounded bg-orange-100 dark:bg-orange-500/20 px-1 py-0.5 text-[10px] font-medium text-orange-800 dark:text-orange-300">
-              <Ban className="size-2.5" />
-              ожидает исключения
-            </span>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-[260px]">
-            {line.removalReason
-              ? `Запрошено исключение из акции: ${line.removalReason} Ожидает согласования коммерческого директора.`
-              : "Запрошено исключение из акции — ожидает согласования коммерческого директора (§5.3)."}
-          </TooltipContent>
-        </Tooltip>
-      )}
-      {line.removed && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex items-center gap-0.5 rounded bg-red-100 dark:bg-red-500/20 px-1 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-300">
-              <Ban className="size-2.5" />
-              исключена
-            </span>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-[260px]">
-            {line.removalReason
-              ? `Исключена из акции: ${line.removalReason} Сохраняется в истории и отчётах с отметкой.`
-              : "Позиция исключена из акции (§5.3). Сохраняется в истории и отчётах с отметкой."}
-          </TooltipContent>
         </Tooltip>
       )}
     </span>
