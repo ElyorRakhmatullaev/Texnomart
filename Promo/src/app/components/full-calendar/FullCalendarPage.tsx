@@ -84,22 +84,48 @@ import {
   type CampaignVersion,
   type DuplicateHit,
   type ImportParseResult,
+  type LinePendingChange,
   type ParsedImportRow,
   type PromoCampaign,
   type PromoLine,
   type UnplannedCampaignInput,
 } from "../../../lib/promo-mock-data";
+import {
+  STATUS_FILTER_OPTIONS,
+  lineDisplayStatus,
+  lineHasRejection,
+  matchesStatusFilter,
+  mergePendingChange,
+} from "../../../lib/full-calendar-status";
+import {
+  getSeenRejections,
+  markRejectionSeen,
+} from "../../../lib/full-calendar-rejection-store";
+import { LineDetailsDrawer } from "./LineDetailsDrawer";
+import { useCurrentUser } from "../../current-user-context";
 
 const ALL = "all";
 
-const CAMPAIGN_STATUSES = [
-  "Черновик",
-  "На согласовании у старшего КМ",
-  "На согласовании у коммерческого директора",
-  "Переотправлено на корректировку КМ",
-  "Согласовано и отправлено смежным отделам",
-  "Отменена",
-];
+// 10-я часть R46 — labels/formatters for the edit→pending diff (панель «Поле/Было/Стало»).
+const TRACKED_FIELD_LABEL: Partial<Record<keyof PromoLine, string>> = {
+  stock: "Остаток",
+  newPrice: "Новая цена",
+  discountPct: "Скидка",
+  salesForecast: "Прогноз продаж",
+  regularSales: "Регулярные продажи",
+  cashDiscountPct: "Скидка за Cash",
+  supplierCompensation: "Компенсация поставщика",
+  compensationLimit: "Лимит компенсации",
+  utp: "УТП",
+};
+function fmtPendingValue(field: keyof PromoLine, v: unknown): string {
+  if (v == null || v === "") return "—";
+  if (field === "newPrice" || field === "supplierCompensation")
+    return `${Number(v).toLocaleString("ru-RU")} сум`;
+  if (field === "discountPct" || field === "cashDiscountPct") return `${v}%`;
+  if (typeof v === "number") return v.toLocaleString("ru-RU");
+  return String(v);
+}
 
 const FILTERS: FilterConfig[] = [
   {
@@ -109,8 +135,8 @@ const FILTERS: FilterConfig[] = [
   },
   {
     key: "status",
-    label: "Статус",
-    options: CAMPAIGN_STATUSES.map((s) => ({ value: s, label: s })),
+    label: "Все статусы",
+    options: STATUS_FILTER_OPTIONS.map((s) => ({ value: s, label: s })),
   },
   {
     key: "km",
@@ -147,7 +173,11 @@ type LineAction =
   // Line cancellation / removal (§5.3): КМ requests, КД approves/rejects.
   | { type: "requestRemoval"; id: string; reason: string; by: string }
   | { type: "approveRemoval"; id: string }
-  | { type: "rejectRemoval"; id: string };
+  | { type: "rejectRemoval"; id: string }
+  // 10-я часть R46: an edit on an approved line accumulates as a pending repeat action
+  // (the table keeps showing approved data); clearPending merges/discards on re-approval.
+  | { type: "setPending"; id: string; pending: LinePendingChange }
+  | { type: "clearPending"; id: string };
 
 function lineReducer(state: LineMap, action: LineAction): LineMap {
   switch (action.type) {
@@ -219,6 +249,21 @@ function lineReducer(state: LineMap, action: LineAction): LineMap {
         removalReason: undefined,
         removalRequestedBy: undefined,
       });
+      return next;
+    }
+    case "setPending": {
+      const cur = state.get(action.id);
+      if (!cur) return state;
+      const next = new Map(state);
+      next.set(action.id, { ...cur, pending: action.pending });
+      return next;
+    }
+    case "clearPending": {
+      const cur = state.get(action.id);
+      if (!cur) return state;
+      const next = new Map(state);
+      const { pending: _pending, ...rest } = cur;
+      next.set(action.id, rest as PromoLine);
       return next;
     }
     default:
@@ -356,9 +401,15 @@ export function FullCalendarPage() {
         : linesFor(campaignId);
       // §7: a plain КМ only sees their own nomenclature within a shared campaign.
       if (ownKmId) out = out.filter((l) => l.kmId === ownKmId);
+      // 10-я часть R46/Блок 7: single «Все статусы» filter, applied PER LINE.
+      const c = campaignsById.get(campaignId);
+      if (c && values.status !== ALL)
+        out = out.filter((l) =>
+          matchesStatusFilter(lineDisplayStatus(c, l), values.status)
+        );
       return out;
     },
-    [linesFor, hideCancelled, ownKmId]
+    [linesFor, hideCancelled, ownKmId, campaignsById, values.status]
   );
 
   // ── Edit-after-approval diff (§5.1) ──────────────────────────────────────────
@@ -434,7 +485,9 @@ export function FullCalendarPage() {
       if (from && !Number.isNaN(from.getTime()) && c.endDate < from) return false;
       if (to && !Number.isNaN(to.getTime()) && c.startDate > to) return false;
       if (values.type !== ALL && c.type !== values.type) return false;
-      if (values.status !== ALL && c.status !== values.status) return false;
+      // 10-я часть R46/Блок 7: status is per-line now — keep a campaign only if it has
+      // at least one displayed line matching the «Все статусы» filter.
+      if (values.status !== ALL && displayLinesFor(c.id).length === 0) return false;
       if (values.priznak !== ALL) {
         if (values.priznak === "planned" && !c.planned) return false;
         if (values.priznak === "unplanned" && c.planned) return false;
@@ -448,6 +501,7 @@ export function FullCalendarPage() {
   }, [
     values,
     linesFor,
+    displayLinesFor,
     kmVisibleCampaigns,
     hideCancelled,
     focusPromo,
@@ -489,36 +543,70 @@ export function FullCalendarPage() {
     [filtered]
   );
 
-  // Changed cells across all approved campaigns — drives the grid's amber highlight.
-  const changedCells = React.useMemo(() => {
-    const set = new Set<string>();
-    for (const c of filtered) {
-      const cs = changeSetFor(c.id);
-      cs?.changedCells.forEach((k) => set.add(k));
-    }
-    return set;
-  }, [filtered, changeSetFor]);
-
-  // Per-campaign change-after-approval badge info (count + re-approval state).
-  const changeBadges = React.useMemo(() => {
-    const m = new Map<string, { count: number; awaitingMarketing: boolean }>();
-    for (const c of filtered) {
-      const cs = changeSetFor(c.id);
-      if (cs) {
-        m.set(c.id, {
-          count: cs.changes.length,
-          awaitingMarketing: reapprovalStateFor(c.id) === "awaiting-marketing",
-        });
-      }
-    }
-    return m;
-  }, [filtered, changeSetFor, reapprovalStateFor]);
-
+  // 10-я часть R46/Блок 2: an edit on an APPROVED line does NOT overwrite the shown
+  // (approved) values — it accumulates as a pending repeat action (light-orange row +
+  // «Детали изменений» panel), applied to the table only after re-approval. Edits to a
+  // draft/under-review line mutate fields directly (primary заполнение, no highlight).
   const onEdit = React.useCallback(
-    (id: string, patch: Partial<PromoLine>) =>
-      dispatch({ type: "edit", id, patch }),
-    []
+    (id: string, patch: Partial<PromoLine>) => {
+      const line = lines.get(id);
+      const c = line ? campaignsById.get(line.campaignId) : undefined;
+      if (line && c && isApprovedCampaign(c)) {
+        const pending = mergePendingChange(
+          line,
+          patch,
+          (f) => TRACKED_FIELD_LABEL[f] ?? String(f),
+          (f, v) => fmtPendingValue(f, v),
+          currentRole,
+          new Date().toISOString()
+        );
+        dispatch({ type: "setPending", id, pending });
+        toast.info(
+          "Изменение отправлено на повторное согласование — в таблице пока показаны согласованные данные."
+        );
+        return;
+      }
+      dispatch({ type: "edit", id, patch });
+    },
+    [lines, campaignsById, currentRole]
   );
+
+  // 10-я часть R46 — «Детали изменений» panel + per-user КМ rejection indicator (Блок 6).
+  const { currentUser } = useCurrentUser();
+  const [detailsLineId, setDetailsLineId] = React.useState<string | null>(null);
+  const [seenTick, setSeenTick] = React.useState(0);
+
+  const isKm = currentRole === "Категорийный менеджер (КМ)";
+  const seenRejections = React.useMemo(
+    () => (isKm ? getSeenRejections(currentUser?.id ?? null) : new Set<string>()),
+    // seenTick forces a re-read after markRejectionSeen.
+    [isKm, currentUser?.id, seenTick]
+  );
+  const rejectionLineIds = React.useMemo(() => {
+    if (!isKm) return new Set<string>();
+    const out = new Set<string>();
+    for (const line of lines.values())
+      if (lineHasRejection(line) && !seenRejections.has(line.id)) out.add(line.id);
+    return out;
+  }, [isKm, lines, seenRejections]);
+
+  const handleOpenDetails = React.useCallback(
+    (lineId: string) => {
+      const line = lines.get(lineId);
+      if (isKm && line && lineHasRejection(line)) {
+        markRejectionSeen(currentUser?.id ?? null, lineId);
+        setSeenTick((t) => t + 1);
+      }
+      // Defer past the opening click (Radix DismissableLayer — see tasks/lessons.md).
+      setTimeout(() => setDetailsLineId(lineId), 0);
+    },
+    [lines, isKm, currentUser?.id]
+  );
+
+  const detailsLine = detailsLineId ? lines.get(detailsLineId) : undefined;
+  const detailsCampaign = detailsLine
+    ? campaignsById.get(detailsLine.campaignId)
+    : undefined;
 
   // §3: hard-delete a draft line before submit (autosave — no «Сохранить» needed).
   const onDeleteLine = React.useCallback(
@@ -1264,14 +1352,22 @@ export function FullCalendarPage() {
             onRejectRemoval={
               canApproveLineRemoval(currentRole) ? onRejectRemoval : undefined
             }
-            changedCells={changedCells}
-            changeBadges={changeBadges}
+            onOpenDetails={handleOpenDetails}
+            rejectionLineIds={rejectionLineIds}
             selectedIds={selectedIds}
             onToggleSelect={onToggleSelect}
             onToggleGroup={onToggleGroup}
           />
         </div>
       </div>
+
+      {/* 10-я часть R46 — «Детали изменений» panel (Поле/Было/Стало · запрос · отклонение). */}
+      <LineDetailsDrawer
+        open={detailsLineId !== null}
+        onOpenChange={(o) => !o && setDetailsLineId(null)}
+        campaign={detailsCampaign}
+        line={detailsLine}
+      />
 
       {/* Add-a-line picker (§8.2.1) — searchable 1С reference, no free-text. */}
       <AddNomenclatureDialog
