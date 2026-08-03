@@ -21,6 +21,8 @@ import {
   getActiveSubstitution,
   isSubstituteConflicted,
 } from "../../../lib/kd-substitution-store";
+import { buildApprovalRows } from "../../../lib/approval-card";
+import { applyLineDecisions } from "../../../lib/line-decision-store";
 import { SubmittedLinesPanel } from "./SubmittedLinesPanel";
 import { ReviewActionsPanel, MobileReviewActionBar } from "./ReviewActionsPanel";
 import {
@@ -63,11 +65,27 @@ export function ApprovalDetailPage() {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [flow, setFlow] = React.useState<ReasonFlow | null>(null);
   const [historyOpen, setHistoryOpen] = React.useState(false);
+  /** §7/§15 — line whose «Было/Стало» panel is open. */
+  const [detailsId, setDetailsId] = React.useState<string | null>(null);
+  // Bumped after every line decision so the rows re-derive from the store (§16).
+  const [decisionTick, setDecisionTick] = React.useState(0);
 
   // Reset the selection whenever we move to a different item.
   React.useEffect(() => {
     setSelected(new Set());
   }, [itemId]);
+
+  // §4 — the card shows the WHOLE promo's nomenclature, with the recorded repeat-action
+  // decisions folded in so a decided row stops asking for a decision.
+  const campaignId = item?.campaignId;
+  const lines = React.useMemo(
+    () => (campaignId ? applyLineDecisions(getPromoLines(campaignId)) : []),
+    [campaignId, decisionTick]
+  );
+  const rows = React.useMemo(
+    () => (campaign && item ? buildApprovalRows(campaign, lines, item) : []),
+    [campaign, lines, item]
+  );
 
   if (!item || !campaign) {
     return (
@@ -93,10 +111,10 @@ export function ApprovalDetailPage() {
 
   const km = getCategoryManager(item.kmId);
   const sla = itemSla(item); // stage-aware SLA (§9) — КД stage counts from auto-forward
-  const lines = getPromoLines(item.campaignId).filter(
-    (l) => l.kmId === item.kmId
-  );
   const isNonPart = item.kind === "non-participation";
+  const isRepeat = item.kind === "repeat";
+  /** §14 — only rows that require a decision may be selected / decided on. */
+  const decidableRows = rows.filter((r) => r.requiresDecision);
 
   // Live auto-escalation (a breached Старший-КМ item is now acted on by the КД).
   const autoEscalated = isAutoEscalated(item);
@@ -127,7 +145,9 @@ export function ApprovalDetailPage() {
     });
   }
   function toggleAll(checked: boolean) {
-    setSelected(checked ? new Set(lines.map((l) => l.id)) : new Set());
+    setSelected(
+      checked ? new Set(decidableRows.map((r) => r.line.id)) : new Set()
+    );
   }
 
   function handleApproveAll() {
@@ -327,16 +347,24 @@ export function ApprovalDetailPage() {
           <CardHeader className="flex-row items-start justify-between gap-2 pb-2">
             <div>
               <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {isNonPart ? "Заявка на неучастие" : "Отправленные строки КМ"}
+                {isNonPart
+                  ? "Заявка на неучастие"
+                  : isRepeat
+                    ? "Номенклатура акции"
+                    : "Отправленные строки КМ"}
               </h2>
               <p className="text-xs text-muted-foreground">
                 {isNonPart
                   ? "КМ запросил освобождение от участия в акции."
-                  : `Снимок отправленной версии (только чтение)${
-                      canAct
-                        ? " — выберите строки для отклонения или согласуйте весь набор."
-                        : "."
-                    }`}
+                  : isRepeat
+                    ? `Весь список позиций акции для полного контекста. Решение принимается только по строкам с повторным действием — они выделены${
+                        canAct ? "; нажмите на строку, чтобы увидеть детали." : "."
+                      }`
+                    : `Снимок отправленной версии (только чтение)${
+                        canAct
+                          ? " — выберите строки для отклонения или согласуйте весь набор."
+                          : "."
+                      }`}
               </p>
             </div>
             <Button
@@ -363,7 +391,7 @@ export function ApprovalDetailPage() {
               </div>
             ) : (
               <SubmittedLinesPanel
-                lines={lines}
+                rows={rows}
                 feedback={item.lineFeedback}
                 selectable={canAct}
                 selectedIds={selected}
@@ -372,6 +400,7 @@ export function ApprovalDetailPage() {
                 onRejectLine={(lineId) =>
                   openFlow({ kind: "reject-lines", lineIds: [lineId] })
                 }
+                onOpenRow={(lineId) => setTimeout(() => setDetailsId(lineId), 0)}
               />
             )}
           </CardContent>
