@@ -12,6 +12,7 @@ import {
   lineDisplayStatus,
   type LineStatus,
 } from "./full-calendar-status";
+import type { LineDecisionAction } from "./line-decision-store";
 import {
   isApprovedCampaign,
   lineNeedsRepeatDecision,
@@ -52,15 +53,26 @@ export interface ApprovalRow {
   requestType?: string;
 }
 
-export const ROW_KIND_LABEL: Record<ApprovalRowKind, string> = {
+export const ROW_KIND_LABEL: Partial<Record<ApprovalRowKind, string>> = {
   change: "Изменение позиции",
   addition: "Добавлена номенклатура",
   removal: "Удаление номенклатуры",
   primary: "На согласовании",
   "approved-earlier": "Согласовано ранее",
   "rejected-repeat": "Отклонённые изменения",
-  context: "",
 };
+
+/** Marker text for a row — a «context» row falls back to its real per-line status. */
+export function rowMarkerLabel(row: ApprovalRow): string {
+  return ROW_KIND_LABEL[row.kind] ?? row.status;
+}
+
+/** Which repeat action a decision on this row is recorded against. */
+export function decisionActionFor(row: ApprovalRow): LineDecisionAction {
+  if (row.kind === "removal") return "removal";
+  if (row.kind === "addition") return "addition";
+  return "change";
+}
 
 /**
  * Classify one line of the promo for the given review item.
@@ -161,11 +173,3 @@ export function approvalCounters(rows: ApprovalRow[]): ApprovalCounters {
   return { pending, approvedEarlier };
 }
 
-/** Russian plural for «строка» (счётчик §12). */
-export function pluralRows(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "строка";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "строки";
-  return "строк";
-}

@@ -102,6 +102,7 @@ import {
   markRejectionSeen,
 } from "../../../lib/full-calendar-rejection-store";
 import { applyLineDecisions } from "../../../lib/line-decision-store";
+import { LINE_FORMS, POSITION_FORMS, pluralRu } from "../../../lib/plural";
 import { LineDetailsDrawer } from "./LineDetailsDrawer";
 import { useCurrentUser } from "../../current-user-context";
 
@@ -1773,19 +1774,6 @@ function AccessDenied({ note }: { note: string }) {
   );
 }
 
-function pluralLines(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "строка";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "строки";
-  return "строк";
-}
-
+const pluralLines = (n: number) => pluralRu(n, LINE_FORMS);
 /** «N позиций» plural for the selection counter (feedback §13). */
-function pluralPositions(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "позиция";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "позиции";
-  return "позиций";
-}
+const pluralPositions = (n: number) => pluralRu(n, POSITION_FORMS);

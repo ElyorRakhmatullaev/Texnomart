@@ -12,7 +12,7 @@ import {
 import { Button } from "@texnomart/ui/button";
 import { RuDate } from "../../../components/RuDate";
 import { Money } from "../../../components/Money";
-import { ROW_KIND_LABEL, type ApprovalRow } from "../../../lib/approval-card";
+import { rowMarkerLabel, type ApprovalRow } from "../../../lib/approval-card";
 import {
   formatPromoNo,
   getCategoryManager,
@@ -137,7 +137,7 @@ export function LineChangeDrawer({
         <SheetHeader className="space-y-1">
           <SheetTitle className="flex items-center gap-2">
             <Icon className="size-4 text-orange-600 dark:text-orange-400" />
-            {row ? ROW_KIND_LABEL[row.kind] : "Детали строки"}
+            {row ? rowMarkerLabel(row) : "Детали строки"}
           </SheetTitle>
           <SheetDescription>
             {nom?.name ?? line?.nomenclatureId ?? "Позиция акции"}
@@ -188,8 +188,8 @@ export function LineChangeDrawer({
             )}
 
             <Section title="Детали запроса">
-              <Row label="Тип изменения" value={ROW_KIND_LABEL[row.kind]} />
-              {row.requestType && row.requestType !== ROW_KIND_LABEL[row.kind] && (
+              <Row label="Тип изменения" value={rowMarkerLabel(row)} />
+              {row.requestType && row.requestType !== rowMarkerLabel(row) && (
                 <Row label="Тип запроса" value={row.requestType} />
               )}
               <Row

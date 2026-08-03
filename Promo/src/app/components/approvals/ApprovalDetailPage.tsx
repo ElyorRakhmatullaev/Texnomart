@@ -21,11 +21,14 @@ import {
   getActiveSubstitution,
   isSubstituteConflicted,
 } from "../../../lib/kd-substitution-store";
-import { buildApprovalRows, type ApprovalRow } from "../../../lib/approval-card";
+import {
+  buildApprovalRows,
+  decisionActionFor,
+  type ApprovalRow,
+} from "../../../lib/approval-card";
 import {
   applyLineDecisions,
   recordLineDecisions,
-  type LineDecisionAction,
 } from "../../../lib/line-decision-store";
 import { LineChangeDrawer } from "./LineChangeDrawer";
 import { SubmittedLinesPanel } from "./SubmittedLinesPanel";
@@ -167,13 +170,6 @@ export function ApprovalDetailPage() {
     setSelected(
       checked ? new Set(decidableRows.map((r) => r.line.id)) : new Set()
     );
-  }
-
-  /** What kind of repeat action a row carries (for the decision record). */
-  function decisionActionFor(row: ApprovalRow): LineDecisionAction {
-    if (row.kind === "removal") return "removal";
-    if (row.kind === "addition") return "addition";
-    return "change";
   }
 
   /**

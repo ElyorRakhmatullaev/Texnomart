@@ -15,12 +15,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import { cn } from "@texnomart/ui/utils";
 import { Money } from "../../../components/Money";
 import {
-  ROW_KIND_LABEL,
   approvalCounters,
-  pluralRows,
+  rowMarkerLabel,
   type ApprovalRow,
   type ApprovalRowKind,
 } from "../../../lib/approval-card";
+import { LINE_FORMS, pluralRu } from "../../../lib/plural";
 import {
   getNomenclatureItem,
   type LineFeedback,
@@ -60,7 +60,7 @@ const REPEAT_ICON: Partial<Record<ApprovalRowKind, React.ElementType>> = {
 
 /** «Согласовано ранее» + замок / тип повторного действия — вместо колонки статуса (§13). */
 function RowMarker({ row }: { row: ApprovalRow }) {
-  const label = ROW_KIND_LABEL[row.kind] || row.status;
+  const label = rowMarkerLabel(row);
   if (row.isRepeat) {
     const Icon = REPEAT_ICON[row.kind] ?? Pencil;
     return (
@@ -144,13 +144,13 @@ export function SubmittedLinesPanel({
           <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">
             {counters.pending}
           </span>{" "}
-          {pluralRows(counters.pending)} ·{" "}
+          {pluralRu(counters.pending, LINE_FORMS)} ·{" "}
           <span className="whitespace-nowrap">
             Согласовано ранее:{" "}
             <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">
               {counters.approvedEarlier}
             </span>{" "}
-            {pluralRows(counters.approvedEarlier)}
+            {pluralRu(counters.approvedEarlier, LINE_FORMS)}
           </span>
         </p>
         {hasRepeat && (
