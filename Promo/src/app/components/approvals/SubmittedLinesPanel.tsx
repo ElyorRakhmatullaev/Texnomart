@@ -40,6 +40,8 @@ interface SubmittedLinesPanelProps {
   onRejectLine?: (lineId: string) => void;
   /** §7/§15 — open the side panel with «Было/Стало» + decisions. */
   onOpenRow?: (lineId: string) => void;
+  /** §12 — counters belong to the repeat-approval card; the primary flow stays as-is. */
+  showCounters?: boolean;
 }
 
 /** Whether a line reads as rejected — reviewer feedback wins over the seed flag. */
@@ -102,6 +104,7 @@ export function SubmittedLinesPanel({
   onToggleAll,
   onRejectLine,
   onOpenRow,
+  showCounters = false,
 }: SubmittedLinesPanelProps) {
   const [onlyChanges, setOnlyChanges] = React.useState(false);
 
@@ -130,8 +133,13 @@ export function SubmittedLinesPanel({
   return (
     <div className="space-y-3">
       {/* §12 счётчик + §11 переключатель «Все строки / Только изменения» */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-2",
+          showCounters ? "justify-between" : "justify-end"
+        )}
+      >
+        <p className={cn("text-xs text-muted-foreground", !showCounters && "hidden")}>
           На согласовании:{" "}
           <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">
             {counters.pending}

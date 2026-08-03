@@ -189,10 +189,9 @@ export function LineChangeDrawer({
 
             <Section title="Детали запроса">
               <Row label="Тип изменения" value={ROW_KIND_LABEL[row.kind]} />
-              <Row
-                label="Тип запроса"
-                value={row.requestType ?? "—"}
-              />
+              {row.requestType && row.requestType !== ROW_KIND_LABEL[row.kind] && (
+                <Row label="Тип запроса" value={row.requestType} />
+              )}
               <Row
                 label="Кто отправил"
                 value={

@@ -143,16 +143,37 @@ export function applyLineDecisions(
 
     if (d.action === "removal") {
       if (!line.removalPending && !line.removed) return line;
-      return d.kind === "approved"
-        ? { ...line, removalPending: false, removed: true }
-        : {
-            ...line,
-            removalPending: false,
-            removed: false,
-            removalReason: undefined,
-            removalRequestedBy: undefined,
-            removalRequestedAt: undefined,
-          };
+      if (d.kind === "approved") {
+        return { ...line, removalPending: false, removed: true };
+      }
+      // Rejected exclusion: the position stays in the promo, and the refusal is recorded
+      // as a resolved repeat action so the КМ sees «Отклонённые изменения», the red
+      // indicator and the reason in «Детали изменений» (Волна 2, Блок 6.2/6.6).
+      return {
+        ...line,
+        removalPending: false,
+        removed: false,
+        pending: {
+          action: "change",
+          requestType: "Запрос на исключение из промо",
+          by: line.removalRequestedBy ?? "Категорийный менеджер (КМ)",
+          at: line.removalRequestedAt ?? d.at,
+          comment: line.removalReason,
+          fields: [
+            {
+              field: "removed",
+              label: "Участие в акции",
+              was: "Согласована в акции",
+              now: "Предложена к удалению",
+            },
+          ],
+          rejected: {
+            by: d.by,
+            at: d.at,
+            reason: d.reason ?? "Причина не указана.",
+          },
+        },
+      };
     }
 
     const pending = line.pending;

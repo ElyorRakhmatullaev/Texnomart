@@ -472,9 +472,11 @@ export function ApprovalDetailPage() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-        <Card>
+        {/* min-w-0: a grid child defaults to min-width:auto and would be stretched by the
+            table's min-content width, pushing the whole card off-screen on mobile. */}
+        <Card className="min-w-0">
           <CardHeader className="flex-row items-start justify-between gap-2 pb-2">
-            <div>
+            <div className="min-w-0">
               <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {isNonPart
                   ? "Заявка на неучастие"
@@ -533,6 +535,7 @@ export function ApprovalDetailPage() {
                   })
                 }
                 onOpenRow={(lineId) => setTimeout(() => setDetailsId(lineId), 0)}
+                showCounters={isRepeat}
               />
             )}
           </CardContent>
