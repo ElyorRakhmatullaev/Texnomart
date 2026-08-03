@@ -4,6 +4,9 @@ Reverse chronological. One-line summaries — implementation details are in the 
 
 ---
 
+## 2026-08-03 — Texnomart Promo: doc_sync — исходники «10-й части» + объём Волн 3 и 6 (кода не меняли)
+Кода не трогали; рабочее дерево чистое, `main` = `origin/main`. Найдены и распакованы **исходники раунда**, которых нет в репозитории: `~/Downloads/Telegram Desktop/10я_часть_комментарий_Общее_по_дизайну_29_07_2026.docx` (+ `… (2).docx`). Из них извлечён дословный текст двух оставшихся волн: **Волна 3** — «Дополнение к комментариям. Согласование. Карточка согласования» (R57, 16 пунктов по `/approvals/:id`) и **Волна 6** — «Распределение по категориям» (R74, 9 пунктов, PDF 30.07). Оба объёма записаны в `docs/AI_CONTEXT.md`. Поправлены устаревшие пометки: «push pending» / «push пока не делали» → запушено (`cd70df6`) в трёх файлах; счётчик роутов Promo в корневом `CLAUDE.md` 16 → 21. Сверено без изменений: `@texnomart/ui` = 46 компонентов + 2 утилиты, `@texnomart/shared` = 10 pattern-компонентов, Dashboard = 22 роута, `--status-*` в `styles-config.md` совпадают с `Promo/src/styles/theme.css`.
+
 ## 2026-07-31 — Texnomart Promo: «10-я часть» client feedback — Волна 2 (полный промо-календарь: построчная модель статусов + подарки)
 Applied the «10я часть · Общее по дизайну» PDF (29.07.2026), раздел «1. Полный промо-календарь» Блоки 1–7 (трекер R46) + подарки (R44), to `/full-calendar`. Executed spec → plan → **8 задач inline** (per-task build gate + commit) + full in-browser QA + a `/code-review` (high) pass that caught and fixed one regression. **11 commits `15be3bf..def1747`**; `build:promo` + `build:dashboard` green; Promo-local only. Spec: `docs/superpowers/specs/2026-07-31-promo-full-calendar-status-model-gifts-design.md`; plan: `docs/superpowers/plans/2026-07-31-promo-full-calendar-status-model-gifts.md`.
 

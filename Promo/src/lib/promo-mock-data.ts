@@ -860,8 +860,18 @@ export interface GiftItem {
  */
 export interface LinePendingChange {
   action: "change" | "addition";
-  /** For action==="change": per-field diff vs the approved value (panel «Поле/Было/Стало»). */
-  fields?: { field: keyof PromoLine; label: string; was: string; now: string }[];
+  /**
+   * For action==="change": per-field diff vs the approved value (panel «Поле/Было/Стало»).
+   * `value` (Волна 3) carries the RAW new value so approving the change applies it exactly;
+   * seeds may omit it — `applyLineDecisions` then falls back to parsing `now`.
+   */
+  fields?: {
+    field: keyof PromoLine;
+    label: string;
+    was: string;
+    now: string;
+    value?: unknown;
+  }[];
   /** Role label (no per-person identity in the mock). */
   by: string;
   /** ISO date the repeat action was sent for approval. */
@@ -935,6 +945,8 @@ export interface PromoLine {
   removalReason?: string;
   /** Actor who requested removal — role label (no per-person identity in the mock). */
   removalRequestedBy?: string;
+  /** ISO date the exclusion request was sent (Волна 3 §7/§9 — panel «дата отправки»). */
+  removalRequestedAt?: string;
   /** Unapproved repeat action (10-я часть, Блоки 2/4) — table still shows approved data. */
   pending?: LinePendingChange;
 }
@@ -973,6 +985,8 @@ type LineSeed = {
   removalPending?: boolean;
   removed?: boolean;
   removalReason?: string;
+  /** ISO date the exclusion request was sent (Волна 3). */
+  removalRequestedAt?: string;
   /** Unapproved repeat action (10-я часть) — see LinePendingChange. */
   pending?: LinePendingChange;
   /** Single gift nomenclature id (fixed «Подарок (1)»). */
@@ -1014,11 +1028,17 @@ const LINE_SEED: LineSeed[] = [
       at: new Date(2026, 6, 28, 11, 40).toISOString(),
       comment: "Просим снизить цену для увеличения продаж в период подготовки к акции.",
       fields: [
-        { field: "salesForecast", label: "Прогноз продаж", was: "40", now: "55" },
-        { field: "discountPct", label: "Скидка", was: "16%", now: "18%" },
+        { field: "salesForecast", label: "Прогноз продаж", was: "40", now: "55", value: 55 },
+        { field: "discountPct", label: "Скидка", was: "16%", now: "18%", value: 18 },
       ],
     } },
   { id: "L-0016", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10016", off: 0.14, forecast: 25, gift: "1C-10018", advKm: true, supplierCompensation: 250000, compensationLimit: 30 },
+  // 10-я часть Волна 3 демо (§9): запрос на исключение ранее согласованной позиции —
+  // светло-оранжевая строка, тип действия «Удаление номенклатуры» в панели проверяющего.
+  { id: "L-0024", campaignId: "PR-2026-003", kmId: "km-4", nomenclatureId: "1C-10020", off: 0.1, forecast: 18, regular: 12, advKm: true, supplierCompensation: 180000, compensationLimit: 20,
+    removalPending: true,
+    removalReason: "Поставщик прекратил отгрузки — позицию нужно исключить из акции.",
+    removalRequestedAt: new Date(2026, 6, 31, 10, 30).toISOString() },
   // 10-я часть демо (Блок 4.4): новая позиция после согласования → светло-оранжевая, у КМ km-1.
   { id: "L-0022", campaignId: "PR-2026-003", kmId: "km-1", nomenclatureId: "1C-10002", off: 0.12, forecast: 30, advKm: true,
     pending: {
@@ -1037,7 +1057,7 @@ const LINE_SEED: LineSeed[] = [
       by: "Категорийный менеджер (КМ)",
       at: new Date(2026, 6, 27, 15, 5).toISOString(),
       comment: "Снижение цены под конкурента.",
-      fields: [{ field: "discountPct", label: "Скидка", was: "14%", now: "20%" }],
+      fields: [{ field: "discountPct", label: "Скидка", was: "14%", now: "20%", value: 20 }],
       rejected: {
         by: "Коммерческий директор",
         at: new Date(2026, 6, 28, 10, 15).toISOString(),
@@ -1118,6 +1138,7 @@ export const PROMO_LINES: PromoLine[] = LINE_SEED.map((s) => {
     removed: s.removed,
     removalReason: s.removalReason,
     removalRequestedBy: s.removalPending || s.removed ? "Категорийный менеджер (КМ)" : undefined,
+    removalRequestedAt: s.removalRequestedAt,
     pending: s.pending,
   };
 });
@@ -1911,8 +1932,12 @@ export function reviewSla(submittedAt: Date, ref: Date = new Date()): ReviewSla 
   return { deadline, remaining: -workingDaysBetween(deadline, ref), overdue: workingDaysBetween(deadline, ref) };
 }
 
-/** A review item is either the КМ's filled data set, or a «Не участвует» request. */
-export type ReviewKind = "data" | "non-participation";
+/**
+ * A review item is the КМ's filled data set, a «Не участвует» request, or — since
+ * «10-я часть» Волна 3 (R57) — a **repeat** approval: changes / additions / exclusion
+ * requests raised on an ALREADY-approved campaign (Волна 2 `line.pending`).
+ */
+export type ReviewKind = "data" | "non-participation" | "repeat";
 
 /**
  * A review comment — author + role + timestamp, scoped either to specific lines
@@ -2066,7 +2091,90 @@ export function buildReviewItems(ref: Date = new Date()): ReviewItem[] {
       });
     }
   }
+  items.push(...buildRepeatReviewItems(items));
   return items;
+}
+
+/**
+ * «10-я часть» Волна 3 (R57) — a line carries an UNRESOLVED repeat action, i.e. the КМ
+ * changed / added / asked to exclude a position on an already-approved campaign and the
+ * reviewer hasn't decided yet. Single source for both the approval card and the queue.
+ */
+export function lineNeedsRepeatDecision(line: PromoLine): boolean {
+  if (line.removed) return false;
+  if (line.removalPending) return true;
+  return Boolean(line.pending && !line.pending.rejected);
+}
+
+/** ISO moment the repeat action on this line was sent for approval (undefined if none). */
+export function repeatActionAt(line: PromoLine): string | undefined {
+  if (line.removalPending && !line.removed) return line.removalRequestedAt;
+  if (line.pending && !line.pending.rejected) return line.pending.at;
+  return undefined;
+}
+
+/**
+ * Review items for repeat approvals: one per (approved campaign × КМ) that has at least
+ * one line awaiting a decision on a repeat action. Grouped by `line.kmId` rather than
+ * `participatingKmIds` — a КМ may add a position to a promo they didn't originally fill.
+ * `submittedAt` is the LATEST repeat-send moment, so «Получено на согласование» reflects
+ * the current re-submission (§3) and the existing stage/SLA machinery applies unchanged.
+ */
+function buildRepeatReviewItems(existing: ReviewItem[]): ReviewItem[] {
+  const taken = new Set(existing.map((it) => it.id));
+  const out: ReviewItem[] = [];
+  for (const c of CAMPAIGNS) {
+    if (!isApprovedCampaign(c)) continue;
+    const byKm = new Map<string, string[]>(); // kmId → repeat-send ISO moments
+    for (const line of PROMO_LINES) {
+      if (line.campaignId !== c.id) continue;
+      if (!lineNeedsRepeatDecision(line)) continue;
+      const at = repeatActionAt(line);
+      if (!at) continue;
+      const list = byKm.get(line.kmId) ?? [];
+      list.push(at);
+      byKm.set(line.kmId, list);
+    }
+    for (const [kmId, moments] of byKm) {
+      const id = reviewItemId(c.id, kmId);
+      if (taken.has(id)) continue; // a live data/non-participation item wins
+      const submittedAt = moments.sort().at(-1)!;
+      out.push({
+        id,
+        campaignId: c.id,
+        kmId,
+        kind: "repeat",
+        kmStatus: "На согласовании у старшего КМ",
+        submittedAt,
+        escalatedToKD: false,
+        comments: [],
+        lineFeedback: {},
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * «Получено на согласование» (§1/§3) — when the CURRENT reviewer received the task at the
+ * CURRENT stage. Stage-aware via `stageSlaStart`; a later re-submission of a repeat action
+ * wins, so a re-sent item shows the re-send date rather than the original one.
+ */
+export function receivedAt(
+  item: ReviewItem,
+  lines: PromoLine[] = [],
+  ref: Date = new Date()
+): Date {
+  let received = stageSlaStart(item, ref);
+  for (const line of lines) {
+    if (line.kmId !== item.kmId) continue;
+    if (!lineNeedsRepeatDecision(line)) continue;
+    const at = repeatActionAt(line);
+    if (!at) continue;
+    const d = new Date(at);
+    if (d.getTime() > received.getTime()) received = d;
+  }
+  return received;
 }
 
 /**
