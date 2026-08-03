@@ -2119,6 +2119,11 @@ export function repeatActionAt(line: PromoLine): string | undefined {
  * `participatingKmIds` — a КМ may add a position to a promo they didn't originally fill.
  * `submittedAt` is the LATEST repeat-send moment, so «Получено на согласование» reflects
  * the current re-submission (§3) and the existing stage/SLA machinery applies unchanged.
+ *
+ * The stage is **КД**: the promo is already approved and sent to the adjacent departments,
+ * so amending it is the commercial director's call — a single-stage decision. That also
+ * keeps §16 honest: approving APPLIES the new values right away instead of forwarding a
+ * card with nothing left to decide to the next reviewer.
  */
 function buildRepeatReviewItems(existing: ReviewItem[]): ReviewItem[] {
   const taken = new Set(existing.map((it) => it.id));
@@ -2144,7 +2149,7 @@ function buildRepeatReviewItems(existing: ReviewItem[]): ReviewItem[] {
         campaignId: c.id,
         kmId,
         kind: "repeat",
-        kmStatus: "На согласовании у старшего КМ",
+        kmStatus: "На согласовании у коммерческого директора",
         submittedAt,
         escalatedToKD: false,
         comments: [],

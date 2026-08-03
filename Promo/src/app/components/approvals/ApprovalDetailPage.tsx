@@ -21,8 +21,13 @@ import {
   getActiveSubstitution,
   isSubstituteConflicted,
 } from "../../../lib/kd-substitution-store";
-import { buildApprovalRows } from "../../../lib/approval-card";
-import { applyLineDecisions } from "../../../lib/line-decision-store";
+import { buildApprovalRows, type ApprovalRow } from "../../../lib/approval-card";
+import {
+  applyLineDecisions,
+  recordLineDecisions,
+  type LineDecisionAction,
+} from "../../../lib/line-decision-store";
+import { LineChangeDrawer } from "./LineChangeDrawer";
 import { SubmittedLinesPanel } from "./SubmittedLinesPanel";
 import { ReviewActionsPanel, MobileReviewActionBar } from "./ReviewActionsPanel";
 import {
@@ -32,9 +37,11 @@ import {
   formatPromoNo,
   getCampaignById,
   getCategoryManager,
+  getNomenclatureItem,
   getPromoLines,
   isAutoEscalated,
   itemSla,
+  receivedAt,
   seniorOverdueInfo,
 } from "../../../lib/promo-mock-data";
 
@@ -43,7 +50,9 @@ type ReasonFlow =
   | { kind: "reject-lines"; lineIds: string[] }
   | { kind: "reject-set" }
   | { kind: "reject-nonpart" }
-  | { kind: "kd-set-nonpart" };
+  | { kind: "kd-set-nonpart" }
+  /** Волна 3 §16 — отклонение повторных изменений по конкретным строкам. */
+  | { kind: "reject-repeat"; lineIds: string[] };
 
 /** ISO «YYYY-MM-DD» → local-midnight Date (avoids the UTC-parse off-by-one RuDate would show). */
 function parseDateOnly(iso: string): Date {
@@ -82,10 +91,16 @@ export function ApprovalDetailPage() {
     () => (campaignId ? applyLineDecisions(getPromoLines(campaignId)) : []),
     [campaignId, decisionTick]
   );
-  const rows = React.useMemo(
-    () => (campaign && item ? buildApprovalRows(campaign, lines, item) : []),
-    [campaign, lines, item]
-  );
+  // §4 «При повторном согласовании…» — the whole-promo list is scoped to repeat items;
+  // the primary flow keeps showing exactly the reviewed КМ's submitted set (no regression).
+  const rows = React.useMemo(() => {
+    if (!campaign || !item) return [];
+    const scoped =
+      item.kind === "repeat"
+        ? lines
+        : lines.filter((l) => l.kmId === item.kmId);
+    return buildApprovalRows(campaign, scoped, item);
+  }, [campaign, lines, item]);
 
   if (!item || !campaign) {
     return (
@@ -111,10 +126,14 @@ export function ApprovalDetailPage() {
 
   const km = getCategoryManager(item.kmId);
   const sla = itemSla(item); // stage-aware SLA (§9) — КД stage counts from auto-forward
+  const received = receivedAt(item, lines); // §1/§3
   const isNonPart = item.kind === "non-participation";
   const isRepeat = item.kind === "repeat";
   /** §14 — only rows that require a decision may be selected / decided on. */
   const decidableRows = rows.filter((r) => r.requiresDecision);
+  const detailsRow = detailsId
+    ? rows.find((r) => r.line.id === detailsId)
+    : undefined;
 
   // Live auto-escalation (a breached Старший-КМ item is now acted on by the КД).
   const autoEscalated = isAutoEscalated(item);
@@ -150,7 +169,70 @@ export function ApprovalDetailPage() {
     );
   }
 
+  /** What kind of repeat action a row carries (for the decision record). */
+  function decisionActionFor(row: ApprovalRow): LineDecisionAction {
+    if (row.kind === "removal") return "removal";
+    if (row.kind === "addition") return "addition";
+    return "change";
+  }
+
+  /**
+   * §16 — persist the decision on the given repeat rows. Согласовано: новые значения
+   * становятся актуальными (подсветка снимается). Отклонено: строки возвращаются КМ,
+   * а причина фиксируется и в строке, и в истории заявки.
+   */
+  function decideRepeatLines(
+    lineIds: string[],
+    kind: "approved" | "rejected",
+    reason?: string
+  ): number {
+    const targets = lineIds
+      .map((id) => rows.find((r) => r.line.id === id))
+      // §14 — решение возможно только по строкам, требующим решения
+      .filter((r): r is ApprovalRow => Boolean(r?.requiresDecision));
+    if (targets.length === 0) return 0;
+    const at = new Date().toISOString();
+    recordLineDecisions(
+      targets.map((r) => ({
+        lineId: r.line.id,
+        campaignId: r.line.campaignId,
+        action: decisionActionFor(r),
+        kind,
+        by: actingAsRole,
+        at,
+        reason,
+      }))
+    );
+    setDecisionTick((t) => t + 1);
+    setSelected(new Set());
+    setDetailsId(null);
+    return targets.length;
+  }
+
+  /** Approve every row still awaiting a decision, then advance the item. */
+  function handleApproveRepeat(lineIds?: string[]) {
+    const ids = lineIds ?? decidableRows.map((r) => r.line.id);
+    const count = decideRepeatLines(ids, "approved");
+    if (count === 0) return;
+    const remaining = decidableRows.filter((r) => !ids.includes(r.line.id));
+    if (remaining.length === 0) {
+      // Все повторные действия закрыты — заявка становится финальной.
+      approve(item!.id, actingAsRole);
+      toast.success(
+        `Изменения согласованы (${count}) — новые данные стали актуальными.`
+      );
+    } else {
+      toast.success(
+        `Согласовано строк: ${count}. Осталось на решение: ${remaining.length}.`
+      );
+    }
+  }
+
   function handleApproveAll() {
+    if (isRepeat) {
+      handleApproveRepeat();
+      return;
+    }
     approve(item!.id, actingAsRole);
     if (isNonPart) {
       toast.success(
@@ -176,6 +258,32 @@ export function ApprovalDetailPage() {
 
   function confirmReason(reason: string) {
     if (!flow) return;
+    if (flow.kind === "reject-repeat") {
+      // §16 — фиксируем решение по строкам + возвращаем данные КМ с причиной,
+      // причём в истории видно, какие именно изменения отклонены.
+      const count = decideRepeatLines(flow.lineIds, "rejected", reason);
+      if (count > 0) {
+        const names = flow.lineIds
+          .map((id) => {
+            const row = rows.find((r) => r.line.id === id);
+            const nom = row
+              ? getNomenclatureItem(row.line.nomenclatureId)
+              : undefined;
+            return nom?.name ?? id;
+          })
+          .join(", ");
+        reject(item!.id, {
+          lineIds: flow.lineIds,
+          comment: `Отклонены повторные изменения (${names}). Причина: ${reason}`,
+          actor: actingAsRole,
+        });
+        toast.success(
+          `Отклонено изменений: ${count}. Данные возвращены КМ на корректировку.`
+        );
+      }
+      setFlow(null);
+      return;
+    }
     if (flow.kind === "kd-set-nonpart") {
       setNonParticipationByKd(item!.campaignId, item!.kmId, reason);
       toast.success("«Не участвует» установлено коммерческим директором.");
@@ -217,6 +325,12 @@ export function ApprovalDetailPage() {
         "Заявка на неучастие будет отклонена — КМ должен будет заполнить номенклатуру. Комментарий по желанию.",
       required: false,
       confirm: "Отклонить заявку",
+    },
+    "reject-repeat": {
+      title: "Отклонить изменения",
+      description: `Будет отклонено строк: ${flow?.kind === "reject-repeat" ? flow.lineIds.length : 0}. Данные вернутся КМ на корректировку, причина зафиксируется в истории.`,
+      required: true,
+      confirm: "Отклонить",
     },
     "kd-set-nonpart": {
       title: "Установить «Не участвует»",
@@ -269,15 +383,30 @@ export function ApprovalDetailPage() {
               </span>
             }
           />
+          {/* §1/§3 — момент получения задачи ТЕКУЩИМ проверяющим на ТЕКУЩЕМ этапе;
+              при повторной отправке — дата повторной отправки, а не первичной. */}
           <InfoRow
-            label="Отправлено на согласование"
+            label="Получено на согласование"
             value={
               <span className="tabular-nums">
-                <RuDate value={new Date(item.submittedAt)} withTime />
+                <RuDate value={received} withTime />
               </span>
             }
           />
           <InfoRow label="Текущий проверяющий" value={actingReviewer ?? "—"} />
+          {/* §2 — автопереданные заявки: факт и дата автопередачи в карточке
+              (общий список согласования при этом не меняется). */}
+          {senior && (
+            <InfoRow
+              label="Авто-передано КД"
+              value={
+                <span className="flex items-center gap-1.5 tabular-nums">
+                  <Forward className="size-3.5 text-amber-600 dark:text-amber-400" />
+                  <RuDate value={senior.autoForwardedAt} withTime />
+                </span>
+              }
+            />
+          )}
           <InfoRow
             label={`Срок проверки${autoEscalated ? " (этап КД)" : ""}`}
             value={
@@ -398,7 +527,10 @@ export function ApprovalDetailPage() {
                 onToggle={toggle}
                 onToggleAll={toggleAll}
                 onRejectLine={(lineId) =>
-                  openFlow({ kind: "reject-lines", lineIds: [lineId] })
+                  openFlow({
+                    kind: isRepeat ? "reject-repeat" : "reject-lines",
+                    lineIds: [lineId],
+                  })
                 }
                 onOpenRow={(lineId) => setTimeout(() => setDetailsId(lineId), 0)}
               />
@@ -416,11 +548,14 @@ export function ApprovalDetailPage() {
             substituteActing={substituteActing}
             conflicted={conflicted}
             decision={decision}
-            lineCount={lines.length}
+            lineCount={decidableRows.length}
             selectedCount={selected.size}
             onApproveAll={handleApproveAll}
             onRejectSelected={() =>
-              openFlow({ kind: "reject-lines", lineIds: [...selected] })
+              openFlow({
+                kind: isRepeat ? "reject-repeat" : "reject-lines",
+                lineIds: [...selected],
+              })
             }
             onRejectSet={() => openFlow({ kind: "reject-set" })}
             onApproveNonParticipation={handleApproveAll}
@@ -436,13 +571,33 @@ export function ApprovalDetailPage() {
           selectedCount={selected.size}
           onApproveAll={handleApproveAll}
           onRejectSelected={() =>
-            openFlow({ kind: "reject-lines", lineIds: [...selected] })
+            openFlow({
+              kind: isRepeat ? "reject-repeat" : "reject-lines",
+              lineIds: [...selected],
+            })
           }
           onRejectSet={() => openFlow({ kind: "reject-set" })}
           onApproveNonParticipation={handleApproveAll}
           onRejectNonParticipation={() => openFlow({ kind: "reject-nonpart" })}
         />
       )}
+
+      {/* §7/§15 — детали повторного действия + решение прямо из панели */}
+      <LineChangeDrawer
+        open={detailsId !== null}
+        onOpenChange={(o) => {
+          if (!o) setDetailsId(null);
+        }}
+        campaign={campaign}
+        row={detailsRow}
+        sla={sla}
+        canAct={canAct}
+        onApprove={(lineId) => handleApproveRepeat([lineId])}
+        onReject={(lineId) => {
+          setDetailsId(null);
+          openFlow({ kind: "reject-repeat", lineIds: [lineId] });
+        }}
+      />
 
       <ReasonDialog
         open={flow !== null}

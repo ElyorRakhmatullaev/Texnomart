@@ -96,11 +96,14 @@ function ActionButtons({
       </div>
     );
   }
+  // Волна 3 (§14): у повторного согласования нет «набора» — решения принимаются
+  // только по строкам с повторным действием.
+  const isRepeat = item.kind === "repeat";
   return (
     <div className="space-y-2">
       <Button className="w-full" onClick={onApproveAll}>
         <Check className="size-4" />
-        Согласовать всё
+        {isRepeat ? "Согласовать все изменения" : "Согласовать всё"}
       </Button>
       <Button
         variant="outline"
@@ -111,13 +114,15 @@ function ActionButtons({
         <X className="size-4" />
         Отклонить выбранные{selectedCount > 0 ? ` (${selectedCount})` : ""}
       </Button>
-      <Button
-        variant="ghost"
-        className="w-full text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
-        onClick={onRejectSet}
-      >
-        Отклонить весь набор
-      </Button>
+      {!isRepeat && (
+        <Button
+          variant="ghost"
+          className="w-full text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
+          onClick={onRejectSet}
+        >
+          Отклонить весь набор
+        </Button>
+      )}
     </div>
   );
 }
@@ -182,7 +187,8 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
           <>
             {!isNonPart && (
               <p className="mt-2 text-xs text-muted-foreground tabular-nums">
-                Строк: {lineCount} · Выбрано: {selectedCount}
+                {item.kind === "repeat" ? "Строк с решением" : "Строк"}:{" "}
+                {lineCount} · Выбрано: {selectedCount}
               </p>
             )}
 
@@ -194,7 +200,9 @@ export function ReviewActionsPanel(props: ReviewActionsPanelProps) {
               <Info className="mt-0.5 size-3.5 shrink-0" />
               {isNonPart
                 ? "«Не участвует» — это объект согласования: кампания не перейдёт дальше, пока по нему нет финального решения (§4.5.1)."
-                : "Отклонение любой строки требует комментарий и возвращает весь набор КМ на корректировку (§4.5.2)."}
+                : item.kind === "repeat"
+                  ? "Решение принимается только по строкам с повторным действием — ранее согласованные строки в повторное согласование не попадают. Согласованные изменения становятся актуальными; отклонённые возвращаются КМ с причиной."
+                  : "Отклонение любой строки требует комментарий и возвращает весь набор КМ на корректировку (§4.5.2)."}
             </p>
           </>
         ) : conflicted ? (
