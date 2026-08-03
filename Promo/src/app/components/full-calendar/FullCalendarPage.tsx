@@ -101,6 +101,7 @@ import {
   getSeenRejections,
   markRejectionSeen,
 } from "../../../lib/full-calendar-rejection-store";
+import { applyLineDecisions } from "../../../lib/line-decision-store";
 import { LineDetailsDrawer } from "./LineDetailsDrawer";
 import { useCurrentUser } from "../../current-user-context";
 
@@ -161,7 +162,12 @@ const FILTERS: FilterConfig[] = [
 type LineMap = Map<string, PromoLine>;
 
 function seedLineMap(): LineMap {
-  return new Map(PROMO_LINES.map((l) => [l.id, { ...l }]));
+  // Волна 3 (§16): reviewer decisions on repeat actions are folded in before the grid
+  // renders — approved changes become the actual values (подсветка снята), rejected ones
+  // carry `pending.rejected` (→ «Отклонённые изменения» + the КМ red indicator).
+  return new Map(
+    applyLineDecisions(PROMO_LINES.map((l) => ({ ...l }))).map((l) => [l.id, l])
+  );
 }
 
 type LineAction =
@@ -336,7 +342,7 @@ export function FullCalendarPage() {
   // lines/periods; per-campaign live version lists override the seed once a
   // correction is sent. Marketing re-approval is tracked per campaign.
   const [baseline, setBaseline] = React.useState<Map<string, PromoLine>>(() =>
-    new Map(PROMO_LINES.map((l) => [l.id, { ...l }]))
+    seedLineMap()
   );
   const [baselinePeriods, setBaselinePeriods] = React.useState<
     Map<string, { startDate: Date; endDate: Date }>
