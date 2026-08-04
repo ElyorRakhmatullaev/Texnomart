@@ -39,6 +39,14 @@ import {
   MARKETING_EDITABLE_FIELD,
   type ReportField,
 } from "./reportFields";
+import {
+  ReportAckHeaderFilter,
+  ReportChangeHeaderFilter,
+  ReportHeaderFilter,
+  buildEnumOptions,
+  type ColumnFilter,
+  type ReportFilterState,
+} from "./ReportFilters";
 
 /** Which change plashka a line shows in the «Изменение» column. */
 type ChangeKind = "added" | "changed" | "excluded" | null;
@@ -86,6 +94,15 @@ interface DepartmentReportViewProps {
   flagFor: (lineId: string) => boolean;
   onToggleFlag: (lineId: string) => void;
   onBulkFlag: (lineIds: string[], value: boolean) => void;
+  /**
+   * Волна 5 (5A) — фильтры «как в Excel»: воронка в заголовке каждой колонки.
+   * Состояние живёт на странице (там же применяется `applyReportFilters`),
+   * поэтому таблица получает его пропсами. `allLines` — НЕотфильтрованный набор:
+   * список значений enum-колонки не должен схлопываться по мере фильтрации.
+   */
+  filters: ReportFilterState;
+  onFiltersChange: (s: ReportFilterState) => void;
+  allLines: PromoLine[];
 }
 
 export function DepartmentReportView({
@@ -104,6 +121,9 @@ export function DepartmentReportView({
   flagFor,
   onToggleFlag,
   onBulkFlag,
+  filters,
+  onFiltersChange,
+  allLines,
 }: DepartmentReportViewProps) {
   const { notify } = useNotifications();
   const changeSet = getReportChangeSet(campaign.id);
@@ -119,6 +139,22 @@ export function DepartmentReportView({
   const excludedIds = React.useMemo(
     () => new Set(changeSet.removedLineIds),
     [changeSet]
+  );
+
+  // Волна 5 (5A) — значения enum-колонок для воронок; считаются по ВСЕМ строкам
+  // отчёта, а не по отфильтрованным, иначе выбранное значение исчезнет из списка.
+  const enumOptions = React.useMemo(
+    () => buildEnumOptions(fields, allLines, campaign),
+    [fields, allLines, campaign]
+  );
+  const patchColumnFilter = React.useCallback(
+    (id: string, patch: Partial<ColumnFilter>) => {
+      onFiltersChange({
+        ...filters,
+        columns: { ...filters.columns, [id]: { ...(filters.columns[id] ?? {}), ...patch } },
+      });
+    },
+    [filters, onFiltersChange]
   );
 
   const isAcked = React.useCallback(
@@ -369,6 +405,10 @@ export function DepartmentReportView({
           lineHasUnacked={lineHasUnacked}
           onAcknowledgeLine={ackLine}
           excludedIds={excludedIds}
+          filters={filters}
+          onFiltersChange={onFiltersChange}
+          enumOptions={enumOptions}
+          patchColumnFilter={patchColumnFilter}
         />
       </Card>
 
@@ -444,6 +484,11 @@ interface ReportBandTableProps {
   lineHasUnacked: (lineId: string) => boolean;
   onAcknowledgeLine: (lineId: string) => void;
   excludedIds: Set<string>;
+  /** Волна 5 (5A) — воронки фильтров в заголовках столбцов. */
+  filters: ReportFilterState;
+  onFiltersChange: (s: ReportFilterState) => void;
+  enumOptions: Map<string, string[]>;
+  patchColumnFilter: (id: string, patch: Partial<ColumnFilter>) => void;
 }
 
 function ReportBandTable({
@@ -461,6 +506,10 @@ function ReportBandTable({
   lineHasUnacked,
   onAcknowledgeLine,
   excludedIds,
+  filters,
+  onFiltersChange,
+  enumOptions,
+  patchColumnFilter,
 }: ReportBandTableProps) {
   // «Номенклатура» is frozen with «Изменение»; everything else in `fields` scrolls.
   const scrollingFields = fields.filter((f) => f.id !== "nomenclature");
@@ -552,12 +601,24 @@ function ReportBandTable({
                 style={{ width: CHANGE_COL_W }}
               >
                 Изменение
+                <ReportChangeHeaderFilter
+                  selected={filters.change}
+                  onChange={(v) => onFiltersChange({ ...filters, change: v })}
+                />
               </div>
               <div
                 className="flex h-full shrink-0 items-center px-3 text-xs font-semibold text-gray-700 dark:text-gray-200"
                 style={{ width: nomWidth }}
               >
                 Номенклатура
+                {nomField && (
+                  <ReportHeaderFilter
+                    col={nomField}
+                    options={enumOptions.get(nomField.id) ?? []}
+                    filter={filters.columns[nomField.id]}
+                    onChange={(patch) => patchColumnFilter(nomField.id, patch)}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -585,11 +646,16 @@ function ReportBandTable({
                     className={cn(
                       "flex h-full shrink-0 items-center overflow-hidden px-3 text-xs font-semibold text-gray-700 dark:text-gray-200",
                       CELL,
-                      isNumericKind(f.kind) && "justify-end",
-                      f.kind === "check" && "justify-center"
+                      cellJustify(f.kind)
                     )}
                   >
                     <span className={CLAMP2}>{f.label}</span>
+                    <ReportHeaderFilter
+                      col={f}
+                      options={enumOptions.get(f.id) ?? []}
+                      filter={filters.columns[f.id]}
+                      onChange={(patch) => patchColumnFilter(f.id, patch)}
+                    />
                   </div>
                 ))}
                 <div
@@ -600,6 +666,10 @@ function ReportBandTable({
                   )}
                 >
                   Ознакомление
+                  <ReportAckHeaderFilter
+                    value={filters.ack}
+                    onChange={(v) => onFiltersChange({ ...filters, ack: v })}
+                  />
                 </div>
               </div>
             </div>
@@ -677,8 +747,8 @@ function ReportBandTable({
                         className={cn(
                           "flex h-full shrink-0 items-center overflow-hidden px-3 text-sm text-gray-800 dark:text-gray-100",
                           CELL,
-                          isNumericKind(f.kind) && "justify-end tabular-nums",
-                          f.kind === "check" && "justify-center",
+                          cellJustify(f.kind),
+                          isNumericKind(f.kind) && "tabular-nums",
                           struck && "text-gray-400 dark:text-gray-500 line-through",
                           changed &&
                             "bg-amber-100 dark:bg-amber-500/15 ring-1 ring-inset ring-amber-300 dark:ring-amber-500/40"
@@ -996,4 +1066,15 @@ function EmptyNote({ onlyChanged }: { onlyChanged: boolean }) {
 
 function isNumericKind(kind: ReportField["kind"]): boolean {
   return kind === "money" || kind === "number" || kind === "percent";
+}
+
+/**
+ * Волна 5 (5A, PDF 30.07): выравнивание «по аналогии с полным промо-календарём».
+ * Там правило одно — текст влево, всё остальное (суммы, цены, проценты,
+ * количества, даты, чекбоксы) по центру (`FullCalendarGrid.cellJustify`).
+ * Отчёт до этого прижимал числа вправо, из-за чего колонки визуально «плыли».
+ * Одна функция на шапку и на ячейки — иначе они снова разъедутся.
+ */
+function cellJustify(kind: ReportField["kind"]): string {
+  return kind === "text" ? "justify-start" : "justify-center";
 }

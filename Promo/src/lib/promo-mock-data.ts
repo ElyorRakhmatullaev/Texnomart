@@ -3194,6 +3194,27 @@ export interface ReportChangeSet {
 }
 
 const REPORT_CHANGE_SETS: Record<string, ReportChangeSet> = {
+  // Волна 5 (5A): PR-2026-003 — ПЕРВАЯ отправленная акция, то есть та, что
+  // открывается в `/reports` по умолчанию. Её цепочка версий уже содержит v3
+  // «изменена новая цена по 2 позициям», но набора изменений для отчёта не было,
+  // и колонка «Изменение» показывала сплошные «—» (клиентский пункт R59.2).
+  // Ячейки ниже соответствуют v3 и текущим значениям строк, поэтому «История
+  // версий» и колонка «Изменение» больше не противоречат друг другу.
+  //
+  // Только «Изменено»: добавление L-0022 и запрос на исключение L-0024 по этой
+  // акции ещё НЕ согласованы (Волна 2, Блок 4.4/5.6 — несогласованное повторное
+  // действие не попадает в отчёт как согласованное). Плашки «Добавлено» и
+  // «Исключено» демонстрируются на UN-2026-015 ниже.
+  "PR-2026-003": {
+    addedLineIds: [],
+    removedLineIds: [],
+    changedCells: [
+      { lineId: "L-0015", fieldId: "newPrice", prevValue: "4 990 000 сум", newValue: "4 440 000 сум", changedAt: new Date(2026, 8, 29, 11, 40) },
+      { lineId: "L-0015", fieldId: "discountPct", prevValue: "10%", newValue: "16%", changedAt: new Date(2026, 8, 29, 11, 40) },
+      { lineId: "L-0016", fieldId: "newPrice", prevValue: "5 200 000 сум", newValue: "5 150 000 сум", changedAt: new Date(2026, 8, 29, 11, 40) },
+      { lineId: "L-0016", fieldId: "discountPct", prevValue: "12%", newValue: "14%", changedAt: new Date(2026, 8, 29, 11, 40) },
+    ],
+  },
   // UN-2026-015 received a later incremental correction: a price/discount change on
   // L-0019, one added position (L-0021), and one excluded position (L-0020).
   "UN-2026-015": {

@@ -9,7 +9,7 @@
 // see short-calendar/PromoNoFilter.tsx for the Radix-defer-rule precedent).
 
 import * as React from "react";
-import { Check, ChevronsUpDown, X } from "lucide-react";
+import { Check, ChevronsUpDown, Filter, X } from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
 import { buttonVariants } from "@texnomart/ui/button";
 import { Input } from "@texnomart/ui/input";
@@ -292,6 +292,369 @@ function EnumMultiSelect({
   );
 }
 
+// ── общий типизированный контрол ──────────────────────────────────────────────
+// Волна 5 (5A): фильтр вызывается из ДВУХ мест — воронка в заголовке столбца
+// (основной сценарий, «как в Excel») и прежняя панель «Фильтры» (остаётся для
+// мобильных, где в шапке места нет). Разметка контрола общая, чтобы поведение
+// не разошлось; отдельно живёт только enum: в панели это компактный поповер
+// (иначе 30 колонок дадут бесконечный список), в воронке — сразу список.
+
+/** Уникальные значения enum-колонок по переданным строкам. */
+export function buildEnumOptions(
+  columns: ReportColumn[],
+  lines: PromoLine[],
+  campaign: PromoCampaign
+): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const col of columns) {
+    if (!ENUM_COLUMN_IDS.has(col.id)) continue;
+    const set = new Set<string>();
+    for (const l of lines) set.add(String(col.value(l, campaign)));
+    map.set(col.id, [...set].sort((a, b) => a.localeCompare(b, "ru")));
+  }
+  return map;
+}
+
+/** Есть ли по колонке активный фильтр (подсветка воронки + счётчик). */
+export function isColumnFilterActive(f: ColumnFilter | undefined): boolean {
+  if (!f) return false;
+  return Boolean(
+    f.text?.trim() || f.selected?.length || f.min != null || f.max != null || f.from || f.to
+  );
+}
+
+/** Чекбокс-список значений (enum-колонка внутри воронки). */
+function EnumCheckList({
+  options,
+  selected,
+  onChange,
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+}) {
+  function toggle(v: string) {
+    onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
+  }
+  return (
+    <Command>
+      <CommandInput placeholder="Поиск…" className="h-9" />
+      <CommandList>
+        <CommandEmpty>Ничего не найдено</CommandEmpty>
+        <CommandGroup>
+          {options.map((o) => {
+            const checked = selected.includes(o);
+            return (
+              <CommandItem key={o} value={o} onSelect={() => toggle(o)} className="gap-2">
+                <span
+                  className={cn(
+                    "flex size-4 shrink-0 items-center justify-center rounded border",
+                    checked
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-gray-300 dark:border-gray-600"
+                  )}
+                >
+                  {checked && <Check className="size-3" />}
+                </span>
+                <span className="truncate text-sm">{o}</span>
+              </CommandItem>
+            );
+          })}
+        </CommandGroup>
+      </CommandList>
+    </Command>
+  );
+}
+
+/** Контрол одной колонки без подписи — подпись даёт вызывающий. */
+function ColumnFilterBody({
+  col,
+  filter,
+  options,
+  onChange,
+  full,
+}: {
+  col: ReportColumn;
+  filter: ColumnFilter;
+  options: string[];
+  onChange: (patch: Partial<ColumnFilter>) => void;
+  /** true — контрол растягивается на ширину поповера. */
+  full?: boolean;
+}): JSX.Element {
+  if (ENUM_COLUMN_IDS.has(col.id)) {
+    return (
+      <EnumCheckList
+        options={options}
+        selected={filter.selected ?? []}
+        onChange={(v) => onChange({ selected: v })}
+      />
+    );
+  }
+
+  if (col.kind === "check") {
+    const value = filter.selected?.length ? filter.selected[0] : "all";
+    return (
+      <Select
+        value={value}
+        onValueChange={(v) => onChange({ selected: v === "all" ? [] : [v] })}
+      >
+        <SelectTrigger
+          className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[130px]")}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Все</SelectItem>
+          <SelectItem value="yes">Да</SelectItem>
+          <SelectItem value="no">Нет</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  if (col.kind === "money" || col.kind === "number" || col.kind === "percent") {
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          type="number"
+          inputMode="numeric"
+          value={filter.min ?? ""}
+          onChange={(e) =>
+            onChange({ min: e.target.value === "" ? undefined : Number(e.target.value) })
+          }
+          placeholder="от"
+          className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[80px]")}
+        />
+        <span className="text-muted-foreground">—</span>
+        <Input
+          type="number"
+          inputMode="numeric"
+          value={filter.max ?? ""}
+          onChange={(e) =>
+            onChange({ max: e.target.value === "" ? undefined : Number(e.target.value) })
+          }
+          placeholder="до"
+          className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[80px]")}
+        />
+      </div>
+    );
+  }
+
+  if (col.kind === "date") {
+    return (
+      <div className={cn("flex items-center gap-1", full && "flex-col items-stretch")}>
+        <Input
+          type="date"
+          value={filter.from ?? ""}
+          onChange={(e) => onChange({ from: e.target.value || undefined })}
+          className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[140px]")}
+        />
+        <span className="text-center text-muted-foreground">—</span>
+        <Input
+          type="date"
+          value={filter.to ?? ""}
+          onChange={(e) => onChange({ to: e.target.value || undefined })}
+          className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[140px]")}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <Input
+      value={filter.text ?? ""}
+      onChange={(e) => onChange({ text: e.target.value || undefined })}
+      placeholder={col.label}
+      className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[170px]")}
+    />
+  );
+}
+
+/** Кнопка-воронка в заголовке столбца. Нативная <button> — shared <Button> не
+ *  forwardRef и под Radix `asChild` уводит поповер за экран (урок Волны 1). */
+function FunnelTrigger({ active, label }: { active: boolean; label: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Фильтр по «${label}»`}
+      title={`Фильтр по «${label}»`}
+      className={cn(
+        "ml-1 inline-flex size-5 shrink-0 items-center justify-center rounded transition-colors",
+        active
+          ? "bg-primary/15 text-primary-foreground dark:bg-primary/25"
+          : "text-muted-foreground/50 hover:bg-gray-200/70 hover:text-muted-foreground dark:hover:bg-muted"
+      )}
+    >
+      <Filter className={cn("size-3", active && "fill-current text-primary")} />
+    </button>
+  );
+}
+
+/** Воронка + поповер с типизированным контролом для одной колонки отчёта. */
+export function ReportHeaderFilter({
+  col,
+  options,
+  filter,
+  onChange,
+}: {
+  col: ReportColumn;
+  options: string[];
+  filter: ColumnFilter | undefined;
+  onChange: (patch: Partial<ColumnFilter>) => void;
+}): JSX.Element {
+  const [open, setOpen] = React.useState(false);
+  const active = isColumnFilterActive(filter);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <span className="inline-flex">
+          <FunnelTrigger active={active} label={col.label} />
+        </span>
+      </PopoverTrigger>
+      <PopoverContent className="w-[240px] p-0" align="start">
+        <div className="border-b px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200">
+          {col.label}
+        </div>
+        <div className={cn(ENUM_COLUMN_IDS.has(col.id) ? "" : "p-3")}>
+          <ColumnFilterBody
+            col={col}
+            filter={filter ?? {}}
+            options={options}
+            onChange={onChange}
+            full
+          />
+        </div>
+        {active && (
+          <div className="border-t p-1">
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  text: undefined,
+                  selected: [],
+                  min: undefined,
+                  max: undefined,
+                  from: undefined,
+                  to: undefined,
+                })
+              }
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "h-7 w-full justify-start text-xs text-muted-foreground"
+              )}
+            >
+              <X className="mr-1 size-3" />
+              Очистить фильтр
+            </button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Воронка «Изменение» — синтетический фильтр закреплённой колонки. */
+export function ReportChangeHeaderFilter({
+  selected,
+  onChange,
+}: {
+  selected: string[];
+  onChange: (v: string[]) => void;
+}): JSX.Element {
+  const [open, setOpen] = React.useState(false);
+  function toggle(v: string) {
+    onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
+  }
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <span className="inline-flex">
+          <FunnelTrigger active={selected.length > 0} label="Изменение" />
+        </span>
+      </PopoverTrigger>
+      <PopoverContent className="w-[200px] p-2" align="start">
+        <div className="flex flex-col gap-1">
+          {CHANGE_OPTIONS.map((o) => {
+            const active = selected.includes(o.value);
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => toggle(o.value)}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+                  active
+                    ? "bg-primary/10 font-medium text-gray-900 dark:text-gray-100"
+                    : "text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-muted/40"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex size-4 shrink-0 items-center justify-center rounded border",
+                    active
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-gray-300 dark:border-gray-600"
+                  )}
+                >
+                  {active && <Check className="size-3" />}
+                </span>
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Воронка «Ознакомление» — синтетический фильтр последней колонки. */
+export function ReportAckHeaderFilter({
+  value,
+  onChange,
+}: {
+  value: ReportFilterState["ack"];
+  onChange: (v: ReportFilterState["ack"]) => void;
+}): JSX.Element {
+  const [open, setOpen] = React.useState(false);
+  const OPTIONS: { value: ReportFilterState["ack"]; label: string }[] = [
+    { value: "all", label: "Все" },
+    { value: "acked", label: "Ознакомлен" },
+    { value: "unacked", label: "Не ознакомлен" },
+  ];
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <span className="inline-flex">
+          <FunnelTrigger active={value !== "all"} label="Ознакомление" />
+        </span>
+      </PopoverTrigger>
+      <PopoverContent className="w-[190px] p-2" align="end">
+        <div className="flex flex-col gap-1">
+          {OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => {
+                onChange(o.value);
+                setOpen(false);
+              }}
+              className={cn(
+                "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+                value === o.value
+                  ? "bg-primary/10 font-medium text-gray-900 dark:text-gray-100"
+                  : "text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-muted/40"
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ── panel ───────────────────────────────────────────────────────────────────────
 
 export function ReportFilters({
@@ -310,17 +673,10 @@ export function ReportFilters({
   open: boolean;
 }): JSX.Element | null {
   // Distinct values for every ENUM column, derived from the currently visible lines.
-  const enumOptions = React.useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const col of columns) {
-      if (!ENUM_COLUMN_IDS.has(col.id)) continue;
-      const set = new Set<string>();
-      for (const l of lines) set.add(String(col.value(l, campaign)));
-      map.set(col.id, [...set].sort((a, b) => a.localeCompare(b, "ru")));
-    }
-    return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns, lines, campaign]);
+  const enumOptions = React.useMemo(
+    () => buildEnumOptions(columns, lines, campaign),
+    [columns, lines, campaign]
+  );
 
   // Group columns by `column.group`, merging only ADJACENT same-label runs —
   // mirrors ReportBandTable's own group-header computation so a repeated label
@@ -361,95 +717,15 @@ export function ReportFilters({
       );
     }
 
-    if (col.kind === "check") {
-      const value = filter.selected?.length ? filter.selected[0] : "all";
-      return (
-        <label key={col.id} className="flex flex-col gap-1">
-          <span className="text-[11px] font-medium text-muted-foreground">{col.label}</span>
-          <Select
-            value={value}
-            onValueChange={(v) => updateColumn(col.id, { selected: v === "all" ? [] : [v] })}
-          >
-            <SelectTrigger className="h-8 w-[130px] bg-white text-sm dark:bg-card">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все</SelectItem>
-              <SelectItem value="yes">Да</SelectItem>
-              <SelectItem value="no">Нет</SelectItem>
-            </SelectContent>
-          </Select>
-        </label>
-      );
-    }
-
-    if (col.kind === "money" || col.kind === "number" || col.kind === "percent") {
-      return (
-        <label key={col.id} className="flex flex-col gap-1">
-          <span className="text-[11px] font-medium text-muted-foreground">{col.label}</span>
-          <div className="flex items-center gap-1">
-            <Input
-              type="number"
-              inputMode="numeric"
-              value={filter.min ?? ""}
-              onChange={(e) =>
-                updateColumn(col.id, {
-                  min: e.target.value === "" ? undefined : Number(e.target.value),
-                })
-              }
-              placeholder="от"
-              className="h-8 w-[80px] bg-white text-sm dark:bg-card"
-            />
-            <span className="text-muted-foreground">—</span>
-            <Input
-              type="number"
-              inputMode="numeric"
-              value={filter.max ?? ""}
-              onChange={(e) =>
-                updateColumn(col.id, {
-                  max: e.target.value === "" ? undefined : Number(e.target.value),
-                })
-              }
-              placeholder="до"
-              className="h-8 w-[80px] bg-white text-sm dark:bg-card"
-            />
-          </div>
-        </label>
-      );
-    }
-
-    if (col.kind === "date") {
-      return (
-        <label key={col.id} className="flex flex-col gap-1">
-          <span className="text-[11px] font-medium text-muted-foreground">{col.label}</span>
-          <div className="flex items-center gap-1">
-            <Input
-              type="date"
-              value={filter.from ?? ""}
-              onChange={(e) => updateColumn(col.id, { from: e.target.value || undefined })}
-              className="h-8 w-[140px] bg-white text-sm dark:bg-card"
-            />
-            <span className="text-muted-foreground">—</span>
-            <Input
-              type="date"
-              value={filter.to ?? ""}
-              onChange={(e) => updateColumn(col.id, { to: e.target.value || undefined })}
-              className="h-8 w-[140px] bg-white text-sm dark:bg-card"
-            />
-          </div>
-        </label>
-      );
-    }
-
-    // plain "text" column — substring search
+    // Остальные типы — общий контрол (тот же, что в воронке заголовка).
     return (
       <label key={col.id} className="flex flex-col gap-1">
         <span className="text-[11px] font-medium text-muted-foreground">{col.label}</span>
-        <Input
-          value={filter.text ?? ""}
-          onChange={(e) => updateColumn(col.id, { text: e.target.value || undefined })}
-          placeholder={col.label}
-          className="h-8 w-[170px] bg-white text-sm dark:bg-card"
+        <ColumnFilterBody
+          col={col}
+          filter={filter}
+          options={enumOptions.get(col.id) ?? []}
+          onChange={(patch) => updateColumn(col.id, patch)}
         />
       </label>
     );

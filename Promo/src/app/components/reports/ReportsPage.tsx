@@ -21,6 +21,7 @@ import { DepartmentReportView } from "./DepartmentReportView";
 import { ReportAcknowledgeDrawer } from "./ReportAcknowledgeDrawer";
 import { reportColumnsFor } from "./reportFields";
 import { exportReportXlsx } from "../../../lib/report-xlsx";
+import { POSITION_FORMS, pluralRu } from "../../../lib/plural";
 import {
   ReportFilters,
   applyReportFilters,
@@ -385,7 +386,7 @@ export function ReportsPage() {
               <span className="font-medium tabular-nums text-gray-900 dark:text-gray-100">
                 {shownCount.toLocaleString("ru-RU")}
               </span>{" "}
-              позиций
+              {pluralRu(shownCount, POSITION_FORMS)}
             </span>
           </div>
 
@@ -402,6 +403,9 @@ export function ReportsPage() {
             key={viewKey}
             campaign={campaign}
             lines={filteredLines}
+            allLines={lines}
+            filters={filters}
+            onFiltersChange={setFilters}
             totalCount={lines.length}
             department={department}
             fields={fields}
