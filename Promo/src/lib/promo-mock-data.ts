@@ -1723,16 +1723,25 @@ export interface CampaignPlanApproval {
   deliveredToKmAt?: Date;
 }
 
+/**
+ * Даты и статусы здесь ОБЯЗАНЫ совпадать с тем, что вычисляет правило:
+ * отправка — не позже `startDate − PLAN_MARKETING_SUBMIT_LEAD_DAYS` (кал. дн.),
+ * решение директора — не позже `+PLAN_DIRECTOR_SLA_WORKING_DAYS` (раб. дн.) от
+ * старта его этапа (у КД — отправка, у ОД — согласование КД). Иначе экран
+ * «План акций» (сид) разойдётся с `/audit` → «Сроки по плану» и с живой
+ * деривацией Волны 4: строка меняла бы «В срок» на «Просрочка» просто потому,
+ * что по ней появился живой цикл. Проверено пересчётом при правке сида.
+ */
 export const PLAN_APPROVALS: CampaignPlanApproval[] = [
   {
     campaignId: "PR-2026-001",
     marketing: {
-      reviewedAt: new Date(2026, 7, 24, 11, 10),
-      sentAt: new Date(2026, 7, 27, 9, 30),
+      reviewedAt: new Date(2026, 8, 24, 11, 10),
+      sentAt: new Date(2026, 8, 25, 9, 30),
       status: "onTime",
     },
-    kd: { decidedAt: new Date(2026, 8, 30, 10, 15), status: "onTime" },
-    od: { decidedAt: new Date(2026, 9, 2, 10, 40), status: "onTime" },
+    kd: { decidedAt: new Date(2026, 8, 29, 10, 15), status: "onTime" },
+    od: { decidedAt: new Date(2026, 9, 1, 10, 40), status: "onTime" },
   },
   {
     campaignId: "PR-2026-002",
@@ -1741,8 +1750,10 @@ export const PLAN_APPROVALS: CampaignPlanApproval[] = [
       sentAt: new Date(2026, 9, 14, 10, 0),
       status: "onTime",
     },
-    kd: { decidedAt: new Date(2026, 9, 17, 11, 5), status: "onTime" },
-    od: { decidedAt: new Date(2026, 9, 23, 9, 20), status: "overdue", overdueDays: 1 },
+    kd: { decidedAt: new Date(2026, 9, 16, 11, 5), status: "onTime" },
+    // Перелёт > 24 ч: и «План акций» (раб. дн.), и /audit (кал. дн.) считают это
+    // просрочкой. При перелёте меньше суток экраны дали бы разный РЕЗУЛЬТАТ.
+    od: { decidedAt: new Date(2026, 9, 23, 12, 0), status: "overdue", overdueDays: 2 },
   },
   {
     campaignId: "PR-2026-003",
@@ -1761,8 +1772,8 @@ export const PLAN_APPROVALS: CampaignPlanApproval[] = [
       sentAt: new Date(2026, 5, 1, 9, 20),
       status: "onTime",
     },
-    kd: { decidedAt: new Date(2026, 5, 5, 18, 45), status: "overdue", overdueDays: 3 },
-    od: { decidedAt: new Date(2026, 5, 9, 10, 30), status: "onTime" },
+    kd: { decidedAt: new Date(2026, 5, 8, 18, 45), status: "overdue", overdueDays: 3 },
+    od: { decidedAt: new Date(2026, 5, 11, 10, 30), status: "onTime" },
   },
   {
     campaignId: "PR-2026-006",
@@ -1770,9 +1781,9 @@ export const PLAN_APPROVALS: CampaignPlanApproval[] = [
       reviewedAt: new Date(2026, 3, 20, 15, 20),
       sentAt: new Date(2026, 4, 4, 8, 45),
       status: "overdue",
-      overdueDays: 1,
+      overdueDays: 2,
     },
-    kd: { decidedAt: new Date(2026, 4, 7, 10, 0), status: "onTime" },
+    kd: { decidedAt: new Date(2026, 4, 6, 10, 0), status: "onTime" },
     od: { status: "waiting" },
     returnedAt: new Date(2026, 4, 5, 12, 30),
     returnedBy: "Коммерческий директор",
@@ -1783,12 +1794,14 @@ export const PLAN_APPROVALS: CampaignPlanApproval[] = [
   {
     campaignId: "PR-2026-007",
     marketing: {
-      reviewedAt: new Date(2026, 5, 1, 12, 10),
-      sentAt: new Date(2026, 5, 2, 9, 40),
+      // Старт 22.06 ⇒ отправка не позже 23.04 (60 кал. дн.); прежние июньские
+      // даты нарушали собственное правило и в /audit давали «просрочено +40».
+      reviewedAt: new Date(2026, 3, 17, 12, 10),
+      sentAt: new Date(2026, 3, 21, 9, 40),
       status: "onTime",
     },
-    kd: { decidedAt: new Date(2026, 5, 5, 10, 20), status: "onTime" },
-    od: { decidedAt: new Date(2026, 5, 10, 16, 30), status: "overdue", overdueDays: 1 },
+    kd: { decidedAt: new Date(2026, 3, 23, 10, 20), status: "onTime" },
+    od: { decidedAt: new Date(2026, 3, 30, 10, 30), status: "overdue", overdueDays: 3 },
   },
 ];
 
