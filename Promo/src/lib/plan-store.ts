@@ -13,9 +13,11 @@ import type { PlanStatus } from "./promo-mock-data";
 const KEY = "promo:plan-state";
 
 /** The two interactive reviewer stages (mirrors PlanMode's `ReviewerStage`). */
-type ReviewerStage = "kd" | "od";
+export type PlanReviewerStage = "kd" | "od";
+type ReviewerStage = PlanReviewerStage;
 /** Reviewer decision on a row (mirrors `PlanApprovalTable`'s `RowDecision`). */
-type RowDecision = "approved" | "rejected";
+export type PlanStageDecisionKind = "approved" | "rejected";
+type RowDecision = PlanStageDecisionKind;
 /** Per-row send lifecycle (mirrors `PlanApprovalTable`'s `PlanRowSend`). */
 type PlanRowSend = "draft" | "sent";
 
@@ -59,6 +61,63 @@ export interface PlanRejectionEvent {
   comment: string;
 }
 
+/**
+ * «10-я часть» Волна 4 — решение одного согласующего этапа внутри цикла.
+ * `comment` — единое поле «Комментарий» (без отдельной «Причины», §9.2 «7-й части»).
+ */
+export interface PlanStageDecision {
+  decision: PlanStageDecisionKind;
+  /** ISO date-time момента решения. */
+  at: string;
+  /** ФИО вошедшего пользователя (fallback — метка роли). */
+  by: string;
+  /** Роль согласующего. */
+  role: string;
+  comment?: string;
+}
+
+/**
+ * Один цикл согласования строки плана: отправка → решение КД → решение ОД.
+ * Правка отправленной строки и «Вернуть на доработку» ЗАКРЫВАЮТ цикл
+ * (`closedAt`/`closedReason`), повторная отправка открывает следующий (R30.1) —
+ * прежние даты и решения при этом не затираются.
+ */
+export interface PlanApprovalCycle {
+  /** 1-based номер цикла. */
+  no: number;
+  /** ISO — дата (повторной) отправки на согласование. */
+  sentAt: string;
+  sentBy: string;
+  kd?: PlanStageDecision;
+  od?: PlanStageDecision;
+  closedAt?: string;
+  closedReason?: "return" | "edit";
+}
+
+/**
+ * Запрос на удаление ранее согласованной строки (R30.2). `requiredStages` —
+ * СНИМОК согласовавших строку этапов на момент запроса: если позже цикл
+ * изменится, требования к удалению остаются прежними.
+ */
+export interface PlanRemovalRequest {
+  requestedAt: string;
+  requestedBy: string;
+  reason: string;
+  requiredStages: PlanReviewerStage[];
+  kd?: PlanStageDecision;
+  od?: PlanStageDecision;
+}
+
+/** Журнал одной строки плана: циклы согласования + запрос на удаление. */
+export interface PlanRowJournal {
+  /** От старых к новым; последний — текущий. */
+  cycles: PlanApprovalCycle[];
+  /** Активный запрос на удаление (максимум один). */
+  removal?: PlanRemovalRequest;
+  /** Завершённые (отклонённые или применённые) запросы, новые сверху. */
+  removalHistory?: PlanRemovalRequest[];
+}
+
 /** JSON-safe snapshot of PlanMode's session lifecycle state. */
 export interface PersistedPlanState {
   planStatus: PlanStatus;
@@ -69,10 +128,17 @@ export interface PersistedPlanState {
   sendStatus: Record<string, PlanRowSend>;
   decisions: Record<string, Partial<Record<ReviewerStage, RowDecision>>>;
   /**
-   * Per-row rejection/return history, newest first («7-я часть» §9). Survives
-   * «Вернуть на доработку» resets — it IS the history the side panel shows.
+   * LEGACY (до Волны 4). Новые отклонения пишутся в `rowJournal`; этот слайс
+   * остаётся ТОЛЬКО НА ЧТЕНИЕ, чтобы снапшоты прошлых сессий по-прежнему
+   * показывали историю. Двойной записи нет осознанно — это шов, на котором
+   * в E-4 разъехались `.role`/`.roles`.
    */
   rejectionLog: Record<string, PlanRejectionEvent[]>;
+  /**
+   * «10-я часть» Волна 4 — пер-строчный журнал циклов согласования и запросов
+   * на удаление. Отсутствует в старых снапшотах → `{}` (поведение как раньше).
+   */
+  rowJournal: Record<string, PlanRowJournal>;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -111,6 +177,10 @@ export function getPlanState(): PersistedPlanState | null {
       // Absent in pre-«7-я часть» snapshots → default {} (backward-compatible).
       rejectionLog: isRecord(parsed.rejectionLog)
         ? (parsed.rejectionLog as Record<string, PlanRejectionEvent[]>)
+        : {},
+      // Absent in pre-Волна-4 snapshots → default {} (backward-compatible).
+      rowJournal: isRecord(parsed.rowJournal)
+        ? (parsed.rowJournal as Record<string, PlanRowJournal>)
         : {},
     };
   } catch {
