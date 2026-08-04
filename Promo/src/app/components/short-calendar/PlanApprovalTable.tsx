@@ -408,8 +408,16 @@ export function PlanApprovalTable({
           container would trap `position:sticky` on the header (CSS one-axis quirk:
           `overflow-x-auto` silently sets `overflow-y:auto` too). A wide table now
           overflows into the PAGE's own horizontal scrollbar instead, so the `<thead>`
-          can stick to the page's vertical scroll (tracker V2-13, plan Option 2). */}
-      <div className="hidden md:block">
+          can stick to the page's vertical scroll (tracker V2-13, plan Option 2).
+          I-1 (ревью Задачи 7): `w-fit` + `bg-card` — the ancestor `Card` lost
+          `overflow-clip` (T7) and stays narrower than `min-w-[1320px]`, so without
+          this the table's opaque sticky header (and the transparent body cells behind
+          it) painted past the Card's own background/border onto the page's bg —
+          a disconnected-looking patch. Sizing THIS wrapper to its own content (instead
+          of 100% of Card) makes its `bg-card` extend exactly as wide as the table
+          itself, closing the gap — Card's own box (and everything anchored to its
+          width, incl. the sticky bottom action strip) is untouched. */}
+      <div className="hidden md:block w-fit bg-card">
         <table className="w-full min-w-[1320px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
