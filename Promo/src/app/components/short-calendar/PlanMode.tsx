@@ -625,8 +625,14 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       next.delete(id);
       return next;
     });
-    logPlan("отмена", row, "Черновик удалён");
-    toast.success("Черновик удалён");
+    // I-2 (ревью Задачи 7): гейт isDraft снят — эта ветка теперь срабатывает и для
+    // «Отправлено»-строки без единого решения (approvedStages пуст), не только для
+    // черновика. Текст обязан отражать, что именно произошло, иначе в аудите строка,
+    // снятая с уже начатого согласования у КД, выглядит как удаление черновика.
+    const wasSent = sendOf(id) === "sent";
+    const what = wasSent ? "Строка снята с согласования и удалена" : "Черновик удалён";
+    logPlan("отмена", row, what);
+    toast.success(what);
   }
 
   function requestRemoval(reason: string) {
