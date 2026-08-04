@@ -40,7 +40,7 @@ import {
   type PlanRowSend,
   type RowDecision,
 } from "./PlanApprovalTable";
-import { PlanRejectionDrawer } from "./PlanRejectionDrawer";
+import { PlanRowHistoryDrawer } from "./PlanRowHistoryDrawer";
 import { useRole } from "../../role-context";
 import { useCurrentUser } from "../../current-user-context";
 import {
@@ -143,8 +143,8 @@ export function PlanMode({ campaigns }: PlanModeProps) {
   const [rejectionLog, setRejectionLog] = React.useState<
     Record<string, PlanRejectionEvent[]>
   >(() => initialStored?.rejectionLog ?? {});
-  // Which row's rejection details are open in the side panel (null = closed).
-  const [rejectionRowId, setRejectionRowId] = React.useState<string | null>(
+  // Which row's history panel is open in the side panel (null = closed).
+  const [historyRowId, setHistoryRowId] = React.useState<string | null>(
     null
   );
 
@@ -667,7 +667,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
             canManage={isMarketing}
             onEditRow={openEdit}
             onDeleteRow={handleDelete}
-            onShowHistory={setRejectionRowId}
+            onShowHistory={setHistoryRowId}
           />
 
           {/* Selection strip — send mode (marketing) or review mode (КД/ОД).
@@ -739,13 +739,13 @@ export function PlanMode({ campaigns }: PlanModeProps) {
         onConfirm={rejectSelected}
       />
 
-      {/* «7-я часть» §9 — rejection details behind the clickable «Отклонено» badge. */}
-      <PlanRejectionDrawer
-        open={rejectionRowId !== null}
-        onOpenChange={(o) => !o && setRejectionRowId(null)}
-        rowId={rejectionRowId}
-        rowName={rejectionRowId ? rowById(rejectionRowId)?.name : undefined}
-        events={rejectionRowId ? rejectionLog[rejectionRowId] ?? [] : []}
+      {/* «7-я часть» §9 + Волна 4 — история согласования строки и запрос на удаление. */}
+      <PlanRowHistoryDrawer
+        open={historyRowId !== null}
+        onOpenChange={(o) => !o && setHistoryRowId(null)}
+        rowId={historyRowId}
+        rowName={historyRowId ? rowById(historyRowId)?.name : undefined}
+        legacyEvents={historyRowId ? rejectionLog[historyRowId] ?? [] : []}
       />
 
       <PlanRowDialog
