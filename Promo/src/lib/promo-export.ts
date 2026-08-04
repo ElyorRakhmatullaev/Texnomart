@@ -19,6 +19,14 @@ import {
   type PromoLine,
 } from "./promo-mock-data";
 import { getPlanState } from "./plan-store";
+import {
+  currentCycle,
+  directorStageCell,
+  latestJournalRejection,
+  marketingStageCell,
+  planRowLifecycle,
+  type PlanRowLifecycle,
+} from "./plan-approval";
 
 function csvCell(v: string): string {
   return /[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
@@ -53,10 +61,23 @@ function fmtDateTime(d: Date): string {
   );
 }
 
-function stageLabel(status: PlanStageStatus, overdueDays?: number): string {
-  if (status === "waiting") return "Ожидает согласования";
+/**
+ * Волна 4: подпись единицы срока обязательна — маркетинговый дедлайн считается в
+ * КАЛЕНДАРНЫХ днях, SLA согласования КД/ОД — в РАБОЧИХ. Ожидание тоже может быть
+ * просроченным (решения нет, а срок этапа уже прошёл).
+ */
+function stageLabel(
+  status: PlanStageStatus,
+  overdueDays?: number,
+  unit: "cal" | "work" = "work"
+): string {
+  const u = unit === "cal" ? "кал. дн." : "раб. дн.";
+  if (status === "waiting")
+    return overdueDays
+      ? `Ожидает согласования (просрочка +${overdueDays} ${u})`
+      : "Ожидает согласования";
   if (status === "onTime") return "В срок";
-  return `Просрочка +${overdueDays ?? 0} дн.`;
+  return `Просрочка +${overdueDays ?? 0} ${u}`;
 }
 
 /**
@@ -242,6 +263,10 @@ export interface PlanExportRow {
  * PLUS the row's live lifecycle + rejection details from the persisted plan state
  * («7-я часть» §9.5 — the reject comment goes into the выгрузка). Reads
  * `promo:plan-state` directly so the CSV matches what the plan tab shows.
+ *
+ * Волна 4 (T8): этапы берутся из ТОЙ ЖЕ деривации `plan-approval`, что питает
+ * таблицу и панель истории (сид `PLAN_APPROVALS` — fallback внутри неё), поэтому
+ * выгрузка не может разойтись с экраном. Плюс колонка «Цикл согласования».
  */
 export function buildPlanCsv(rows: PlanExportRow[]): string {
   const state = getPlanState();
@@ -249,17 +274,35 @@ export function buildPlanCsv(rows: PlanExportRow[]): string {
   const sendOf = (id: string): "draft" | "sent" =>
     state?.sendStatus?.[id] ?? (getPlanApproval(id) ? "sent" : "draft");
 
+  const journalOf = (id: string) => state?.rowJournal?.[id];
+
+  const LIFECYCLE_LABEL: Record<PlanRowLifecycle, string> = {
+    draft: "Черновик",
+    sent: "Отправлено",
+    approved: "Согласовано",
+    rejected: "Отклонено",
+    "removal-pending": "Удаление на согласовании",
+  };
+
   const lifecycleOf = (id: string): string => {
     const d = state?.decisions?.[id];
-    if (d?.kd === "rejected" || d?.od === "rejected") return "Отклонено";
-    if (sendOf(id) === "draft") return "Черновик";
-    if (state?.planStatus === "Утверждён") return "Согласовано";
-    return "Отправлено";
+    // Та же композиция, что у `rowDecision` в PlanMode: отклонение любого этапа
+    // важнее согласования, «Согласовано» — только у утверждённого плана.
+    const decision =
+      d?.kd === "rejected" || d?.od === "rejected"
+        ? ("rejected" as const)
+        : state?.planStatus === "Утверждён" && sendOf(id) === "sent"
+          ? ("approved" as const)
+          : undefined;
+    return LIFECYCLE_LABEL[
+      planRowLifecycle({ journal: journalOf(id), send: sendOf(id), decision })
+    ];
   };
 
   const header = [
     "Код акции",
     "Статус строки",
+    "Цикл согласования",
     "Тип акции",
     "Наименование акции",
     "Период (начало)",
@@ -277,29 +320,43 @@ export function buildPlanCsv(rows: PlanExportRow[]): string {
     "Комментарий отклонения",
   ];
   const out = rows.map((r) => {
-    const a = getPlanApproval(r.id);
-    const m = a?.marketing;
-    const kd = a?.kd;
-    const od = a?.od;
-    // Latest ACTUAL rejection (returns are history entries, not the headline).
-    const rejection = (state?.rejectionLog?.[r.id] ?? []).find(
+    const j = journalOf(r.id);
+    const ref = { id: r.id, startDate: r.startDate };
+    const m = marketingStageCell(ref, j);
+    const kd = directorStageCell("kd", ref, j);
+    const od = directorStageCell("od", ref, j);
+    const cyc = currentCycle(j);
+
+    // Отклонение: журнал — источник; legacy-слайс читается, только когда журнала
+    // нет (returns — записи истории, а не заголовок).
+    const fromJournal = latestJournalRejection(j);
+    const legacy = (state?.rejectionLog?.[r.id] ?? []).find(
       (e) => e.kind !== "return"
     );
+    const rejection = fromJournal
+      ? {
+          by: fromJournal.by,
+          role: fromJournal.role,
+          at: fromJournal.at,
+          comment: fromJournal.comment ?? "",
+        }
+      : legacy;
     const rejectionAt = rejection ? new Date(rejection.at) : undefined;
     return [
       formatPromoNo(r.id),
       lifecycleOf(r.id),
+      cyc ? String(cyc.no) : "—",
       r.type,
       r.name,
       fmtDate(r.startDate),
       fmtDate(r.endDate),
-      m ? fmtDateTime(m.reviewedAt) : "—",
-      m ? fmtDateTime(m.sentAt) : "—",
-      m ? stageLabel(m.status, m.overdueDays) : "—",
+      m?.reviewedAt ? fmtDateTime(m.reviewedAt) : "—",
+      m?.sentAt ? fmtDateTime(m.sentAt) : "—",
+      m ? stageLabel(m.status, m.overdueDays, m.unit) : "—",
       kd?.decidedAt ? fmtDateTime(kd.decidedAt) : "—",
-      kd ? stageLabel(kd.status, kd.overdueDays) : "—",
+      kd ? stageLabel(kd.status, kd.overdueDays, kd.unit) : "—",
       od?.decidedAt ? fmtDateTime(od.decidedAt) : "—",
-      od ? stageLabel(od.status, od.overdueDays) : "—",
+      od ? stageLabel(od.status, od.overdueDays, od.unit) : "—",
       rejection?.by ?? "—",
       rejection?.role ?? "—",
       rejectionAt && !Number.isNaN(rejectionAt.getTime())
