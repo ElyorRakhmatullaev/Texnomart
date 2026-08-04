@@ -23,6 +23,7 @@ import type {
   PlanRemovalRequest,
   PlanReviewerStage,
   PlanRowJournal,
+  PlanStageDecision,
   PlanStageDecisionKind,
 } from "./plan-store";
 
@@ -301,4 +302,146 @@ export function latestJournalRejection(
     }
   }
   return undefined;
+}
+
+// ── Запись в журнал ───────────────────────────────────────────────────────────
+// Все функции ниже чистые: возвращают НОВЫЙ объект, чтобы React-мемо и
+// write-through-эффект персистентности срабатывали по ссылке.
+
+function cloneJournal(j?: PlanRowJournal): PlanRowJournal {
+  return {
+    cycles: [...(j?.cycles ?? [])],
+    removal: j?.removal,
+    removalHistory: j?.removalHistory ? [...j.removalHistory] : undefined,
+  };
+}
+
+/**
+ * Отправка строки на согласование открывает НОВЫЙ цикл. Если предыдущий цикл
+ * ещё открыт, повтор игнорируется — «Отправлено» уже блокирует повторную
+ * отправку в UI («6-я часть» №7), это защита на уровне модели.
+ */
+export function withSend(
+  j: PlanRowJournal | undefined,
+  at: Date,
+  by: string
+): PlanRowJournal {
+  const next = cloneJournal(j);
+  const last = next.cycles[next.cycles.length - 1];
+  if (last && !last.closedAt) return next;
+  next.cycles.push({
+    no: (last?.no ?? 0) + 1,
+    sentAt: at.toISOString(),
+    sentBy: by,
+  });
+  return next;
+}
+
+/**
+ * Гарантирует наличие открытого цикла перед записью решения. Сид-строка,
+ * отправленная до появления журнала, материализуется как цикл №1 с датой
+ * отправки из `PLAN_APPROVALS` — так SLA КД считается от реальной отправки,
+ * а не от момента клика проверяющего.
+ */
+export function ensureOpenCycle(
+  j: PlanRowJournal | undefined,
+  rowId: string,
+  fallbackSentAt: Date,
+  sentBy: string
+): PlanRowJournal {
+  if (openCycle(j)) return j as PlanRowJournal;
+  const seed = getPlanApproval(rowId);
+  return withSend(
+    j,
+    seed?.marketing.sentAt ?? fallbackSentAt,
+    seed ? "Директор маркетинга" : sentBy
+  );
+}
+
+/** Решение КД/ОД в текущем цикле (цикл при необходимости материализуется). */
+export function withDecision(
+  j: PlanRowJournal | undefined,
+  rowId: string,
+  stage: PlanReviewerStage,
+  decision: PlanStageDecisionKind,
+  meta: { at: Date; by: string; role: string; comment?: string }
+): PlanRowJournal {
+  const base = ensureOpenCycle(j, rowId, meta.at, meta.by);
+  const next = cloneJournal(base);
+  const idx = next.cycles.length - 1;
+  const cyc = next.cycles[idx];
+  if (!cyc) return next;
+  const entry: PlanStageDecision = {
+    decision,
+    at: meta.at.toISOString(),
+    by: meta.by,
+    role: meta.role,
+    comment: meta.comment,
+  };
+  // Ветвление вместо вычисляемого ключа: computed key расширил бы тип, а
+  // транспайл-онли билд такого не поймает.
+  next.cycles[idx] = stage === "kd" ? { ...cyc, kd: entry } : { ...cyc, od: entry };
+  return next;
+}
+
+/**
+ * Закрывает текущий цикл без результата: «Вернуть на доработку» (`return`)
+ * или правка отправленной строки (`edit`). Данные цикла остаются — именно они
+ * попадают в историю (R30.1).
+ */
+export function withCycleClosed(
+  j: PlanRowJournal | undefined,
+  reason: "return" | "edit",
+  at: Date
+): PlanRowJournal {
+  const next = cloneJournal(j);
+  const idx = next.cycles.length - 1;
+  const cyc = next.cycles[idx];
+  if (!cyc || cyc.closedAt) return next;
+  next.cycles[idx] = { ...cyc, closedAt: at.toISOString(), closedReason: reason };
+  return next;
+}
+
+export function withRemovalRequest(
+  j: PlanRowJournal | undefined,
+  req: PlanRemovalRequest
+): PlanRowJournal {
+  const next = cloneJournal(j);
+  next.removal = req;
+  return next;
+}
+
+export function withRemovalDecision(
+  j: PlanRowJournal | undefined,
+  stage: PlanReviewerStage,
+  decision: PlanStageDecisionKind,
+  meta: { at: Date; by: string; role: string; comment?: string }
+): PlanRowJournal {
+  const next = cloneJournal(j);
+  const req = next.removal;
+  if (!req) return next;
+  const entry: PlanStageDecision = {
+    decision,
+    at: meta.at.toISOString(),
+    by: meta.by,
+    role: meta.role,
+    comment: meta.comment,
+  };
+  next.removal = stage === "kd" ? { ...req, kd: entry } : { ...req, od: entry };
+  return next;
+}
+
+/**
+ * Переносит завершённый запрос в историю — после отклонения (строка остаётся
+ * в плане) или после применения удаления (строка уходит в tombstone-набор,
+ * но её история сохраняется).
+ */
+export function withRemovalArchived(
+  j: PlanRowJournal | undefined
+): PlanRowJournal {
+  const next = cloneJournal(j);
+  if (!next.removal) return next;
+  next.removalHistory = [next.removal, ...(next.removalHistory ?? [])];
+  next.removal = undefined;
+  return next;
 }
