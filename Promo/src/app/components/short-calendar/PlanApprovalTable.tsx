@@ -288,16 +288,15 @@ function TypeCell({ type, missing }: { type: string; missing?: boolean }) {
 }
 
 /**
- * Волна 4 отклонение от брифа (решение контроллера): «Удалить» остаётся
- * черновик-only (`isDraft`), а не `canManage && !removalPending` как в брифе —
- * до Задачи 7 `handleDelete` для не-черновика молча выходит по `return`, и
- * снятие гейта дало бы кнопку, которая ничего не делает. «История» — всем
- * ролям и всегда, «Изменить» — как в брифе.
+ * Задача 7 (R30.2): «Удалить» гейтится только `canManage && !removalPending` —
+ * для не-черновика `handleDelete` теперь открывает диалог запроса на удаление
+ * через согласование, а не молча выходит, поэтому черновик-only гейт (Волна 4,
+ * Задача 4) снят. «История» — всем ролям и всегда, «Изменить» — пока удаление
+ * не на согласовании.
  */
 function RowActions({
   id,
   canManage,
-  isDraft,
   removalPending,
   onHistory,
   onEdit,
@@ -305,7 +304,6 @@ function RowActions({
 }: {
   id: string;
   canManage: boolean;
-  isDraft: boolean;
   removalPending: boolean;
   onHistory?: (id: string) => void;
   onEdit?: (id: string) => void;
@@ -335,8 +333,8 @@ function RowActions({
           Изменить
         </Button>
       )}
-      {/* Удаление — черновик-only до Задачи 7 (согласованное удаление через запрос). */}
-      {canManage && isDraft && !removalPending && (
+      {/* Удаление согласованной строки — через запрос (R30.2), см. handleDelete. */}
+      {canManage && !removalPending && (
         <Button
           variant="ghost"
           size="sm"
@@ -449,7 +447,6 @@ export function PlanApprovalTable({
               const decision = decisionFor?.(r.id);
               const send = sendStatusFor?.(r.id);
               const checked = selectedIds?.has(r.id) ?? false;
-              const isDraft = send === "draft";
               return (
                 <tr
                   key={r.id}
@@ -514,7 +511,6 @@ export function PlanApprovalTable({
                     <RowActions
                       id={r.id}
                       canManage={canManage}
-                      isDraft={isDraft}
                       removalPending={removalPending}
                       onHistory={onShowHistory}
                       onEdit={onEditRow}
@@ -537,7 +533,6 @@ export function PlanApprovalTable({
           const decision = decisionFor?.(r.id);
           const send = sendStatusFor?.(r.id);
           const checked = selectedIds?.has(r.id) ?? false;
-          const isDraft = send === "draft";
           return (
             <div
               key={r.id}
@@ -611,7 +606,6 @@ export function PlanApprovalTable({
                 <RowActions
                   id={r.id}
                   canManage={canManage}
-                  isDraft={isDraft}
                   removalPending={removalPending}
                   onHistory={onShowHistory}
                   onEdit={onEditRow}

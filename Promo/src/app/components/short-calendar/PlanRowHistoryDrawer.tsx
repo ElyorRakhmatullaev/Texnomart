@@ -344,7 +344,14 @@ export function PlanRowHistoryDrawer({
   onRejectRemoval,
 }: PlanRowHistoryDrawerProps) {
   const cycles = journal?.cycles ?? [];
-  const hasJournal = cycles.length > 0 || Boolean(journal?.removal);
+  // Задача 7 fix: строка без единого живого цикла (только сид-approval) может тем не
+  // менее иметь АРХИВНЫЙ запрос на удаление (`removalHistory`) — как только запрос
+  // решён, `journal.removal` очищается, и без этого условия hasJournal ложно вернулся
+  // бы к legacy-виду, пряча блок «Завершённые запросы на удаление» (QA Задачи 7, п.6).
+  const hasJournal =
+    cycles.length > 0 ||
+    Boolean(journal?.removal) ||
+    Boolean(journal?.removalHistory?.length);
   const current = cycles[cycles.length - 1];
   const previous = cycles.slice(0, -1).reverse(); // новые сверху
 

@@ -63,9 +63,23 @@ import {
   serializeOverrides,
   serializeRows,
   type PlanRejectionEvent,
+  type PlanRemovalRequest,
   type PlanRowJournal,
 } from "../../../lib/plan-store";
-import { withCycleClosed, withDecision, withSend } from "../../../lib/plan-approval";
+import {
+  approvedStages,
+  pendingRemovalStageFor,
+  removalFullyApproved,
+  removalNeedsApproval,
+  removalRejected,
+  STAGE_LABEL,
+  withCycleClosed,
+  withDecision,
+  withRemovalArchived,
+  withRemovalDecision,
+  withRemovalRequest,
+  withSend,
+} from "../../../lib/plan-approval";
 import { appendAuditEvent } from "../../../lib/audit-store";
 
 interface PlanRow {
@@ -159,6 +173,12 @@ export function PlanMode({ campaigns }: PlanModeProps) {
   );
 
   const [rejectOpen, setRejectOpen] = React.useState(false);
+  // R30.2 — строка, для которой владелец плана запрашивает удаление (null = диалог закрыт).
+  const [removalRowId, setRemovalRowId] = React.useState<string | null>(null);
+  // Строка, по которой проверяющий отклоняет удаление (нужен комментарий).
+  const [removalRejectRowId, setRemovalRejectRowId] = React.useState<
+    string | null
+  >(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   // null → create a new draft; an id → edit that row.
   const [editId, setEditId] = React.useState<string | null>(null);
@@ -239,6 +259,10 @@ export function PlanMode({ campaigns }: PlanModeProps) {
   const draftRows = rows.filter((r) => sendOf(r.id) === "draft");
   const sendableDrafts = draftRows.filter(hasType); // тип required to send (№2)
   const blockedDrafts = draftRows.filter((r) => !hasType(r)); // тип missing
+  // Строка с активным запросом на удаление решается отдельным треком и не должна
+  // блокировать продвижение плана: без этого исключения `every(...)` никогда не
+  // станет истинным и цепочка КД → ОД → «Утверждён» встанет.
+  const gatingRows = sentRows.filter((r) => !journalOf(r.id)?.removal);
 
   const reviewMode = canAct && reviewerStage !== undefined && sentRows.length > 0;
   const sendMode = isMarketing && draftRows.length > 0;
@@ -246,9 +270,11 @@ export function PlanMode({ campaigns }: PlanModeProps) {
 
   // The rows that can be checked in the active mode.
   const selectablePool: PlanRow[] = reviewMode
-    ? sentRows.filter((r) => !decisions[r.id]?.[reviewerStage!])
+    ? sentRows.filter(
+        (r) => !decisions[r.id]?.[reviewerStage!] && !journalOf(r.id)?.removal
+      )
     : sendMode
-      ? sendableDrafts
+      ? sendableDrafts.filter((r) => !journalOf(r.id)?.removal)
       : [];
 
   const rowCheckable = (id: string): boolean =>
@@ -260,7 +286,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
   const someSelected = selectedIds.size > 0 && !allSelected;
 
   const approvedCount = reviewerStage
-    ? sentRows.filter((r) => decisions[r.id]?.[reviewerStage] === "approved")
+    ? gatingRows.filter((r) => decisions[r.id]?.[reviewerStage] === "approved")
         .length
     : 0;
 
@@ -424,7 +450,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       if (row) logPlan("согласование", row, `Согласовано на этапе ${stageLabel}`);
     }
 
-    const allApproved = sentRows.every(
+    const allApproved = gatingRows.every(
       (r) => next[r.id]?.[reviewerStage] === "approved"
     );
     if (allApproved) {
@@ -435,7 +461,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
         );
       else advance("Утверждён", "План утверждён");
     } else {
-      const remaining = sentRows.filter(
+      const remaining = gatingRows.filter(
         (r) => !next[r.id]?.[reviewerStage]
       ).length;
       toast.success(`Согласовано акций: ${ids.length}. Осталось: ${remaining}`);
@@ -583,14 +609,107 @@ export function PlanMode({ campaigns }: PlanModeProps) {
   }
 
   function handleDelete(id: string) {
-    if (sendOf(id) !== "draft") return; // delete drafts only
+    const row = rowById(id);
+    if (!row) return;
+    // R30.2 — строка, согласованная в последнем цикле, не удаляется сразу:
+    // сначала удаление согласуют те же этапы, что её согласовали.
+    if (removalNeedsApproval(id, journalOf(id))) {
+      // Контролируемый диалог из обычной кнопки — открывать только отложенно,
+      // иначе DismissableLayer закроет его тем же кликом.
+      setTimeout(() => setRemovalRowId(id), 0);
+      return;
+    }
     setDeletedIds((prev) => new Set(prev).add(id));
     setSelectedIds((prev) => {
       const next = new Set(prev);
       next.delete(id);
       return next;
     });
+    logPlan("отмена", row, "Черновик удалён");
     toast.success("Черновик удалён");
+  }
+
+  function requestRemoval(reason: string) {
+    const id = removalRowId;
+    if (!id) return;
+    const row = rowById(id);
+    if (!row) return;
+    const stages = approvedStages(id, journalOf(id));
+    if (stages.length === 0) return; // защита: развилка уже это проверила
+
+    const req: PlanRemovalRequest = {
+      requestedAt: new Date().toISOString(),
+      requestedBy: currentUser?.fullName ?? PLAN_EDITOR,
+      reason,
+      requiredStages: stages,
+    };
+    setRowJournal((prev) => ({ ...prev, [id]: withRemovalRequest(prev[id], req) }));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setRemovalRowId(null);
+    logPlan("изменение", row, `Запрос на удаление строки: ${reason}`);
+    toast.success(
+      `Запрос на удаление отправлен на согласование: ${stages
+        .map((s) => STAGE_LABEL[s])
+        .join(", ")}`
+    );
+  }
+
+  /**
+   * Решение по запросу на удаление. Гейт пер-строчный: `pendingRemovalStageFor`
+   * смотрит только на роль и на требуемые этапы, НЕ на `planStatus` — при
+   * «Утверждён» плановая цепочка вообще не имеет актора.
+   */
+  function decideRemoval(id: string, decision: "approved" | "rejected", reason?: string) {
+    const row = rowById(id);
+    const stage = pendingRemovalStageFor(currentRole, journalOf(id));
+    if (!row || !stage) return;
+
+    const now = new Date();
+    const meta = {
+      at: now,
+      by: currentUser?.fullName ?? currentRole,
+      role: currentRole,
+      comment: reason,
+    };
+
+    // Решение считаем синхронно: асинхронное состояние ещё не обновилось.
+    let after = withRemovalDecision(journalOf(id), stage, decision, meta);
+    const req = after.removal;
+    if (!req) return;
+
+    if (decision === "rejected" || removalRejected(req)) {
+      after = withRemovalArchived(after);
+      setRowJournal((prev) => ({ ...prev, [id]: after }));
+      logPlan("отклонение", row, `Удаление строки отклонено: ${reason ?? "—"}`);
+      toast.success("Удаление отклонено — строка остаётся в плане");
+      return;
+    }
+
+    if (removalFullyApproved(req)) {
+      after = withRemovalArchived(after);
+      setRowJournal((prev) => ({ ...prev, [id]: after }));
+      setDeletedIds((prev) => new Set(prev).add(id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setHistoryRowId(null);
+      // Два разных факта: кто решил и что произошло с планом.
+      logPlan("согласование", row, `Удаление согласовано (${STAGE_LABEL[stage]})`);
+      logPlan("отмена", row, "Строка удалена из плана");
+      toast.success("Удаление согласовано — строка исключена из плана");
+      return;
+    }
+
+    setRowJournal((prev) => ({ ...prev, [id]: after }));
+    logPlan("согласование", row, `Удаление согласовано (${STAGE_LABEL[stage]})`);
+    const waiting = req.requiredStages.filter((s) => !req[s]).map((s) => STAGE_LABEL[s]);
+    toast.success(`Удаление согласовано. Ожидает: ${waiting.join(", ")}`);
   }
 
   const editingRow = editId ? rowById(editId) : undefined;
@@ -654,7 +773,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
                   </b>{" "}
                   из{" "}
                   <b className="tabular-nums text-gray-700 dark:text-gray-200">
-                    {sentRows.length}
+                    {gatingRows.length}
                   </b>{" "}
                   на этапе {stageLabel} — отметьте акции в таблице ниже
                 </span>
@@ -679,8 +798,15 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       </Card>
 
       {/* ── Plan rows ───────────────────────────────────────────────────── */}
-      {/* overflow-clip rounds the sticky strip's corners without trapping sticky. */}
-      <Card className="overflow-clip">
+      {/* Волна 4 (T7): NO overflow-clip here anymore. The plan table (~1600px)
+          deliberately has no internal overflow-x-auto (T5/V2-13 — an inner scroll
+          container would trap the sticky header) — it overflows into the PAGE's own
+          horizontal scrollbar (`<main>` is viewport-height-bound, so that scrollbar is
+          always reachable). A Card-level overflow-clip cut that overflow off before it
+          reached `<main>` — «Действия» buttons (incl. «Удалить») were physically
+          unreachable at 1440px (Task 6 QA finding). The rounded corners this used to
+          buy for the sticky bottom strip are now clipped LOCALLY on that strip below. */}
+      <Card>
         <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
           <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             Строки плана
@@ -753,9 +879,13 @@ export function PlanMode({ campaigns }: PlanModeProps) {
               R29.2 (10-я часть): pinned to the viewport bottom while the table
               scrolls (sticky; negative offset cancels <main>'s bottom padding),
               so a decision never requires scrolling back up. Solid bg-card layer
-              under the brand tint — content must not show through while pinned. */}
+              under the brand tint — content must not show through while pinned.
+              Волна 4 (T7): overflow-clip + rounded-b-xl moved HERE from the ancestor
+              Card (see the comment above the Card) — same corner-rounding trick,
+              scoped to just this strip so it no longer clips the table's own
+              horizontal overflow. */}
           {(sendMode || reviewMode) && (
-            <div className="sticky bottom-[-0.75rem] z-30 border-t bg-card md:bottom-[-1rem]">
+            <div className="sticky bottom-[-0.75rem] z-30 overflow-clip rounded-b-xl border-t bg-card md:bottom-[-1rem]">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-primary/5 px-4 py-2.5">
                 <span className="text-sm text-gray-700 dark:text-gray-200">
                   Выбрано:{" "}
@@ -818,6 +948,33 @@ export function PlanMode({ campaigns }: PlanModeProps) {
         onConfirm={rejectSelected}
       />
 
+      {/* R30.2 — владелец плана запрашивает удаление согласованной строки. */}
+      <ReasonDialog
+        open={removalRowId !== null}
+        onOpenChange={(o) => !o && setRemovalRowId(null)}
+        title="Запросить удаление строки плана"
+        description="Строка была согласована, поэтому удаление требует согласования. До решения она останется в плане."
+        reasonLabel="Причина удаления"
+        confirmLabel="Отправить запрос"
+        destructive
+        onConfirm={requestRemoval}
+      />
+
+      {/* R30.2 — проверяющий отклоняет удаление (комментарий обязателен). */}
+      <ReasonDialog
+        open={removalRejectRowId !== null}
+        onOpenChange={(o) => !o && setRemovalRejectRowId(null)}
+        title="Отклонить удаление строки"
+        description="Строка останется в плане. Причина будет видна в истории строки."
+        reasonLabel="Комментарий"
+        confirmLabel="Отклонить удаление"
+        destructive
+        onConfirm={(reason) => {
+          if (removalRejectRowId) decideRemoval(removalRejectRowId, "rejected", reason);
+          setRemovalRejectRowId(null);
+        }}
+      />
+
       {/* «7-я часть» §9 + Волна 4 — история согласования строки и запрос на удаление. */}
       <PlanRowHistoryDrawer
         open={historyRowId !== null}
@@ -826,6 +983,17 @@ export function PlanMode({ campaigns }: PlanModeProps) {
         rowName={historyRowId ? rowById(historyRowId)?.name : undefined}
         journal={historyRowId ? journalOf(historyRowId) : undefined}
         legacyEvents={historyRowId ? rejectionLog[historyRowId] ?? [] : []}
+        removalStage={
+          historyRowId ? pendingRemovalStageFor(currentRole, journalOf(historyRowId)) : undefined
+        }
+        onApproveRemoval={() =>
+          historyRowId && decideRemoval(historyRowId, "approved")
+        }
+        onRejectRemoval={() => {
+          const id = historyRowId;
+          setHistoryRowId(null);
+          if (id) setTimeout(() => setRemovalRejectRowId(id), 0);
+        }}
       />
 
       <PlanRowDialog
