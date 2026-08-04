@@ -1,19 +1,22 @@
 "use client";
 
-import { Check, Clock, FilePen, Pencil, Send, Trash2, TriangleAlert, X } from "lucide-react";
+import { Check, Clock, FilePen, History, Pencil, Send, Trash2, TriangleAlert, X } from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
 import { Checkbox } from "@texnomart/ui/checkbox";
 import { Button } from "@texnomart/ui/button";
 import {
   formatPromoNo,
-  getPlanApproval,
   PLAN_DIRECTOR_SLA_WORKING_DAYS,
   PLAN_MARKETING_REVIEW_LEAD_DAYS,
   PLAN_MARKETING_SUBMIT_LEAD_DAYS,
-  type PlanStageDirector,
-  type PlanStageMarketing,
   type PlanStageStatus,
 } from "../../../lib/promo-mock-data";
+import {
+  directorStageCell,
+  marketingStageCell,
+  type StageCellData,
+} from "../../../lib/plan-approval";
+import type { PlanRowJournal } from "../../../lib/plan-store";
 
 // Per-campaign plan approval (client feedback §5): for each plan row, the approval
 // progress is shown separately across the three directors — when the stage was sent /
@@ -25,6 +28,12 @@ import {
 // leading checkbox targets the drafts the marketing director picks to send; in review mode
 // it targets the sent rows the КД/ОД decides. The marketing director also gets per-row
 // «Изменить»/«Удалить» (№6).
+//
+// «10-я часть» Волна 4 (T4): stage cells are derived from the per-row approval journal
+// (`lib/plan-approval.ts`) instead of the static `PLAN_APPROVALS` seed directly — the
+// derivation layer falls back to the seed internally when a row has no live journal, so
+// seed-only rows render exactly as before. Adds the «Удаление на согласовании» row state
+// (R30.2) and an always-visible «История» action (all roles).
 
 export interface PlanRowData {
   id: string;
@@ -62,10 +71,12 @@ interface PlanApprovalTableProps {
   onEditRow?: (id: string) => void;
   onDeleteRow?: (id: string) => void;
   /**
-   * «7-я часть» §9 — makes the «Отклонено» badge clickable: opens the right-side
-   * rejection-details panel for the row (кто отклонил · роль · дата · комментарий).
+   * Журнал строки (Волна 4). Без него ячейки этапов читаются из сида
+   * `PLAN_APPROVALS` — ровно сегодняшнее поведение.
    */
-  onShowRejection?: (id: string) => void;
+  journalFor?: (id: string) => PlanRowJournal | undefined;
+  /** Открыть боковую панель истории строки (доступна всем ролям). */
+  onShowHistory?: (id: string) => void;
 }
 
 function formatDateTime(d: Date): string {
@@ -80,18 +91,31 @@ function formatDate(d: Date): string {
   return d.toLocaleDateString("ru-RU");
 }
 
+const UNIT_LABEL: Record<"cal" | "work", string> = {
+  cal: "кал. дн.",
+  work: "раб. дн.",
+};
+
 function StageStatusBadge({
   status,
   overdueDays,
+  unit = "work",
 }: {
   status: PlanStageStatus;
   overdueDays?: number;
+  unit?: "cal" | "work";
 }) {
+  const u = UNIT_LABEL[unit];
   if (status === "waiting") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500 dark:bg-muted dark:text-gray-400">
         <Clock className="size-3" />
         Ожидает согласования
+        {overdueDays ? (
+          <span className="font-semibold text-red-600 dark:text-red-400">
+            · просрочка +{overdueDays} {u}
+          </span>
+        ) : null}
       </span>
     );
   }
@@ -105,25 +129,45 @@ function StageStatusBadge({
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
       <TriangleAlert className="size-3" />
-      Просрочка +{overdueDays ?? 0} дн.
+      Просрочка +{overdueDays ?? 0} {u}
     </span>
   );
 }
 
 /**
  * The single «Статус строки» pill computed from the send state + reviewer decision
- * (№2/№4/№5/№7): «Черновик» → «Отправлено» → «Согласовано»/«Отклонено».
+ * (№2/№4/№5/№7): «Черновик» → «Отправлено» → «Согласовано»/«Отклонено». Волна 4 (R30.2)
+ * adds «Удаление на согласовании» as the top-priority branch — an active removal request
+ * overrides every other row state.
  */
 function RowLifecycleBadge({
   send,
   decision,
+  removalPending,
   onRejectedClick,
+  onRemovalClick,
 }: {
   send?: PlanRowSend;
   decision?: RowDecision;
+  /** R30.2 — активный запрос на удаление перекрывает остальные состояния. */
+  removalPending?: boolean;
   /** When provided, the «Отклонено» pill becomes a button opening the details panel (§9). */
   onRejectedClick?: () => void;
+  onRemovalClick?: () => void;
 }) {
+  if (removalPending) {
+    return (
+      <button
+        type="button"
+        onClick={onRemovalClick}
+        title="Показать запрос на удаление"
+        className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700 underline decoration-orange-300 decoration-dotted underline-offset-2 transition-colors hover:bg-orange-100 dark:bg-orange-500/15 dark:text-orange-300 dark:decoration-orange-500/50 dark:hover:bg-orange-500/25"
+      >
+        <Trash2 className="size-3" />
+        Удаление на согласовании
+      </button>
+    );
+  }
   if (send === "sent" && decision === "approved") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
@@ -169,33 +213,59 @@ function RowLifecycleBadge({
   );
 }
 
-function MarketingCell({ stage }: { stage?: PlanStageMarketing }) {
-  if (!stage) return <Dash />;
+/** Метка цикла — выводится ТОЛЬКО в маркетинговой колонке, чтобы не троиться. */
+function CycleTag({ no }: { no?: number }) {
+  if (!no) return null;
+  return (
+    <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
+      Цикл {no}
+    </span>
+  );
+}
+
+function MarketingCell({ cell }: { cell?: StageCellData }) {
+  if (!cell) return <Dash />;
   return (
     <div className="flex flex-col gap-1">
-      <div className="text-xs tabular-nums text-gray-700 dark:text-gray-200">
-        <span className="text-muted-foreground">Озн.:</span>{" "}
-        {formatDateTime(stage.reviewedAt)}
-      </div>
-      <div className="text-xs tabular-nums text-gray-700 dark:text-gray-200">
-        <span className="text-muted-foreground">Отпр.:</span>{" "}
-        {formatDateTime(stage.sentAt)}
-      </div>
-      <StageStatusBadge status={stage.status} overdueDays={stage.overdueDays} />
+      {cell.reviewedAt && (
+        <div className="text-xs tabular-nums text-gray-700 dark:text-gray-200">
+          <span className="text-muted-foreground">Озн.:</span>{" "}
+          {formatDateTime(cell.reviewedAt)}
+        </div>
+      )}
+      {cell.sentAt && (
+        <div className="text-xs tabular-nums text-gray-700 dark:text-gray-200">
+          <span className="text-muted-foreground">Отпр.:</span>{" "}
+          {formatDateTime(cell.sentAt)}
+        </div>
+      )}
+      <StageStatusBadge
+        status={cell.status}
+        overdueDays={cell.overdueDays}
+        unit={cell.unit}
+      />
+      <CycleTag no={cell.cycleNo} />
     </div>
   );
 }
 
-function DirectorCell({ stage }: { stage?: PlanStageDirector }) {
-  if (!stage) return <Dash />;
+function DirectorCell({ cell }: { cell?: StageCellData }) {
+  if (!cell) return <Dash />;
   return (
     <div className="flex flex-col gap-1">
-      {stage.decidedAt && (
+      {cell.decidedAt && (
         <div className="text-xs tabular-nums text-gray-700 dark:text-gray-200">
-          {formatDateTime(stage.decidedAt)}
+          {formatDateTime(cell.decidedAt)}
         </div>
       )}
-      <StageStatusBadge status={stage.status} overdueDays={stage.overdueDays} />
+      <StageStatusBadge
+        status={cell.status}
+        overdueDays={cell.overdueDays}
+        unit={cell.unit}
+      />
+      {cell.by && (
+        <span className="text-[10px] text-muted-foreground">{cell.by}</span>
+      )}
     </div>
   );
 }
@@ -217,29 +287,56 @@ function TypeCell({ type, missing }: { type: string; missing?: boolean }) {
   return <span className="text-gray-600 dark:text-gray-300">{type || "—"}</span>;
 }
 
+/**
+ * Волна 4 отклонение от брифа (решение контроллера): «Удалить» остаётся
+ * черновик-only (`isDraft`), а не `canManage && !removalPending` как в брифе —
+ * до Задачи 7 `handleDelete` для не-черновика молча выходит по `return`, и
+ * снятие гейта дало бы кнопку, которая ничего не делает. «История» — всем
+ * ролям и всегда, «Изменить» — как в брифе.
+ */
 function RowActions({
   id,
+  canManage,
   isDraft,
+  removalPending,
+  onHistory,
   onEdit,
   onDelete,
 }: {
   id: string;
+  canManage: boolean;
   isDraft: boolean;
+  removalPending: boolean;
+  onHistory?: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
 }) {
   return (
     <div className="flex items-center gap-1">
+      {/* Доступна всем ролям: история согласования — не действие владельца. */}
       <Button
         variant="ghost"
         size="sm"
         className="h-8 px-2 text-xs"
-        onClick={() => onEdit?.(id)}
+        onClick={() => onHistory?.(id)}
       >
-        <Pencil className="size-3.5" />
-        Изменить
+        <History className="size-3.5" />
+        История
       </Button>
-      {isDraft && (
+      {/* Пока удаление на согласовании — строку не правят. */}
+      {canManage && !removalPending && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2 text-xs"
+          onClick={() => onEdit?.(id)}
+        >
+          <Pencil className="size-3.5" />
+          Изменить
+        </Button>
+      )}
+      {/* Удаление — черновик-only до Задачи 7 (согласованное удаление через запрос). */}
+      {canManage && isDraft && !removalPending && (
         <Button
           variant="ghost"
           size="sm"
@@ -290,7 +387,8 @@ export function PlanApprovalTable({
   canManage = false,
   onEditRow,
   onDeleteRow,
-  onShowRejection,
+  journalFor,
+  onShowHistory,
 }: PlanApprovalTableProps) {
   const marketingNote = `ознакомление: за ${PLAN_MARKETING_REVIEW_LEAD_DAYS} кал. дн · отправка на согл.: за ${PLAN_MARKETING_SUBMIT_LEAD_DAYS} кал. дн`;
   const directorNote = `согласование: ${PLAN_DIRECTOR_SLA_WORKING_DAYS} раб. дн`;
@@ -314,7 +412,7 @@ export function PlanApprovalTable({
           overflows into the PAGE's own horizontal scrollbar instead, so the `<thead>`
           can stick to the page's vertical scroll (tracker V2-13, plan Option 2). */}
       <div className="hidden md:block">
-        <table className="w-full min-w-[1200px] border-separate border-spacing-0 text-sm">
+        <table className="w-full min-w-[1320px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
               {selectable && (
@@ -340,12 +438,14 @@ export function PlanApprovalTable({
               <th className={cn(HEAD, "w-[170px]")}>
                 <StageHeader title="Операционный директор" note={directorNote} />
               </th>
-              {canManage && <th className={cn(HEAD, "w-[160px]")}>Действия</th>}
+              <th className={cn(HEAD, "w-[240px]")}>Действия</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => {
-              const appr = getPlanApproval(r.id);
+              const journal = journalFor?.(r.id);
+              const rowRef = { id: r.id, startDate: r.startDate };
+              const removalPending = Boolean(journal?.removal);
               const decision = decisionFor?.(r.id);
               const send = sendStatusFor?.(r.id);
               const checked = selectedIds?.has(r.id) ?? false;
@@ -375,8 +475,12 @@ export function PlanApprovalTable({
                     <RowLifecycleBadge
                       send={send}
                       decision={decision}
+                      removalPending={removalPending}
                       onRejectedClick={
-                        onShowRejection ? () => onShowRejection(r.id) : undefined
+                        onShowHistory ? () => onShowHistory(r.id) : undefined
+                      }
+                      onRemovalClick={
+                        onShowHistory ? () => onShowHistory(r.id) : undefined
                       }
                     />
                   </td>
@@ -398,24 +502,25 @@ export function PlanApprovalTable({
                     {formatDate(r.startDate)} — {formatDate(r.endDate)}
                   </td>
                   <td className={CELL}>
-                    <MarketingCell stage={appr?.marketing} />
+                    <MarketingCell cell={marketingStageCell(rowRef, journal)} />
                   </td>
                   <td className={CELL}>
-                    <DirectorCell stage={appr?.kd} />
+                    <DirectorCell cell={directorStageCell("kd", rowRef, journal)} />
                   </td>
                   <td className={CELL}>
-                    <DirectorCell stage={appr?.od} />
+                    <DirectorCell cell={directorStageCell("od", rowRef, journal)} />
                   </td>
-                  {canManage && (
-                    <td className={cn(CELL, "align-middle")}>
-                      <RowActions
-                        id={r.id}
-                        isDraft={isDraft}
-                        onEdit={onEditRow}
-                        onDelete={onDeleteRow}
-                      />
-                    </td>
-                  )}
+                  <td className={cn(CELL, "align-middle")}>
+                    <RowActions
+                      id={r.id}
+                      canManage={canManage}
+                      isDraft={isDraft}
+                      removalPending={removalPending}
+                      onHistory={onShowHistory}
+                      onEdit={onEditRow}
+                      onDelete={onDeleteRow}
+                    />
+                  </td>
                 </tr>
               );
             })}
@@ -426,7 +531,9 @@ export function PlanApprovalTable({
       {/* Mobile: stacked cards */}
       <div className="space-y-3 p-4 md:hidden">
         {rows.map((r) => {
-          const appr = getPlanApproval(r.id);
+          const journal = journalFor?.(r.id);
+          const rowRef = { id: r.id, startDate: r.startDate };
+          const removalPending = Boolean(journal?.removal);
           const decision = decisionFor?.(r.id);
           const send = sendStatusFor?.(r.id);
           const checked = selectedIds?.has(r.id) ?? false;
@@ -454,8 +561,12 @@ export function PlanApprovalTable({
                   <RowLifecycleBadge
                     send={send}
                     decision={decision}
+                    removalPending={removalPending}
                     onRejectedClick={
-                      onShowRejection ? () => onShowRejection(r.id) : undefined
+                      onShowHistory ? () => onShowHistory(r.id) : undefined
+                    }
+                    onRemovalClick={
+                      onShowHistory ? () => onShowHistory(r.id) : undefined
                     }
                   />
                 </div>
@@ -476,7 +587,7 @@ export function PlanApprovalTable({
                     Директор маркетинга
                   </dt>
                   <dd className="mt-1">
-                    <MarketingCell stage={appr?.marketing} />
+                    <MarketingCell cell={marketingStageCell(rowRef, journal)} />
                   </dd>
                 </div>
                 <div>
@@ -484,7 +595,7 @@ export function PlanApprovalTable({
                     Коммерческий директор
                   </dt>
                   <dd className="mt-1">
-                    <DirectorCell stage={appr?.kd} />
+                    <DirectorCell cell={directorStageCell("kd", rowRef, journal)} />
                   </dd>
                 </div>
                 <div>
@@ -492,20 +603,21 @@ export function PlanApprovalTable({
                     Операционный директор
                   </dt>
                   <dd className="mt-1">
-                    <DirectorCell stage={appr?.od} />
+                    <DirectorCell cell={directorStageCell("od", rowRef, journal)} />
                   </dd>
                 </div>
               </dl>
-              {canManage && (
-                <div className="mt-3 border-t pt-2">
-                  <RowActions
-                    id={r.id}
-                    isDraft={isDraft}
-                    onEdit={onEditRow}
-                    onDelete={onDeleteRow}
-                  />
-                </div>
-              )}
+              <div className="mt-3 border-t pt-2">
+                <RowActions
+                  id={r.id}
+                  canManage={canManage}
+                  isDraft={isDraft}
+                  removalPending={removalPending}
+                  onHistory={onShowHistory}
+                  onEdit={onEditRow}
+                  onDelete={onDeleteRow}
+                />
+              </div>
             </div>
           );
         })}

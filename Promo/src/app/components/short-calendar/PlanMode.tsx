@@ -667,7 +667,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
             canManage={isMarketing}
             onEditRow={openEdit}
             onDeleteRow={handleDelete}
-            onShowRejection={setRejectionRowId}
+            onShowHistory={setRejectionRowId}
           />
 
           {/* Selection strip — send mode (marketing) or review mode (КД/ОД).
