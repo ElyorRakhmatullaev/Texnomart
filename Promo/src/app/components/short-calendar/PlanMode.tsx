@@ -51,6 +51,7 @@ import {
   formatPromoNo,
   getPlanApproval,
   nextPlanPromoNo,
+  type AuditActionType,
   type PlanStatus,
   type PromoCampaign,
 } from "../../../lib/promo-mock-data";
@@ -62,7 +63,10 @@ import {
   serializeOverrides,
   serializeRows,
   type PlanRejectionEvent,
+  type PlanRowJournal,
 } from "../../../lib/plan-store";
+import { withCycleClosed, withDecision, withSend } from "../../../lib/plan-approval";
+import { appendAuditEvent } from "../../../lib/audit-store";
 
 interface PlanRow {
   id: string;
@@ -138,11 +142,17 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     () => new Set()
   );
 
-  // «7-я часть» §9 — per-row rejection/return history (newest first). Survives
-  // «Вернуть на доработку» + re-sends: it IS the history the side panel shows.
-  const [rejectionLog, setRejectionLog] = React.useState<
-    Record<string, PlanRejectionEvent[]>
-  >(() => initialStored?.rejectionLog ?? {});
+  // «7-я часть» §9 — per-row rejection/return history (newest first). LEGACY as of
+  // Волна 4: new rejections write to `rowJournal` below, not here — this slice stays
+  // read-only so past sessions' snapshots still render via the drawer's legacy view.
+  const [rejectionLog] = React.useState<Record<string, PlanRejectionEvent[]>>(
+    () => initialStored?.rejectionLog ?? {}
+  );
+  // Волна 4 — пер-строчный журнал циклов согласования (R29.5/R30.1) и запросов
+  // на удаление (R30.2). Живёт рядом с decisions/sendStatus, а не вместо них.
+  const [rowJournal, setRowJournal] = React.useState<
+    Record<string, PlanRowJournal>
+  >(() => initialStored?.rowJournal ?? {});
   // Which row's history panel is open in the side panel (null = closed).
   const [historyRowId, setHistoryRowId] = React.useState<string | null>(
     null
@@ -172,6 +182,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       sendStatus,
       decisions,
       rejectionLog,
+      rowJournal,
     });
   }, [
     planStatus,
@@ -182,9 +193,11 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     sendStatus,
     decisions,
     rejectionLog,
+    rowJournal,
   ]);
 
   const sendOf = (id: string): PlanRowSend => sendStatus[id] ?? "draft";
+  const journalOf = (id: string): PlanRowJournal | undefined => rowJournal[id];
 
   const rows: PlanRow[] = React.useMemo(() => {
     const base: PlanRow[] = campaigns.map((c) => ({
@@ -274,6 +287,30 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     [rows]
   );
 
+  /**
+   * Живое событие плана в общий аудит-лог. Новые типы действий НЕ вводим:
+   * `AUDIT_ACTION_META` — это `Record<AuditActionType, …>`, и его неисчерпаемость
+   * невидима для транспайл-онли билда (уже ломало аудит в E-4).
+   */
+  function logPlan(
+    action: AuditActionType,
+    row: PlanRow,
+    comment?: string,
+    statuses?: { from?: string; to?: string }
+  ) {
+    appendAuditEvent({
+      user: currentUser?.fullName ?? currentRole,
+      role: currentRole,
+      action,
+      objectType: "план",
+      objectLabel: row.name,
+      campaignId: row.id,
+      statusFrom: statuses?.from,
+      statusTo: statuses?.to,
+      comment,
+    });
+  }
+
   function advance(next: PlanStatus, message: string) {
     setPlanStatus(next);
     setRejectedStage(undefined);
@@ -314,6 +351,20 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       for (const id of ids) next[id] = "sent";
       return next;
     });
+    const now = new Date();
+    const sentBy = currentUser?.fullName ?? PLAN_EDITOR;
+    setRowJournal((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = withSend(next[id], now, sentBy);
+      return next;
+    });
+    for (const id of ids) {
+      const row = rowById(id);
+      if (row) {
+        const cycleNo = (journalOf(id)?.cycles.length ?? 0) + 1;
+        logPlan("отправка на согласование", row, `Цикл ${cycleNo}`);
+      }
+    }
     setSelectedIds(new Set());
 
     // Sending (re)opens the review chain when the plan isn't already at a reviewer
@@ -356,6 +407,23 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     setDecisions(next);
     setSelectedIds(new Set());
 
+    const now = new Date();
+    const by = currentUser?.fullName ?? currentRole;
+    setRowJournal((prev) => {
+      const out = { ...prev };
+      for (const id of ids)
+        out[id] = withDecision(out[id], id, reviewerStage, "approved", {
+          at: now,
+          by,
+          role: currentRole,
+        });
+      return out;
+    });
+    for (const id of ids) {
+      const row = rowById(id);
+      if (row) logPlan("согласование", row, `Согласовано на этапе ${stageLabel}`);
+    }
+
     const allApproved = sentRows.every(
       (r) => next[r.id]?.[reviewerStage] === "approved"
     );
@@ -384,20 +452,25 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     setPlanStatus("Отклонён");
     setRejectedStage(reviewerStage); // №4 — mark the rejecting stage
 
-    // «7-я часть» §9 — record WHO rejected, the role, when, and the comment,
-    // so the clickable «Отклонено» badge can show the details + history.
-    const event: PlanRejectionEvent = {
-      kind: reviewerStage,
-      by: currentUser?.fullName ?? currentActor ?? currentRole,
-      role: currentActor ?? currentRole,
-      at: new Date().toISOString(),
-      comment: reason,
-    };
-    setRejectionLog((prev) => {
+    // Волна 4 — record WHO rejected, the role, when, and the comment IN THE JOURNAL
+    // (§9 legacy `rejectionLog` is read-only now; no double-write).
+    const now = new Date();
+    const by = currentUser?.fullName ?? currentActor ?? currentRole;
+    setRowJournal((prev) => {
       const out = { ...prev };
-      for (const id of ids) out[id] = [event, ...(out[id] ?? [])];
+      for (const id of ids)
+        out[id] = withDecision(out[id], id, reviewerStage, "rejected", {
+          at: now,
+          by,
+          role: currentActor ?? currentRole,
+          comment: reason,
+        });
       return out;
     });
+    for (const id of ids) {
+      const row = rowById(id);
+      if (row) logPlan("отклонение", row, reason);
+    }
 
     toast.success(
       `Отклонено акций: ${ids.length}. План возвращён директору маркетинга`
@@ -419,19 +492,18 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       return next;
     });
 
-    // §9.3 — the return is part of each row's rejection history (no comment field).
-    const event: PlanRejectionEvent = {
-      kind: "return",
-      by: currentUser?.fullName ?? PLAN_EDITOR,
-      role: PLAN_EDITOR,
-      at: new Date().toISOString(),
-      comment: "",
-    };
-    setRejectionLog((prev) => {
+    // §9.3 / Волна 4 — the return closes each row's current cycle (R30.1): prior
+    // dates/decisions stay in the journal, a re-send opens the next cycle.
+    const now = new Date();
+    setRowJournal((prev) => {
       const out = { ...prev };
-      for (const id of rejectedIds) out[id] = [event, ...(out[id] ?? [])];
+      for (const id of rejectedIds) out[id] = withCycleClosed(out[id], "return", now);
       return out;
     });
+    for (const id of rejectedIds) {
+      const row = rowById(id);
+      if (row) logPlan("изменение", row, "Возврат на доработку");
+    }
 
     resetReview();
     setPlanStatus("На обсуждении");
@@ -496,6 +568,12 @@ export function PlanMode({ campaigns }: PlanModeProps) {
         delete next[id];
         return next;
       });
+      // Волна 4 — правка отправленной строки закрывает её текущий цикл (R30.1).
+      setRowJournal((prev) => ({
+        ...prev,
+        [id]: withCycleClosed(prev[id], "edit", new Date()),
+      }));
+      logPlan("изменение", patch, "Правка отправленной строки — требуется повторная отправка");
       toast.info(
         `Строка возвращена в черновик — требуется повторная отправка на согласование`
       );
@@ -667,6 +745,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
             canManage={isMarketing}
             onEditRow={openEdit}
             onDeleteRow={handleDelete}
+            journalFor={journalOf}
             onShowHistory={setHistoryRowId}
           />
 
@@ -745,6 +824,7 @@ export function PlanMode({ campaigns }: PlanModeProps) {
         onOpenChange={(o) => !o && setHistoryRowId(null)}
         rowId={historyRowId}
         rowName={historyRowId ? rowById(historyRowId)?.name : undefined}
+        journal={historyRowId ? journalOf(historyRowId) : undefined}
         legacyEvents={historyRowId ? rejectionLog[historyRowId] ?? [] : []}
       />
 
