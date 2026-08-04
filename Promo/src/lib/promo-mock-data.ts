@@ -3288,23 +3288,43 @@ export function getReportAckSeed(campaignId: string, department: ReportDepartmen
  * the bell, the list, and any filter stay consistent.
  */
 export type NotificationType =
-  | "data-changed" // новые/изменённые данные (новая версия отчёта)
+  | "data-changed" // новая ВЕРСИЯ отчёта (v2+)
   | "campaign-cancelled" // «Акция отменена»
   | "line-removed" // «Удалена позиция»
   | "marketing-reapproval" // «Требуется повторное согласование маркетинга»
   | "km-assignment" // назначение КМ
-  | "ad-approval"; // утверждение «В рекламу»
+  | "ad-approval" // утверждение «В рекламу»
+  // Волна 5 (5B) — перечень событий по согласованию для КМ / ст. КМ / КД и
+  // разделение отчётных событий на «новый отчёт» и «новая версия отчёта».
+  | "report-new" // «Направлен новый отчёт по акции» (первая версия)
+  | "review-new" // новое промо поступило на согласование
+  | "review-returned" // возврат на корректировку
+  | "review-resubmitted" // повторная отправка после корректировки
+  | "kd-approved" // согласование КД
+  | "non-participation" // заявка о неучастии
+  | "auto-forwarded" // автопередача КД по просрочке
+  | "sla-overdue" // просрочка SLA согласования
+  | "deadline-today"; // срок заполнения/отправки истекает сегодня
 
 export const NOTIFICATION_TYPE_META: Record<
   NotificationType,
   { label: string; bg: string; text: string }
 > = {
-  "data-changed": { label: "Новые/изменённые данные", bg: "bg-blue-50 dark:bg-blue-500/15", text: "text-blue-700 dark:text-blue-300" },
+  "data-changed": { label: "Новая версия отчёта", bg: "bg-blue-50 dark:bg-blue-500/15", text: "text-blue-700 dark:text-blue-300" },
   "campaign-cancelled": { label: "Акция отменена", bg: "bg-red-50 dark:bg-red-500/15", text: "text-red-700 dark:text-red-300" },
   "line-removed": { label: "Удалена позиция", bg: "bg-orange-50 dark:bg-orange-500/15", text: "text-orange-700 dark:text-orange-300" },
   "marketing-reapproval": { label: "Повторное согласование маркетинга", bg: "bg-pink-50 dark:bg-pink-500/15", text: "text-pink-700 dark:text-pink-300" },
   "km-assignment": { label: "Назначение КМ", bg: "bg-violet-50 dark:bg-violet-500/15", text: "text-violet-700 dark:text-violet-300" },
   "ad-approval": { label: "Утверждение «В рекламу»", bg: "bg-emerald-50 dark:bg-emerald-500/15", text: "text-emerald-700 dark:text-emerald-300" },
+  "report-new": { label: "Новый отчёт по акции", bg: "bg-sky-50 dark:bg-sky-500/15", text: "text-sky-700 dark:text-sky-300" },
+  "review-new": { label: "Новое промо на согласование", bg: "bg-indigo-50 dark:bg-indigo-500/15", text: "text-indigo-700 dark:text-indigo-300" },
+  "review-returned": { label: "Возврат на корректировку", bg: "bg-rose-50 dark:bg-rose-500/15", text: "text-rose-700 dark:text-rose-300" },
+  "review-resubmitted": { label: "Повторная отправка", bg: "bg-cyan-50 dark:bg-cyan-500/15", text: "text-cyan-700 dark:text-cyan-300" },
+  "kd-approved": { label: "Согласовано КД", bg: "bg-green-50 dark:bg-green-500/15", text: "text-green-700 dark:text-green-300" },
+  "non-participation": { label: "Заявка о неучастии", bg: "bg-slate-100 dark:bg-slate-500/20", text: "text-slate-700 dark:text-slate-300" },
+  "auto-forwarded": { label: "Автопередача КД", bg: "bg-amber-50 dark:bg-amber-500/15", text: "text-amber-700 dark:text-amber-300" },
+  "sla-overdue": { label: "Просрочка срока согласования", bg: "bg-red-50 dark:bg-red-500/15", text: "text-red-700 dark:text-red-300" },
+  "deadline-today": { label: "Срок истекает сегодня", bg: "bg-yellow-50 dark:bg-yellow-500/15", text: "text-yellow-800 dark:text-yellow-300" },
 };
 
 export interface PromoNotification {
@@ -3351,6 +3371,21 @@ const ADJ_DEPARTMENTS_AUDIENCE: PromoRole[] = [
   "Администратор",
 ];
 
+// Волна 5 (5B) — события контура согласования. Участники: КМ (чьи данные),
+// проверяющие и Администратор.
+const REVIEW_AUDIENCE: PromoRole[] = [
+  "Категорийный менеджер (КМ)",
+  "Старший КМ",
+  "Коммерческий директор",
+  "Администратор",
+];
+/** Только проверяющие — событию «поступило на согласование» КМ не адресат. */
+const REVIEWERS_AUDIENCE: PromoRole[] = [
+  "Старший КМ",
+  "Коммерческий директор",
+  "Администратор",
+];
+
 /**
  * E-2 — what an action handler passes to `notify()`. The store fills in
  * id / sentAt / actor / read; audience defaults from `notificationAudienceFor`.
@@ -3381,10 +3416,21 @@ export function notificationAudienceFor(
     case "campaign-cancelled":
     case "line-removed":
     case "data-changed":
+    case "report-new":
       return ADJ_DEPARTMENTS_AUDIENCE;
     case "marketing-reapproval":
     case "ad-approval":
       return MARKETING_AUDIENCE;
+    case "review-new":
+    case "review-resubmitted":
+      return REVIEWERS_AUDIENCE;
+    case "review-returned":
+    case "kd-approved":
+    case "non-participation":
+    case "auto-forwarded":
+    case "sla-overdue":
+    case "deadline-today":
+      return REVIEW_AUDIENCE;
     case "km-assignment":
       return undefined;
   }
@@ -3524,7 +3570,138 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       read: true,
       href: "/full-calendar",
     },
+
+    // ── Волна 5 (5B): перечень событий контура согласования для КМ / ст. КМ / КД.
+    // Часть из них («срок истекает сегодня», «просрочка SLA») в моке живого
+    // источника не имеет — они выводятся из сидов, а не из планировщика.
+    {
+      id: "ntf-09",
+      type: "review-new",
+      campaignId: "PR-2026-001",
+      campaignName: "Чёрная пятница 2026",
+      actor: { name: "Каримов Шерзод", role: "Категорийный менеджер (КМ)" },
+      description: "Данные по 4 позициям отправлены на согласование. Требуется решение старшего КМ.",
+      sentAt: minutesAgo(12),
+      read: false,
+      href: "/approvals",
+      visibleTo: REVIEWERS_AUDIENCE,
+    },
+    {
+      id: "ntf-10",
+      type: "review-returned",
+      campaignId: "PR-2026-001",
+      campaignName: "Чёрная пятница 2026",
+      actor: { name: "Тошматов Фаррух", role: "Старший КМ" },
+      description: "Возврат на корректировку: скидка ниже минимальной маржи по категории — пересчитайте новую цену.",
+      sentAt: minutesAgo(50),
+      read: false,
+      href: "/approvals",
+      visibleTo: REVIEW_AUDIENCE,
+    },
+    {
+      id: "ntf-11",
+      type: "review-resubmitted",
+      campaignId: "PR-2026-002",
+      campaignName: "Рассрочка на технику к Новому году",
+      actor: { name: "Рашидова Дилноза", role: "Категорийный менеджер (КМ)" },
+      description: "Данные повторно отправлены на согласование после корректировки.",
+      sentAt: hoursAgo(2),
+      read: false,
+      href: "/approvals",
+      visibleTo: REVIEWERS_AUDIENCE,
+    },
+    {
+      id: "ntf-12",
+      type: "auto-forwarded",
+      campaignId: "PR-2026-002",
+      campaignName: "Рассрочка на технику к Новому году",
+      actor: { name: "Система", role: "Администратор" },
+      description: "Старший КМ просрочил срок согласования — заявка автоматически передана коммерческому директору.",
+      sentAt: hoursAgo(4),
+      read: false,
+      href: "/approvals",
+      visibleTo: REVIEW_AUDIENCE,
+    },
+    {
+      id: "ntf-13",
+      type: "sla-overdue",
+      campaignId: "PR-2026-006",
+      campaignName: "Скидки на климатическую технику",
+      actor: { name: "Система", role: "Администратор" },
+      description: "Срок согласования истёк: заявка ожидает решения дольше 2 рабочих дней.",
+      sentAt: hoursAgo(5),
+      read: false,
+      href: "/approvals",
+      visibleTo: REVIEW_AUDIENCE,
+    },
+    {
+      id: "ntf-14",
+      type: "deadline-today",
+      campaignId: "PR-2026-005",
+      campaignName: "Cashback на смартфоны",
+      actor: { name: "Система", role: "Администратор" },
+      description: "Сегодня истекает крайний срок заполнения данных КМ по акции.",
+      sentAt: hoursAgo(7),
+      read: false,
+      href: "/full-calendar",
+      visibleTo: REVIEW_AUDIENCE,
+    },
+    {
+      id: "ntf-15",
+      type: "kd-approved",
+      campaignId: "PR-2026-003",
+      campaignName: "1+1 на мелкую бытовую технику",
+      actor: { name: "Сардор Мавлянов", role: "Коммерческий директор" },
+      description: "Коммерческий директор согласовал данные КМ по акции.",
+      sentAt: daysAgo(1),
+      read: true,
+      href: "/approvals",
+      visibleTo: REVIEW_AUDIENCE,
+    },
+    {
+      id: "ntf-16",
+      type: "non-participation",
+      campaignId: "PR-2026-006",
+      campaignName: "Скидки на климатическую технику",
+      actor: { name: "Юсупова Нигора", role: "Категорийный менеджер (КМ)" },
+      description: "Отправлена заявка о неучастии в акции: нет подходящих позиций в категории.",
+      sentAt: daysAgo(1),
+      read: true,
+      href: "/approvals",
+      visibleTo: REVIEW_AUDIENCE,
+    },
+    {
+      id: "ntf-17",
+      type: "report-new",
+      campaignId: "PR-2026-007",
+      campaignName: "Летняя рассрочка на смартфоны",
+      reportVersion: 1,
+      actor: { name: "Сардор Мавлянов", role: "Коммерческий директор" },
+      description: "Направлен новый отчёт по акции: 1 позиция.",
+      sentAt: daysAgo(2),
+      read: true,
+      href: "/reports",
+      visibleTo: ADJ_DEPARTMENTS_AUDIENCE,
+    },
   ];
+}
+
+/**
+ * Волна 5 (5B) — краткое описание изменений для уведомления смежным отделам
+ * («Добавлено 2 позиции, изменены цены по 3 позициям»). Считается по тому же
+ * набору изменений, что рисует колонка «Изменение» в отчёте, поэтому текст
+ * уведомления и сам отчёт не расходятся.
+ */
+export function reportChangeSummary(campaignId: string): string {
+  const set = getReportChangeSet(campaignId);
+  const changedLines = new Set(set.changedCells.map((c) => c.lineId)).size;
+  const parts: string[] = [];
+  if (set.addedLineIds.length)
+    parts.push(`добавлено ${set.addedLineIds.length} поз.`);
+  if (changedLines) parts.push(`изменено ${changedLines} поз.`);
+  if (set.removedLineIds.length)
+    parts.push(`исключено ${set.removedLineIds.length} поз.`);
+  return parts.length ? parts.join(", ") : "без изменений состава";
 }
 
 /** E-2b — per-role notification config: which categories each role receives. */
@@ -3572,6 +3749,7 @@ export function notificationLinksFor(n: PromoNotification): NotificationLink[] {
   const reportAvailable = getSentCampaigns().some((c) => c.id === id);
   switch (n.type) {
     case "data-changed":
+    case "report-new":
       return reportAvailable ? [report, promo] : [promo];
     case "campaign-cancelled":
     case "line-removed":
@@ -3581,6 +3759,18 @@ export function notificationLinksFor(n: PromoNotification): NotificationLink[] {
       return [promo];
     case "ad-approval":
       return reportAvailable ? [report, promo] : [promo];
+    // Волна 5 (5B) — события контура согласования ведут в заявку, а из неё
+    // при необходимости в промо.
+    case "review-new":
+    case "review-returned":
+    case "review-resubmitted":
+    case "kd-approved":
+    case "non-participation":
+    case "auto-forwarded":
+    case "sla-overdue":
+      return [approval, promo];
+    case "deadline-today":
+      return [promo, approval];
   }
 }
 

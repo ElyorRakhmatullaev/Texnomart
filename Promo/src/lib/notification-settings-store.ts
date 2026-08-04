@@ -6,31 +6,58 @@ import type { NotificationType, RoleNotificationConfig } from "./promo-mock-data
 
 const STORAGE_KEY = "promo:notification-role-config";
 
-const ALL: NotificationType[] = [
-  "data-changed",
+// Операционные события промо (отмена, исключение позиции, маркетинг, назначение).
+const OPS: NotificationType[] = [
   "campaign-cancelled",
   "line-removed",
   "marketing-reapproval",
   "km-assignment",
   "ad-approval",
 ];
-// ADJ_DEPARTMENTS types (cancel/removed/data) + km-assignment (all).
+// Отчётные события: первый отчёт и новая версия.
+const REPORTS: NotificationType[] = ["report-new", "data-changed"];
+/**
+ * Волна 5 (5B) — контур согласования. Клиент перечислил события, которые
+ * обязаны приходить КМ, старшему КМ и коммерческому директору: возврат на
+ * корректировку, согласование КД, заявка о неучастии, назначение КМ, новое
+ * промо на согласование, повторная отправка, окончание срока сегодня,
+ * автопередача КД и просрочка SLA.
+ */
+const REVIEW: NotificationType[] = [
+  "review-new",
+  "review-returned",
+  "review-resubmitted",
+  "kd-approved",
+  "non-participation",
+  "auto-forwarded",
+  "sla-overdue",
+  "deadline-today",
+];
+
+/** Полный перечень — используется и для валидации сохранённого конфига. */
+const ALL: NotificationType[] = [...OPS, ...REPORTS, ...REVIEW];
+// Смежные подразделения: отчёты + отмена/исключение позиции + назначение КМ.
 const ADJ: NotificationType[] = [
-  "data-changed",
+  ...REPORTS,
   "campaign-cancelled",
   "line-removed",
   "km-assignment",
 ];
-const KM_ONLY: NotificationType[] = ["km-assignment"];
+// Старший КМ: весь контур согласования + назначение КМ.
+const SENIOR_KM: NotificationType[] = [...REVIEW, "km-assignment"];
+// КМ: то же, минус два события, адресованные проверяющим («поступило на
+// согласование» и «повторно отправлено») — их инициирует сам КМ.
+const KM: NotificationType[] = SENIOR_KM.filter(
+  (t) => t !== "review-new" && t !== "review-resubmitted"
+);
 
-/** Faithful inversion of the pre-E-2b audiences → role→categories. */
 export const DEFAULT_ROLE_CONFIG: RoleNotificationConfig = {
   "Коммерческий директор": [...ALL],
   "Операционный директор": [...ADJ],
-  "Директор маркетинга": [...ALL],
-  "Категорийный менеджер (КМ)": [...KM_ONLY],
-  "Старший КМ": [...KM_ONLY],
-  "Сотрудник маркетинга": [...ALL],
+  "Директор маркетинга": [...OPS, ...REPORTS],
+  "Категорийный менеджер (КМ)": [...KM],
+  "Старший КМ": [...SENIOR_KM],
+  "Сотрудник маркетинга": [...OPS, ...REPORTS],
   "Сотрудник закупа": [...ADJ],
   "Сотрудник аналитики": [...ADJ],
   "Администратор": [...ALL],

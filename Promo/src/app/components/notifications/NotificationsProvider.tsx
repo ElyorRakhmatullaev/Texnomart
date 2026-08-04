@@ -39,11 +39,36 @@ const NotificationsContext = React.createContext<
  * apply the persisted per-user read-set. Seeds are rebuilt here (never via
  * `notify`) so NO toast fires on load — only real actions toast.
  */
+/**
+ * Волна 5 (5B): ключ дедупликации. Одно событие не должно приходить пользователю
+ * дважды — а это реально: живая эмиссия из двух обработчиков одного действия,
+ * повторный клик, либо живое событие, дублирующее сид. Ключ намеренно НЕ
+ * включает `sentAt` и `actor`: дубль отличается именно временем.
+ */
+function dedupeKey(n: PromoNotification): string {
+  return [n.type, n.campaignId ?? "", n.reportVersion ?? "", n.description].join("|");
+}
+
+/** Оставляет по каждому ключу самую свежую запись, порядок не меняя. */
+function dedupe(list: PromoNotification[]): PromoNotification[] {
+  const seen = new Set<string>();
+  const out: PromoNotification[] = [];
+  for (const n of list) {
+    const key = dedupeKey(n);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(n);
+  }
+  return out;
+}
+
 function buildInitial(userId: string | null): PromoNotification[] {
   const readIds = getReadIds(userId);
-  return [...getLiveNotifications(), ...buildNotifications()]
+  const merged = [...getLiveNotifications(), ...buildNotifications()]
     .map((n) => (readIds.has(n.id) ? { ...n, read: true } : n))
     .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
+  // Список уже отсортирован по убыванию даты, поэтому dedupe оставит новейший.
+  return dedupe(merged);
 }
 
 /**
@@ -104,7 +129,7 @@ export function NotificationsProvider({
         new Date()
       );
       setNotifications((prev) =>
-        [n, ...prev].sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime())
+        dedupe([n, ...prev].sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime()))
       );
       appendLiveNotification(n);
       const meta = NOTIFICATION_TYPE_META[n.type];

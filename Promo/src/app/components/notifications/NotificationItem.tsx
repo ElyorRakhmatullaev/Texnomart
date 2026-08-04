@@ -1,13 +1,23 @@
 "use client";
 
+import * as React from "react";
 import { Link } from "react-router";
 import {
   Ban,
+  CalendarClock,
   Check,
+  CheckCheck,
   CircleMinus,
+  FileText,
+  Forward,
+  Inbox,
   Megaphone,
   RefreshCw,
   RotateCcw,
+  Send,
+  TriangleAlert,
+  Undo2,
+  UserMinus,
   UserPlus,
   type LucideIcon,
 } from "lucide-react";
@@ -17,11 +27,14 @@ import { buttonVariants } from "@texnomart/ui/button";
 import { RuDate } from "../../../components/RuDate";
 import {
   NOTIFICATION_TYPE_META,
+  formatPromoNo,
   notificationLinksFor,
   type NotificationType,
   type PromoNotification,
 } from "../../../lib/promo-mock-data";
 import { rolesForType } from "../../../lib/notification-settings-store";
+import { rolesOf } from "../../../lib/users-store";
+import { useCurrentUser } from "../../current-user-context";
 import { useRole } from "../../role-context";
 import { useNotificationSettings } from "../notification-settings/NotificationSettingsProvider";
 
@@ -32,6 +45,16 @@ const TYPE_ICONS: Record<NotificationType, LucideIcon> = {
   "marketing-reapproval": RotateCcw,
   "km-assignment": UserPlus,
   "ad-approval": Megaphone,
+  // Волна 5 (5B)
+  "report-new": FileText,
+  "review-new": Inbox,
+  "review-returned": Undo2,
+  "review-resubmitted": Send,
+  "kd-approved": CheckCheck,
+  "non-participation": UserMinus,
+  "auto-forwarded": Forward,
+  "sla-overdue": TriangleAlert,
+  "deadline-today": CalendarClock,
 };
 
 interface NotificationItemProps {
@@ -47,9 +70,20 @@ export function NotificationItem({
   const Icon = TYPE_ICONS[n.type];
   const { config } = useNotificationSettings();
   const { currentRole } = useRole();
+  const { currentUser } = useCurrentUser();
   const tagRoles = rolesForType(n.type, config);
   const links = notificationLinksFor(n);
-  const currentIncluded = tagRoles.includes(currentRole);
+
+  // Волна 5 (5B): у пользователя может быть несколько ролей, и клиенту важно
+  // видеть, В РАМКАХ КАКОЙ роли пришло это уведомление, а не весь целевой набор.
+  // Берём пересечение ролей пользователя (плюс активная роль god-mode-переключателя)
+  // с ролями, которым этот тип настроен. Полный набор остаётся в подсказке.
+  const myRoles = React.useMemo(() => {
+    const own = currentUser ? rolesOf(currentUser) : [];
+    return Array.from(new Set<string>([...own, currentRole]));
+  }, [currentUser, currentRole]);
+  const receivingRoles = myRoles.filter((r) => tagRoles.includes(r as never));
+  const isAdmin = myRoles.includes("Администратор");
 
   return (
     <div
@@ -95,8 +129,15 @@ export function NotificationItem({
           )}
         </div>
 
-        {n.campaignName && (
+        {/* № промо + название — клиент требует оба во ВСЕХ уведомлениях (5B). */}
+        {(n.campaignId || n.campaignName) && (
           <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {n.campaignId && (
+              <span className="tabular-nums text-muted-foreground">
+                № {formatPromoNo(n.campaignId)}
+                {n.campaignName ? " · " : ""}
+              </span>
+            )}
             {n.campaignName}
           </p>
         )}
@@ -119,22 +160,35 @@ export function NotificationItem({
         </div>
 
         <div className="flex flex-wrap items-center gap-1 text-xs">
-          <span className="text-muted-foreground">Роли:</span>
-          {tagRoles.length === 0 ? (
-            <span className="text-muted-foreground">—</span>
+          {/* Администратор видит всё в обход конфига — он наблюдатель, а не
+              адресат, поэтому ему показываем целевые роли, а не «Вам как». */}
+          {receivingRoles.length > 0 && !isAdmin ? (
+            <>
+              <span className="text-muted-foreground">Вам как:</span>
+              <span
+                className="inline-flex items-center rounded-md bg-primary px-1.5 py-0.5 font-medium text-primary-foreground"
+                title={`Получатели категории: ${tagRoles.join(", ")}`}
+              >
+                {receivingRoles.join(", ")}
+              </span>
+            </>
           ) : (
-            <span
-              className={cn(
-                "inline-flex items-center rounded-md px-1.5 py-0.5 font-medium",
-                currentIncluded
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-gray-100 text-gray-600 dark:bg-muted dark:text-gray-300"
+            <>
+              <span className="text-muted-foreground">
+                {isAdmin ? "Получают роли:" : "Для роли:"}
+              </span>
+              {tagRoles.length === 0 ? (
+                <span className="text-muted-foreground">—</span>
+              ) : (
+                <span
+                  className="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 font-medium text-gray-600 dark:bg-muted dark:text-gray-300"
+                  title={tagRoles.join(", ")}
+                >
+                  {tagRoles.slice(0, 2).join(", ")}
+                  {tagRoles.length > 2 ? ` +${tagRoles.length - 2}` : ""}
+                </span>
               )}
-              title={tagRoles.join(", ")}
-            >
-              {tagRoles.slice(0, 2).join(", ")}
-              {tagRoles.length > 2 ? ` +${tagRoles.length - 2}` : ""}
-            </span>
+            </>
           )}
         </div>
 
@@ -151,6 +205,8 @@ export function NotificationItem({
               {lnk.label}
             </Link>
           ))}
+          {/* 5B: в центре уведомлений — только статус ПРОЧТЕНИЯ. «Ознакомлен»
+              относится к отчёту смежного отдела и живёт внутри самого отчёта. */}
           {!n.read && (
             <Button
               variant="ghost"
@@ -159,7 +215,7 @@ export function NotificationItem({
               onClick={() => onAcknowledge(n.id)}
             >
               <Check className="size-4" />
-              Ознакомлен
+              Отметить прочитанным
             </Button>
           )}
         </div>

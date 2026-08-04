@@ -4,13 +4,17 @@ import * as React from "react";
 import {
   approvedKmStatusFor,
   buildReviewItems,
+  getCampaignById,
+  getCategoryManager,
   reviewItemId,
   REJECTED_KM_STATUS,
   reviewQueueFor,
   type KmStatus,
+  type NotificationInput,
   type ReviewComment,
   type ReviewItem,
 } from "../../../lib/promo-mock-data";
+import { useNotifications } from "../notifications/NotificationsProvider";
 import type { PromoRole } from "../../role-context";
 
 /**
@@ -202,33 +206,84 @@ export function ApprovalsProvider({ children }: { children: React.ReactNode }) {
     () => buildReviewItems()
   );
 
+  // Волна 5 (5B) — живые уведомления по контуру согласования. Эмиссия живёт в
+  // экшен-креаторах, а НЕ в редьюсере: редьюсер обязан остаться чистым.
+  const { notify } = useNotifications();
+  const notifyFor = React.useCallback(
+    (campaignId: string, input: Omit<NotificationInput, "campaignId" | "campaignName">) => {
+      const c = getCampaignById(campaignId);
+      notify({ ...input, campaignId, campaignName: c?.name });
+    },
+    [notify]
+  );
+  const kmName = (kmId: string) => getCategoryManager(kmId)?.name ?? kmId;
+
   const value = React.useMemo<ApprovalsContextValue>(
     () => ({
       items,
       getItem: (id) => items.find((it) => it.id === id),
       queueFor: (role) => reviewQueueFor(role, items),
-      approve: (itemId, actor) =>
-        dispatch({ type: "approve", itemId, actor, at: new Date().toISOString() }),
-      reject: (itemId, opts) =>
-        dispatch({ type: "reject", itemId, ...opts, at: new Date().toISOString() }),
-      requestNonParticipation: (campaignId, kmId, reason) =>
+      approve: (itemId, actor) => {
+        dispatch({ type: "approve", itemId, actor, at: new Date().toISOString() });
+        const it = items.find((i) => i.id === itemId);
+        if (!it) return;
+        // Старший КМ передаёт набор дальше — для КД это НОВОЕ промо на согласование;
+        // решение КД финальное, о нём узнают КМ и старший КМ.
+        notifyFor(
+          it.campaignId,
+          actor === "Старший КМ"
+            ? {
+                type: "review-new",
+                description: `Набор КМ ${kmName(it.kmId)} согласован старшим КМ и передан коммерческому директору.`,
+                href: "/approvals",
+              }
+            : {
+                type: "kd-approved",
+                description: `Коммерческий директор согласовал данные КМ ${kmName(it.kmId)}.`,
+                href: "/approvals",
+              }
+        );
+      },
+      reject: (itemId, opts) => {
+        dispatch({ type: "reject", itemId, ...opts, at: new Date().toISOString() });
+        const it = items.find((i) => i.id === itemId);
+        if (!it) return;
+        notifyFor(it.campaignId, {
+          type: "review-returned",
+          description: `Данные КМ ${kmName(it.kmId)} возвращены на корректировку: ${opts.comment}`,
+          href: "/approvals",
+        });
+      },
+      requestNonParticipation: (campaignId, kmId, reason) => {
         dispatch({
           type: "request-non-participation",
           campaignId,
           kmId,
           reason,
           at: new Date().toISOString(),
-        }),
-      setNonParticipationByKd: (campaignId, kmId, reason) =>
+        });
+        notifyFor(campaignId, {
+          type: "non-participation",
+          description: `КМ ${kmName(kmId)} отправил заявку о неучастии: ${reason}`,
+          href: "/approvals",
+        });
+      },
+      setNonParticipationByKd: (campaignId, kmId, reason) => {
         dispatch({
           type: "set-non-participation-kd",
           campaignId,
           kmId,
           reason,
           at: new Date().toISOString(),
-        }),
+        });
+        notifyFor(campaignId, {
+          type: "non-participation",
+          description: `Коммерческий директор установил «Не участвует» для КМ ${kmName(kmId)}.${reason ? ` ${reason}` : ""}`,
+          href: "/approvals",
+        });
+      },
     }),
-    [items]
+    [items, notifyFor]
   );
 
   return (

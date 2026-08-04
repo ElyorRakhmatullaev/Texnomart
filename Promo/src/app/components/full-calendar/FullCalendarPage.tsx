@@ -83,6 +83,7 @@ import {
   type CampaignStatus,
   type CampaignVersion,
   type DuplicateHit,
+  reportChangeSummary,
   type ImportParseResult,
   type LinePendingChange,
   type ParsedImportRow,
@@ -912,12 +913,18 @@ export function FullCalendarPage() {
         next.delete(campaignId);
         return next;
       });
+      // 5B: первая отправка — «новый отчёт по акции», последующие — «новая версия»;
+      // в тексте краткое описание изменений, посчитанное по тому же набору, что
+      // рисует колонка «Изменение» в отчёте.
       notify({
-        type: "data-changed",
+        type: nextNo <= 1 ? "report-new" : "data-changed",
         campaignId,
         campaignName: campaignsById.get(campaignId)?.name,
         reportVersion: nextNo,
-        description: `Сформирована и отправлена версия ${nextNo} смежным отделам (инкрементально).`,
+        description:
+          nextNo <= 1
+            ? `Направлен новый отчёт по акции (версия ${nextNo}).`
+            : `Направлена новая версия отчёта (${nextNo}): ${reportChangeSummary(campaignId)}.`,
         href: "/reports",
       });
     },
