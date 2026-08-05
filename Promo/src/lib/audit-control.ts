@@ -544,13 +544,20 @@ export function buildParticipantMetrics(
   );
 
   // Ростер, а не список из точек: участник без задач обязан быть виден (со строкой
-  // «Нет данных»). Фильтр «Участник» сужает и его, иначе остальные дадут пустые строки.
-  const roster = participantsFor(role).filter(
-    (name) =>
+  // «Нет данных»). Но ростер тоже обязан подчиняться скоупу прав — иначе рядовой КМ
+  // увидит строки чужих КМ (пусть и пустые), что нарушает «только свои промо».
+  // Фильтр «Участник» сужает его дополнительно, иначе остальные дадут пустые строки.
+  const scopeNames = opts?.scope?.kmNames;
+  const roster = participantsFor(role).filter((name) => {
+    if (role === KM_ROLE && scopeNames && scopeNames !== "all" && !scopeNames.includes(name)) {
+      return false;
+    }
+    return (
       !opts?.filters ||
       opts.filters.participant === "all" ||
       opts.filters.participant === name
-  );
+    );
+  });
 
   const rows = roster.map((name) => {
     const mine = points.filter((p) => p.responsibleName === name);

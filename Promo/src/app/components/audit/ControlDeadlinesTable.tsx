@@ -25,6 +25,38 @@ export function ControlDeadlinesTable({
   points: ControlPoint[];
   lead: "plan" | "promo";
 }) {
+  // 5C, вкладка 2 п. 8 — «нижний горизонтальный скролл как в Excel».
+  // Замечание воспроизводится: бокс ограничен `max-h-[calc(100vh-320px)]`, но начинается
+  // низко на странице, поэтому его собственная горизонтальная полоса уходит НИЖЕ вьюпорта
+  // (замерено на 1440×900: нижняя кромка y≈1125). Добавляем закреплённую снизу дорожку,
+  // синхронизированную с телом таблицы, — тот же приём, что в band-таблицах «7-й части» §4.
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const trackRef = React.useRef<HTMLDivElement>(null);
+  const [scrollW, setScrollW] = React.useState(0);
+
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setScrollW(el.scrollWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [points, lead]);
+
+  // Присваивание того же значения не порождает событие scroll, поэтому цикла нет.
+  const syncFromBody = () => {
+    if (scrollRef.current && trackRef.current) {
+      trackRef.current.scrollLeft = scrollRef.current.scrollLeft;
+    }
+  };
+  const syncFromTrack = () => {
+    if (scrollRef.current && trackRef.current) {
+      scrollRef.current.scrollLeft = trackRef.current.scrollLeft;
+    }
+  };
+  const needsTrack = scrollW > (scrollRef.current?.clientWidth ?? 0);
+
   if (points.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center text-sm text-muted-foreground">
@@ -38,8 +70,16 @@ export function ControlDeadlinesTable({
   return (
     <>
       {/* Desktop table */}
-      <div className="hidden overflow-hidden rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:block">
-        <div className="max-h-[calc(100vh-320px)] overflow-auto [scrollbar-gutter:stable]">
+      {/* overflow-clip, а НЕ overflow-hidden: hidden создаёт контейнер прокрутки, и
+          закреплённая снизу полоса приклеилась бы к низу карточки (то есть тоже ниже
+          вьюпорта). clip только обрезает скругления и оставляет sticky на скроллпорте
+          страницы — тот же механизм, на котором держится закреплённая шапка. */}
+      <div className="hidden overflow-clip rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:block">
+        <div
+          ref={scrollRef}
+          onScroll={syncFromBody}
+          className="max-h-[calc(100vh-320px)] overflow-auto [scrollbar-gutter:stable]"
+        >
           {/* 7-я часть §6.2 — explicit compact widths on the short-value columns so a
               full-width table doesn't pad them with dead space; the remaining width
               goes to «Комментарий» (long text stays readable, §6.3). */}
@@ -105,6 +145,19 @@ export function ControlDeadlinesTable({
             </tbody>
           </table>
         </div>
+
+        {/* Закреплённая снизу горизонтальная полоса: собственная полоса бокса уходит
+            ниже вьюпорта, поэтому дублируем её у нижней кромки видимой области. */}
+        {needsTrack && (
+          <div
+            ref={trackRef}
+            onScroll={syncFromTrack}
+            className="sticky bottom-0 z-30 overflow-x-auto overflow-y-hidden border-t border-gray-200 dark:border-border bg-white dark:bg-card"
+            aria-hidden="true"
+          >
+            <div style={{ width: scrollW, height: 1 }} />
+          </div>
+        )}
       </div>
 
       {/* Mobile cards (Mode B) */}
