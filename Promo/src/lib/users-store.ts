@@ -1,4 +1,16 @@
 import type { PromoRole } from "../app/role-context";
+import { activeRolesOf, type RoleAssignment } from "./user-roles";
+
+export type { RoleAssignment, RoleKind, RoleCarrier } from "./user-roles";
+export {
+  ROLE_KIND_LABEL,
+  assignmentsOf,
+  permanentRolesOf,
+  primaryRoleOf,
+  temporaryAssignments,
+  isAssignmentActive,
+  isAssignmentExpired,
+} from "./user-roles";
 
 export type UserStatus = "active" | "temp-password" | "blocked";
 
@@ -28,6 +40,13 @@ export interface PromoUser {
   adminScope?: AdminScope;
   /** Связь с CATEGORY_MANAGERS.id — для конфликта интересов при замещении КД (E-4). */
   kmId?: string;
+  /**
+   * Реестр ролей (5D): основная / дополнительные / временные с периодом.
+   * Отсутствует у старых снапшотов localStorage — тогда строится из `roles`/`role`.
+   */
+  roleAssignments?: RoleAssignment[];
+  /** ФИО создателя учётной записи (5D, стр. 66 п. 2). */
+  createdBy?: string;
 }
 
 /** Подразделения (E-4). */
@@ -40,9 +59,13 @@ export const DEPARTMENTS: string[] = [
   "ИТ / Администрирование",
 ];
 
-/** Полный набор ролей пользователя (E-4). Читайте роли ТОЛЬКО через этот хелпер. */
+/**
+ * Полный набор ДЕЙСТВУЮЩИХ ролей пользователя (E-4 · 5D). Читайте роли ТОЛЬКО
+ * через этот хелпер: истёкшие временные роли сюда не попадают. Где нужны именно
+ * постоянные роли (гварды администраторов) — `permanentRolesOf`.
+ */
 export function rolesOf(user: PromoUser): PromoRole[] {
-  return user.roles && user.roles.length > 0 ? user.roles : [user.role];
+  return activeRolesOf(user);
 }
 
 export interface NewUserInput {
@@ -62,14 +85,44 @@ const STORAGE_KEY = "promo:users";
 // несколько функциональных ролей и один пользователь с временным паролём
 // для демонстрации обязательной смены при первом входе.
 const SEED_USERS: PromoUser[] = [
-  { id: "u-1", fullName: "Сардор Мавлянов", email: "sardor@texnomart.uz", role: "Коммерческий директор", roles: ["Коммерческий директор"], status: "active", password: "Director2026!", mustChangePassword: false, createdAt: "2026-01-10T09:00:00.000Z", department: "Коммерческий департамент", position: "Коммерческий директор" },
-  { id: "u-2", fullName: "Администратор Системы", email: "admin@texnomart.uz", role: "Администратор", roles: ["Администратор"], status: "active", password: "Admin2026!", mustChangePassword: false, createdAt: "2026-01-10T09:00:00.000Z", department: "ИТ / Администрирование", position: "Системный администратор" },
-  { id: "u-3", fullName: "Резервный Администратор", email: "reserv@texnomart.uz", role: "Администратор", roles: ["Администратор"], status: "active", password: "Backup2026!", mustChangePassword: false, createdAt: "2026-01-10T09:00:00.000Z", department: "ИТ / Администрирование", position: "Системный администратор" },
-  { id: "u-4", fullName: "Каримов Шохрух", email: "karimov@texnomart.uz", role: "Категорийный менеджер (КМ)", roles: ["Категорийный менеджер (КМ)"], status: "active", password: "Manager2026!", mustChangePassword: false, createdAt: "2026-02-02T09:00:00.000Z", department: "Категорийный менеджмент", position: "Категорийный менеджер", managerId: "u-5", kmId: "km-3" },
-  { id: "u-5", fullName: "Исмаилов Жасур", email: "ismailov@texnomart.uz", role: "Старший КМ", roles: ["Старший КМ", "Категорийный менеджер (КМ)"], status: "active", password: "Senior2026!", mustChangePassword: false, createdAt: "2026-02-02T09:00:00.000Z", department: "Категорийный менеджмент", position: "Старший категорийный менеджер", managerId: "u-1", kmId: "km-6" },
-  { id: "u-6", fullName: "Алиева Нигора", email: "alieva@texnomart.uz", role: "Сотрудник маркетинга", roles: ["Сотрудник маркетинга"], status: "active", password: "Market2026!", mustChangePassword: false, createdAt: "2026-03-15T09:00:00.000Z", department: "Маркетинг", position: "Маркетолог", managerId: "u-1", adminScope: { kind: "department", department: "Маркетинг" } },
-  { id: "u-7", fullName: "Новый Сотрудник", email: "newuser@texnomart.uz", role: "Сотрудник закупа", roles: ["Сотрудник закупа"], status: "temp-password", password: "Temp1234!a", mustChangePassword: true, createdAt: "2026-06-20T09:00:00.000Z", department: "Закуп", position: "Специалист по закупкам", managerId: "u-1" },
-  { id: "u-8", fullName: "Тошматов Фаррух", email: "toshmatov@texnomart.uz", role: "Категорийный менеджер (КМ)", roles: ["Категорийный менеджер (КМ)"], status: "active", password: "Manager2026!", mustChangePassword: false, createdAt: "2026-02-10T09:00:00.000Z", department: "Категорийный менеджмент", position: "Категорийный менеджер", managerId: "u-5", kmId: "km-5" },
+  { id: "u-1", fullName: "Сардор Мавлянов", email: "sardor@texnomart.uz", role: "Коммерческий директор", roles: ["Коммерческий директор"], status: "active", password: "Director2026!", mustChangePassword: false, createdAt: "2026-01-10T09:00:00.000Z", department: "Коммерческий департамент", position: "Коммерческий директор", createdBy: "Администратор Системы" },
+  { id: "u-2", fullName: "Администратор Системы", email: "admin@texnomart.uz", role: "Администратор", roles: ["Администратор"], status: "active", password: "Admin2026!", mustChangePassword: false, createdAt: "2026-01-10T09:00:00.000Z", department: "ИТ / Администрирование", position: "Системный администратор", createdBy: "Первичная настройка системы" },
+  { id: "u-3", fullName: "Резервный Администратор", email: "reserv@texnomart.uz", role: "Администратор", roles: ["Администратор"], status: "active", password: "Backup2026!", mustChangePassword: false, createdAt: "2026-01-10T09:00:00.000Z", department: "ИТ / Администрирование", position: "Системный администратор", createdBy: "Администратор Системы" },
+  // u-4 — истёкшая временная роль: демонстрирует, что права по окончании периода не действуют.
+  {
+    id: "u-4", fullName: "Каримов Шохрух", email: "karimov@texnomart.uz", role: "Категорийный менеджер (КМ)", roles: ["Категорийный менеджер (КМ)"], status: "active", password: "Manager2026!", mustChangePassword: false, createdAt: "2026-02-02T09:00:00.000Z", department: "Категорийный менеджмент", position: "Категорийный менеджер", managerId: "u-5", kmId: "km-3", createdBy: "Администратор Системы",
+    roleAssignments: [
+      { role: "Категорийный менеджер (КМ)", kind: "primary" },
+      {
+        role: "Старший КМ",
+        kind: "temporary",
+        from: "2026-05-01",
+        to: "2026-05-31",
+        assignedBy: "Администратор Системы",
+        assignedAt: "2026-04-28T09:00:00.000Z",
+        reason: "Исполнение обязанностей на период отсутствия старшего КМ.",
+      },
+    ],
+  },
+  { id: "u-5", fullName: "Исмаилов Жасур", email: "ismailov@texnomart.uz", role: "Старший КМ", roles: ["Старший КМ", "Категорийный менеджер (КМ)"], status: "active", password: "Senior2026!", mustChangePassword: false, createdAt: "2026-02-02T09:00:00.000Z", department: "Категорийный менеджмент", position: "Старший категорийный менеджер", managerId: "u-1", kmId: "km-6", createdBy: "Администратор Системы" },
+  // u-6 — активная временная роль (окно вокруг демо-даты 2026-08-05).
+  {
+    id: "u-6", fullName: "Алиева Нигора", email: "alieva@texnomart.uz", role: "Сотрудник маркетинга", roles: ["Сотрудник маркетинга"], status: "active", password: "Market2026!", mustChangePassword: false, createdAt: "2026-03-15T09:00:00.000Z", department: "Маркетинг", position: "Маркетолог", managerId: "u-1", adminScope: { kind: "department", department: "Маркетинг" }, createdBy: "Администратор Системы",
+    roleAssignments: [
+      { role: "Сотрудник маркетинга", kind: "primary" },
+      {
+        role: "Директор маркетинга",
+        kind: "temporary",
+        from: "2026-08-01",
+        to: "2026-08-31",
+        assignedBy: "Администратор Системы",
+        assignedAt: "2026-07-31T09:00:00.000Z",
+        reason: "Замещение на период отпуска директора маркетинга.",
+      },
+    ],
+  },
+  { id: "u-7", fullName: "Новый Сотрудник", email: "newuser@texnomart.uz", role: "Сотрудник закупа", roles: ["Сотрудник закупа"], status: "temp-password", password: "Temp1234!a", mustChangePassword: true, createdAt: "2026-06-20T09:00:00.000Z", department: "Закуп", position: "Специалист по закупкам", managerId: "u-1", createdBy: "Алиева Нигора" },
+  { id: "u-8", fullName: "Тошматов Фаррух", email: "toshmatov@texnomart.uz", role: "Категорийный менеджер (КМ)", roles: ["Категорийный менеджер (КМ)"], status: "active", password: "Manager2026!", mustChangePassword: false, createdAt: "2026-02-10T09:00:00.000Z", department: "Категорийный менеджмент", position: "Категорийный менеджер", managerId: "u-5", kmId: "km-5", createdBy: "Администратор Системы" },
 ];
 
 function read(): PromoUser[] {
