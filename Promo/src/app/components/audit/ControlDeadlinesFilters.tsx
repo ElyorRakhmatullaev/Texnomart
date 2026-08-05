@@ -3,29 +3,35 @@
 import * as React from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { Button } from "@texnomart/ui/button";
-import { Input } from "@texnomart/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@texnomart/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@texnomart/ui/sheet";
+import { PromoNoFilter, type PromoNoOption } from "../short-calendar/PromoNoFilter";
 import type { ControlPoint, ControlResult } from "../../../lib/audit-control";
 import type { AuditGlobalFilters } from "./AuditPage";
 
 export interface ControlFilters {
-  promo: string;           // № промо substring
+  /** Выбранные акции (id). Пусто = все. Подписи — «26-N · Название», как в кратком календаре. */
+  promoIds: string[];
   planPeriod: string;      // "all" | подпись планового периода («Ноябрь 2026») — только вкладка 1
+  /** Период ПРОВЕДЕНИЯ акции (ISO yyyy-mm-dd) — только вкладка 2, отдельно от периода дедлайна. */
+  promoFrom: string;
+  promoTo: string;
   responsible: string;     // "all" | exact responsibleName
   checkpoint: string;      // "all" | exact checkpoint
   result: "all" | ControlResult | "overdue"; // overdue = «Только просроченные»
 }
 export const EMPTY_CONTROL_FILTERS: ControlFilters = {
-  promo: "", planPeriod: "all", responsible: "all", checkpoint: "all", result: "all",
+  promoIds: [], planPeriod: "all", promoFrom: "", promoTo: "",
+  responsible: "all", checkpoint: "all", result: "all",
 };
 
 export function countActiveControlFilters(f: ControlFilters): number {
   let n = 0;
-  if (f.promo.trim()) n++;
+  if (f.promoIds.length) n++;
   if (f.planPeriod !== "all") n++;
+  if (f.promoFrom || f.promoTo) n++;
   if (f.responsible !== "all") n++;
   if (f.checkpoint !== "all") n++;
   if (f.result !== "all") n++;
@@ -44,11 +50,12 @@ export function applyControlFilters(
     const ts = p.deadline.getTime();
     if (fromTs !== null && ts < fromTs) return false;
     if (toTs !== null && ts > toTs) return false;
-    if (f.promo.trim()) {
-      const q = f.promo.trim().toLowerCase();
-      if (!p.promoNo.toLowerCase().includes(q) && !p.promoName.toLowerCase().includes(q)) return false;
-    }
+    if (f.promoIds.length > 0 && !f.promoIds.includes(p.campaignId)) return false;
     if (f.planPeriod !== "all" && p.planPeriod?.label !== f.planPeriod) return false;
+    // Пересечение с периодом проведения акции (акция попадает в выборку, если её период
+    // пересекается с выбранным, а не только если целиком в него входит).
+    if (f.promoFrom && p.promoPeriod && p.promoPeriod.end < new Date(`${f.promoFrom}T00:00:00`)) return false;
+    if (f.promoTo && p.promoPeriod && p.promoPeriod.start > new Date(`${f.promoTo}T23:59:59`)) return false;
     if (f.responsible !== "all" && p.responsibleName !== f.responsible) return false;
     if (f.checkpoint !== "all" && p.checkpoint !== f.checkpoint) return false;
     if (f.result === "overdue" && p.overdueDays <= 0) return false;
@@ -58,7 +65,7 @@ export function applyControlFilters(
 }
 
 function Fields({
-  values, onChange, responsibles, checkpoints, planPeriods, layout = "row",
+  values, onChange, responsibles, checkpoints, planPeriods, promoOptions, showPromoPeriod, layout = "row",
 }: {
   values: ControlFilters;
   onChange: (p: Partial<ControlFilters>) => void;
@@ -66,17 +73,38 @@ function Fields({
   checkpoints: string[];
   /** Плановые периоды — только вкладка «Сроки по плану»; на вкладке промо не передаются. */
   planPeriods: string[];
+  promoOptions: PromoNoOption[];
+  /** Период проведения акции — только вкладка «Сроки по промо и отчётам». */
+  showPromoPeriod: boolean;
   layout?: "row" | "stack";
 }) {
   const wrap = layout === "row" ? "flex flex-wrap items-end gap-2" : "flex flex-col gap-3";
   return (
     <div className={wrap}>
-      <Input
-        placeholder="№ промо или название"
-        value={values.promo}
-        onChange={(e) => onChange({ promo: e.target.value })}
-        className="h-9 w-full sm:w-56 bg-white dark:bg-card text-sm"
+      <PromoNoFilter
+        options={promoOptions}
+        selected={values.promoIds}
+        onChange={(ids) => onChange({ promoIds: ids })}
+        width={layout === "row" ? "w-[240px]" : "w-full"}
       />
+      {showPromoPeriod && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Период акции</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="date" value={values.promoFrom} onChange={(e) => onChange({ promoFrom: e.target.value })}
+              className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
+              aria-label="Период акции, с"
+            />
+            <span className="text-gray-400">—</span>
+            <input
+              type="date" value={values.promoTo} onChange={(e) => onChange({ promoTo: e.target.value })}
+              className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
+              aria-label="Период акции, по"
+            />
+          </div>
+        </div>
+      )}
       {planPeriods.length > 0 && (
         <Select value={values.planPeriod} onValueChange={(v) => onChange({ planPeriod: v })}>
           <SelectTrigger className="h-9 w-full sm:w-48 bg-white dark:bg-card text-sm"><SelectValue placeholder="Период плана" /></SelectTrigger>
@@ -139,12 +167,26 @@ export function ControlDeadlinesFilters({
       ),
     [points]
   );
+  // Значение опции — campaignId; форматируется только подпись («26-N»), как в кратком календаре.
+  const promoOptions = React.useMemo<PromoNoOption[]>(() => {
+    const map = new Map<string, PromoNoOption>();
+    for (const p of points) {
+      if (!map.has(p.campaignId)) {
+        map.set(p.campaignId, { id: p.campaignId, no: p.promoNo, name: p.promoName });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      a.no.localeCompare(b.no, "ru", { numeric: true })
+    );
+  }, [points]);
+  // Период проведения акции есть только у промо-точек.
+  const showPromoPeriod = React.useMemo(() => points.some((p) => !!p.promoPeriod), [points]);
   const active = countActiveControlFilters(values);
 
   return (
     <>
       <div className="hidden md:flex md:flex-wrap md:items-end md:justify-between md:gap-3">
-        <Fields values={values} onChange={onChange} responsibles={responsibles} checkpoints={checkpoints} planPeriods={planPeriods} />
+        <Fields values={values} onChange={onChange} responsibles={responsibles} checkpoints={checkpoints} planPeriods={planPeriods} promoOptions={promoOptions} showPromoPeriod={showPromoPeriod} />
         <div className="flex items-center gap-3">
           {active > 0 && (
             <Button variant="ghost" size="sm" className="h-9" onClick={onClear}>Очистить</Button>
@@ -165,7 +207,7 @@ export function ControlDeadlinesFilters({
         <SheetContent side="right" className="w-full max-w-sm overflow-y-auto">
           <SheetHeader><SheetTitle>Фильтры сроков</SheetTitle></SheetHeader>
           <div className="px-4 pb-6">
-            <Fields values={values} onChange={onChange} responsibles={responsibles} checkpoints={checkpoints} planPeriods={planPeriods} layout="stack" />
+            <Fields values={values} onChange={onChange} responsibles={responsibles} checkpoints={checkpoints} planPeriods={planPeriods} promoOptions={promoOptions} showPromoPeriod={showPromoPeriod} layout="stack" />
             <div className="mt-5 flex gap-2">
               {active > 0 && <Button variant="outline" className="flex-1" onClick={onClear}>Очистить</Button>}
               <Button className="flex-1" onClick={() => setSheetOpen(false)}>Показать {shown.toLocaleString("ru-RU")}</Button>

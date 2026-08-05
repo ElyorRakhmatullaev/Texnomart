@@ -76,18 +76,26 @@ export function AuditPage() {
           </TabsList>
 
           {(tab === "plan" || tab === "promo") && (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="date" value={globals.from} onChange={(e) => patch({ from: e.target.value })}
-                className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
-                aria-label="Дата с"
-              />
-              <span className="text-gray-400">—</span>
-              <input
-                type="date" value={globals.to} onChange={(e) => patch({ to: e.target.value })}
-                className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
-                aria-label="Дата по"
-              />
+            <div className="flex flex-wrap items-end gap-2">
+              {/* 5C: отбор идёт по СРОКУ контрольной точки, а не по факту — подпись
+                  обязательна, иначе непонятно, что фильтруется (фактическая дата
+                  показана соседней колонкой, отдельный фильтр по ней не нужен). */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Период дедлайна</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date" value={globals.from} onChange={(e) => patch({ from: e.target.value })}
+                    className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
+                    aria-label="Период дедлайна, с"
+                  />
+                  <span className="text-gray-400">—</span>
+                  <input
+                    type="date" value={globals.to} onChange={(e) => patch({ to: e.target.value })}
+                    className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
+                    aria-label="Период дедлайна, по"
+                  />
+                </div>
+              </div>
               <Select
                 value={globals.role}
                 onValueChange={(v) => patch({ role: v as AuditGlobalFilters["role"] })}
