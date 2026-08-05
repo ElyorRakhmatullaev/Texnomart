@@ -1988,6 +1988,12 @@ export interface ReviewItem {
    * (its КД SLA counts from the Старший-КМ deadline).
    */
   kdStageStartedAt?: string;
+  /**
+   * Когда набор возвращали КМ на корректировку (ISO). Если задано, текущий `submittedAt` —
+   * это и есть ПОВТОРНАЯ отправка после возврата (5C, вкладка 2 п. 2): отдельное поле
+   * «переотправлено» не нужно, потому что заново отправленный набор перезаписывает срок.
+   */
+  returnedAt?: string;
   /** Auto-forwarded to КД after the Старший КМ SLA lapsed (spec §4.5.2). */
   escalatedToKD: boolean;
   /** Required reason when kind === "non-participation". */
@@ -2053,13 +2059,25 @@ export function reviewerForKmStatus(status: KmStatus): PromoRole | undefined {
  * today's date the queue shows in-time, breached-Старший-КМ (auto-escalation),
  * and overdue-КД (просрочка) items without time travel. Default = 1 working day.
  */
-const REVIEW_SUBMIT_OFFSET: Record<string, { days: number; escalatedToKD?: boolean; kind?: ReviewKind; reason?: string }> = {
+const REVIEW_SUBMIT_OFFSET: Record<
+  string,
+  {
+    days: number;
+    escalatedToKD?: boolean;
+    kind?: ReviewKind;
+    reason?: string;
+    /** Набор возвращали на корректировку N раб. дн. назад ⇒ `days` — повторная отправка. */
+    returnedDays?: number;
+  }
+> = {
   // PR-2026-002 km-5: at Старший КМ, breached 2-day SLA → eligible for auto-escalation.
   "PR-2026-002~km-5": { days: 3 },
-  // PR-2026-002 km-2: at Старший КМ, still in time.
-  "PR-2026-002~km-2": { days: 1 },
-  // PR-2026-001 km-2: at КД, overdue (просрочка — non-blocking).
-  "PR-2026-001~km-2": { days: 4 },
+  // PR-2026-002 km-2: at Старший КМ, still in time. Возвращался на корректировку
+  // 2 раб. дн. назад → повторная отправка уложилась в срок.
+  "PR-2026-002~km-2": { days: 1, returnedDays: 2 },
+  // PR-2026-001 km-2: at КД, overdue (просрочка — non-blocking). Возвращался
+  // 9 раб. дн. назад → повторная отправка с просрочкой.
+  "PR-2026-001~km-2": { days: 4, returnedDays: 9 },
   // PR-2026-001 km-3: forwarded by Старший КМ, awaiting КД, in time.
   "PR-2026-001~km-3": { days: 1, escalatedToKD: false },
   // UN-2026-014 km-5: unplanned, straight to КД, in time.
@@ -2097,6 +2115,10 @@ export function buildReviewItems(ref: Date = new Date()): ReviewItem[] {
         kind: seed.kind ?? "data",
         kmStatus,
         submittedAt: addWorkingDays(ref, -seed.days).toISOString(),
+        returnedAt:
+          seed.returnedDays !== undefined
+            ? addWorkingDays(ref, -seed.returnedDays).toISOString()
+            : undefined,
         escalatedToKD: seed.escalatedToKD ?? false,
         nonParticipationReason: seed.reason,
         comments: [],

@@ -313,8 +313,32 @@ export function buildPromoControlPoints(ref: Date = new Date()): ControlPoint[] 
         });
       }
 
-      // 5) Возврат на корректировку.
-      if (it.kmStatus === "Переотправлено на корректировку КМ") {
+      // 5) Возврат на корректировку → повторная отправка (5C, вкладка 2 п. 2).
+      // Набор с `returnedAt` уже переотправлен: текущий submittedAt и есть повторная
+      // отправка, а срок на неё — REVIEW_SLA рабочих дней от момента возврата.
+      if (it.returnedAt) {
+        const returnedAt = new Date(it.returnedAt);
+        points.push({
+          ...base, id: `cp-promo-${c.id}-return-${it.kmId}`,
+          checkpoint: "Возврат на корректировку",
+          responsibleName: "Коммерческий директор", responsibleRole: "Коммерческий директор",
+          deadline: returnedAt, actualAt: returnedAt, result: "В срок", overdueDays: 0,
+          comment: `КМ: ${km?.name ?? "—"} · набор возвращён на корректировку.`,
+        });
+        const resendDeadline = addWorkingDays(returnedAt, REVIEW_SLA_WORKING_DAYS);
+        const resendOverdue = getOverdueDays(resendDeadline, submitted);
+        points.push({
+          ...base, id: `cp-promo-${c.id}-resubmit-${it.kmId}`,
+          checkpoint: "Повторная отправка после корректировки",
+          responsibleName: km?.name ?? "Категорийный менеджер", responsibleRole: KM_ROLE,
+          deadline: resendDeadline, actualAt: submitted, unit: "work",
+          result: resendOverdue > 0 ? "Просрочено" : "В срок", overdueDays: resendOverdue,
+          comment:
+            resendOverdue > 0
+              ? "Набор отправлен повторно после возврата с нарушением срока."
+              : "Набор отправлен повторно после возврата на корректировку.",
+        });
+      } else if (it.kmStatus === "Переотправлено на корректировку КМ") {
         points.push({
           ...base, id: `cp-promo-${c.id}-return-${it.kmId}`,
           checkpoint: "Возврат на корректировку",
@@ -447,7 +471,9 @@ export function buildParticipantMetrics(
     p.checkpoint === "Возврат на корректировку" || p.checkpoint === "Возврат плана на корректировку"
   );
   const versionPoints = allPoints.filter((p) =>
-    p.checkpoint.startsWith("Новая версия отчёта") || p.checkpoint === "Повторная отправка плана"
+    p.checkpoint.startsWith("Новая версия отчёта") ||
+    p.checkpoint === "Повторная отправка плана" ||
+    p.checkpoint === "Повторная отправка после корректировки"
   );
 
   const rows = participantsFor(role).map((name) => {
