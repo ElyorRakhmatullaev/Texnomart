@@ -344,7 +344,7 @@ export const CAPABILITIES: Capability[] = [
   {
     id: "manage-users",
     label: "Управление пользователями",
-    description: "Создание учёток, сброс паролей, назначение/отзыв прав, блокировка.",
+    description: "Создание учёток, сброс паролей, назначение/отзыв прав, деактивация.",
     group: "Настройки и администрирование",
     enforcedIn: "users-store · nav gating (Администратор)",
     allowed: (r) => r === "Администратор",
@@ -362,7 +362,7 @@ export const CAPABILITIES: Capability[] = [
   {
     id: "manage-users-global",
     label: "Управление пользователями (глобально)",
-    description: "Создание учёток, сброс паролей, назначение/отзыв прав, блокировка — без ограничения по подразделению.",
+    description: "Создание учёток, сброс паролей, назначение/отзыв прав, деактивация — без ограничения по подразделению.",
     group: "Пользователи и доступ",
     enforcedIn: "effectiveAdminScope · UsersPage · E-4",
     allowed: (r) => r === "Администратор",
@@ -390,6 +390,15 @@ export const CAPABILITIES: Capability[] = [
     group: "Пользователи и доступ",
     enforcedIn: "canActAsKd · ApprovalDetailPage · E-4",
     allowed: (r) => r === "Коммерческий директор",
+  },
+  {
+    id: "assign-temporary-role",
+    label: "Назначение временной роли с периодом",
+    description:
+      "Выдача роли на срок (дата начала и окончания). По истечении периода роль перестаёт действовать автоматически и в набор прав не входит; постоянные роли при этом не затрагиваются.",
+    group: "Пользователи и доступ",
+    enforcedIn: "addTemporaryRole · activeRolesOf · 5D",
+    allowed: (r) => r === "Администратор",
   },
 ];
 
