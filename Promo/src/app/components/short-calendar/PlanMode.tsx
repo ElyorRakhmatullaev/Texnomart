@@ -41,6 +41,13 @@ import {
   type RowDecision,
 } from "./PlanApprovalTable";
 import { PlanRowHistoryDrawer } from "./PlanRowHistoryDrawer";
+import { CategoryDistributionDialog } from "./CategoryDistributionDialog";
+import { canActAsKd } from "../../../lib/kd-substitution-store";
+import {
+  clearDistributionFor,
+  getDistributionFor,
+  setDistributionFor,
+} from "../../../lib/distribution-store";
 import { useRole } from "../../role-context";
 import { useCurrentUser } from "../../current-user-context";
 import {
@@ -52,6 +59,7 @@ import {
   getPlanApproval,
   nextPlanPromoNo,
   type AuditActionType,
+  type AuditFieldChange,
   type PlanStatus,
   type PromoCampaign,
 } from "../../../lib/promo-mock-data";
@@ -92,6 +100,8 @@ interface PlanRow {
 
 interface PlanModeProps {
   campaigns: PromoCampaign[];
+  /** Волна 6: распределение сохранено — страница пересобирает набор акций из стора. */
+  onDistributionSaved?: () => void;
 }
 
 /** Roles allowed to create/edit/send plan rows (the plan owner). */
@@ -105,7 +115,7 @@ type DecisionMap = Record<string, Partial<Record<ReviewerStage, RowDecision>>>;
 const fmt = (d: Date) => d.toLocaleDateString("ru-RU");
 const hasType = (r: PlanRow) => Boolean(r.type && r.type.trim());
 
-export function PlanMode({ campaigns }: PlanModeProps) {
+export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
   const { currentRole } = useRole();
   const { currentUser } = useCurrentUser();
   const isMarketing = currentRole === PLAN_EDITOR;
@@ -322,7 +332,8 @@ export function PlanMode({ campaigns }: PlanModeProps) {
     action: AuditActionType,
     row: PlanRow,
     comment?: string,
-    statuses?: { from?: string; to?: string }
+    statuses?: { from?: string; to?: string },
+    changes?: AuditFieldChange[]
   ) {
     appendAuditEvent({
       user: currentUser?.fullName ?? currentRole,
@@ -334,7 +345,65 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       statusFrom: statuses?.from,
       statusTo: statuses?.to,
       comment,
+      changes,
     });
+  }
+
+  // ── Волна 6: распределение по КМ / дням / категориям ──────────────────────
+  // Действие КД (или уполномоченного лица) на строке, уже отправленной на
+  // согласование: у черновика распределять ещё нечего.
+  const [distributeId, setDistributeId] = React.useState<string | null>(null);
+
+  const canDistribute = React.useCallback(
+    (id: string) => {
+      const isKd =
+        currentRole === "Коммерческий директор" || canActAsKd(currentUser);
+      return isKd && sendOf(id) !== "draft";
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentRole, currentUser, sendStatus]
+  );
+
+  // Контролируемый диалог, открываемый обычной кнопкой, обязан открываться
+  // отложенно: тот же клик иначе ловится DismissableLayer как outside-interaction
+  // (урок S2 Phase 3, рецидив в этом же файле на «Создать строку плана»).
+  const openDistribute = (id: string) => setTimeout(() => setDistributeId(id), 0);
+
+  const distributeCampaign = React.useMemo(
+    () => campaigns.find((c) => c.id === distributeId) ?? null,
+    [campaigns, distributeId]
+  );
+
+  const distributeInitial = React.useMemo(
+    () =>
+      distributeId
+        ? getDistributionFor(distributeId) ??
+          campaigns.find((c) => c.id === distributeId)?.categoryDistribution ??
+          []
+        : [],
+    [campaigns, distributeId]
+  );
+
+  function finishDistribution(nextCount: number, message: string) {
+    const row = distributeId ? rowById(distributeId) : undefined;
+    if (row) {
+      logPlan(
+        "изменение",
+        row,
+        "Распределение промо по КМ, дням и категориям",
+        undefined,
+        [
+          {
+            field: "Распределение по категориям",
+            before: `${distributeInitial.length} позиц.`,
+            after: `${nextCount} позиц.`,
+          },
+        ]
+      );
+    }
+    setDistributeId(null);
+    onDistributionSaved?.();
+    toast.success(message);
   }
 
   function advance(next: PlanStatus, message: string) {
@@ -879,6 +948,8 @@ export function PlanMode({ campaigns }: PlanModeProps) {
             onDeleteRow={handleDelete}
             journalFor={journalOf}
             onShowHistory={setHistoryRowId}
+            canDistribute={canDistribute}
+            onDistribute={openDistribute}
           />
 
           {/* Selection strip — send mode (marketing) or review mode (КД/ОД).
@@ -982,6 +1053,24 @@ export function PlanMode({ campaigns }: PlanModeProps) {
       />
 
       {/* «7-я часть» §9 + Волна 4 — история согласования строки и запрос на удаление. */}
+      {/* Волна 6 — форма распределения по КМ / дням / категориям. */}
+      <CategoryDistributionDialog
+        open={distributeId !== null}
+        onOpenChange={(v) => !v && setDistributeId(null)}
+        campaign={distributeCampaign}
+        initial={distributeInitial}
+        onSave={(entries) => {
+          if (!distributeId) return;
+          setDistributionFor(distributeId, entries);
+          finishDistribution(entries.length, "Распределение сохранено");
+        }}
+        onClear={() => {
+          if (!distributeId) return;
+          clearDistributionFor(distributeId);
+          finishDistribution(0, "Распределение очищено");
+        }}
+      />
+
       <PlanRowHistoryDrawer
         open={historyRowId !== null}
         onOpenChange={(o) => !o && setHistoryRowId(null)}

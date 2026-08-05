@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Clock, FilePen, History, Pencil, Send, Trash2, TriangleAlert, X } from "lucide-react";
+import { Check, Clock, FilePen, History, Pencil, Send, Trash2, TriangleAlert, Users, X } from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
 import { Checkbox } from "@texnomart/ui/checkbox";
 import { Button } from "@texnomart/ui/button";
@@ -77,6 +77,10 @@ interface PlanApprovalTableProps {
   journalFor?: (id: string) => PlanRowJournal | undefined;
   /** Открыть боковую панель истории строки (доступна всем ролям). */
   onShowHistory?: (id: string) => void;
+  /** Волна 6: доступно ли КД распределение промо по КМ/дням/категориям для этой строки. */
+  canDistribute?: (id: string) => boolean;
+  /** Волна 6: открыть форму распределения. */
+  onDistribute?: (id: string) => void;
 }
 
 function formatDateTime(d: Date): string {
@@ -301,6 +305,8 @@ function RowActions({
   onHistory,
   onEdit,
   onDelete,
+  canDistribute,
+  onDistribute,
 }: {
   id: string;
   canManage: boolean;
@@ -308,9 +314,11 @@ function RowActions({
   onHistory?: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  canDistribute?: boolean;
+  onDistribute?: (id: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex flex-wrap items-center gap-1">
       {/* Доступна всем ролям: история согласования — не действие владельца. */}
       <Button
         variant="ghost"
@@ -343,6 +351,21 @@ function RowActions({
         >
           <Trash2 className="size-3.5" />
           Удалить
+        </Button>
+      )}
+      {/* Волна 6: необязательное распределение промо по КМ / дням / категориям —
+          действие коммерческого директора (или уполномоченного лица) на строке,
+          уже отправленной на согласование. Обычная кнопка, не Radix-меню: меню
+          под shared <Button> рендерится за экраном (уроки Волны 1). */}
+      {canDistribute && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2 text-xs"
+          onClick={() => onDistribute?.(id)}
+        >
+          <Users className="size-3.5" />
+          Распределить
         </Button>
       )}
     </div>
@@ -385,6 +408,8 @@ export function PlanApprovalTable({
   canManage = false,
   onEditRow,
   onDeleteRow,
+  canDistribute,
+  onDistribute,
   journalFor,
   onShowHistory,
 }: PlanApprovalTableProps) {
@@ -444,7 +469,7 @@ export function PlanApprovalTable({
               <th className={cn(HEAD, "w-[170px]")}>
                 <StageHeader title="Операционный директор" note={directorNote} />
               </th>
-              <th className={cn(HEAD, "w-[240px]")}>Действия</th>
+              <th className={cn(HEAD, "w-[300px]")}>Действия</th>
             </tr>
           </thead>
           <tbody>
@@ -523,6 +548,8 @@ export function PlanApprovalTable({
                       onHistory={onShowHistory}
                       onEdit={onEditRow}
                       onDelete={onDeleteRow}
+                      canDistribute={canDistribute?.(r.id)}
+                      onDistribute={onDistribute}
                     />
                   </td>
                 </tr>
@@ -618,6 +645,8 @@ export function PlanApprovalTable({
                   onHistory={onShowHistory}
                   onEdit={onEditRow}
                   onDelete={onDeleteRow}
+                  canDistribute={canDistribute?.(r.id)}
+                  onDistribute={onDistribute}
                 />
               </div>
             </div>
