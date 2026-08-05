@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@texnomart/ui/sheet";
 import { RuDate } from "../../../components/RuDate";
-import { buildParticipantTasks } from "../../../lib/audit-control";
+import { buildParticipantTasks, overdueLabel } from "../../../lib/audit-control";
 import type { AuditScope } from "../../../lib/audit-access";
 import type { PromoRole } from "../../role-context";
 
@@ -32,7 +32,7 @@ export function ParticipantTasksDrawer({
               <div className="mb-1 flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{t.checkpoint}</span>
                 {t.overdueDays > 0
-                  ? <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">+{t.overdueDays} дн.</span>
+                  ? <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-red-700 dark:bg-red-500/15 dark:text-red-300">{overdueLabel(t)}</span>
                   : <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">В срок</span>}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400"><span className="font-mono">{t.promoNo}</span> · {t.promoName}</p>

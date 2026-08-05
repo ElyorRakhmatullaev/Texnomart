@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cn } from "@texnomart/ui/utils";
 import { RuDate } from "../../../components/RuDate";
-import type { ControlPoint, ControlResult } from "../../../lib/audit-control";
+import { overdueLabel, type ControlPoint, type ControlResult } from "../../../lib/audit-control";
 
 const RESULT_TINT: Record<ControlResult, string> = {
   "В срок": "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
@@ -98,7 +98,7 @@ export function ControlDeadlinesTable({
                   <td className={cn(td, "tabular-nums whitespace-nowrap text-gray-600 dark:text-gray-300")}><RuDate value={p.deadline} withTime /></td>
                   <td className={cn(td, "tabular-nums whitespace-nowrap text-gray-600 dark:text-gray-300")}>{p.actualAt ? <RuDate value={p.actualAt} withTime /> : <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
                   <td className={td}><ResultChip p={p} /></td>
-                  <td className={cn(td, "tabular-nums text-red-600 dark:text-red-400")}>{p.overdueDays > 0 ? `+${p.overdueDays} дн.` : <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
+                  <td className={cn(td, "tabular-nums whitespace-nowrap text-red-600 dark:text-red-400")}>{p.overdueDays > 0 ? overdueLabel(p) : <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
                   <td className={cn(td, "min-w-[180px] text-gray-600 dark:text-gray-300")}>{p.comment ?? <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
                 </tr>
               ))}
@@ -131,7 +131,7 @@ export function ControlDeadlinesTable({
             </p>
             <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
               <span>Ответственный: <span className="text-gray-700 dark:text-gray-200">{p.responsibleName}</span></span>
-              <span>Просрочка: <span className="text-red-600 dark:text-red-400">{p.overdueDays > 0 ? `+${p.overdueDays} дн.` : "—"}</span></span>
+              <span>Просрочка: <span className="text-red-600 dark:text-red-400">{overdueLabel(p)}</span></span>
               <span>Дедлайн: <RuDate value={p.deadline} /></span>
               <span>Факт: {p.actualAt ? <RuDate value={p.actualAt} /> : "—"}</span>
             </div>

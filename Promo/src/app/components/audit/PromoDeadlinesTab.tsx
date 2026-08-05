@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Download } from "lucide-react";
 import { Button } from "@texnomart/ui/button";
-import { buildPromoControlPoints, type ControlPoint } from "../../../lib/audit-control";
+import { buildPromoControlPoints, overdueLabel, type ControlPoint } from "../../../lib/audit-control";
 import { scopeControlPoints } from "../../../lib/audit-access";
 import { exportAuditXlsx, fmtAuditDate } from "../../../lib/audit-xlsx";
 import { exportStamp } from "../../../lib/promo-export";
@@ -29,7 +29,7 @@ function promoExportRows(points: ControlPoint[]): (string | number)[][] {
     fmtAuditDate(p.deadline, true),
     p.actualAt ? fmtAuditDate(p.actualAt, true) : "—",
     p.result,
-    p.overdueDays > 0 ? `+${p.overdueDays} дн.` : "—",
+    overdueLabel(p),
     p.comment ?? "",
   ]);
 }

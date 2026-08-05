@@ -50,7 +50,19 @@ export interface ControlPoint {
   actualAt?: Date;
   result: ControlResult;
   overdueDays: number;
+  /**
+   * Единица величины срока: дедлайны — календарные дни, SLA согласования — рабочие.
+   * Хранится в данных, а не выводится при рендере, иначе подпись расходится с применённой
+   * арифметикой (долг Волны 4: план печатал раб. дни, `/audit` — кал.).
+   */
+  unit: "cal" | "work";
   comment?: string;
+}
+
+/** Подпись просрочки с единицей — единственное место, где она формируется. */
+export function overdueLabel(p: { overdueDays: number; unit: "cal" | "work" }): string {
+  if (p.overdueDays <= 0) return "—";
+  return `+${p.overdueDays} ${p.unit === "work" ? "раб." : "кал."} дн.`;
 }
 
 /** Плановый период = календарный месяц старта акции: границы + подпись-группировка. */
@@ -69,7 +81,9 @@ function resolve(
 ): { result: ControlResult; overdueDays: number } {
   if (!actualAt) {
     const overdueDays = getOverdueDays(deadline, ref); // 0 unless deadline already passed
-    return { result: "Ожидается", overdueDays };
+    // 5C, вкладка 2 п. 5: если дедлайн прошёл, а факта нет — это «Просрочено».
+    // «Ожидается» рядом с «+N дн.» читается как противоречие.
+    return { result: overdueDays > 0 ? "Просрочено" : "Ожидается", overdueDays };
   }
   const overdueDays = getOverdueDays(deadline, actualAt);
   return { result: overdueDays > 0 ? "Просрочено" : "В срок", overdueDays };
@@ -87,6 +101,8 @@ export function buildPlanControlPoints(ref: Date = new Date()): ControlPoint[] {
       promoNo: formatPromoNo(c.id),
       promoName: c.name,
       planPeriod: planPeriodOf(c.startDate),
+      // По умолчанию календарные дни; этапы директоров переопределяют на рабочие.
+      unit: "cal" as const,
     };
 
     // 1) Ознакомление плана — deadline start − 63 кал. дн.
@@ -136,7 +152,7 @@ export function buildPlanControlPoints(ref: Date = new Date()): ControlPoint[] {
       ...base, id: `cp-plan-${c.id}-kd`,
       checkpoint: "Согласование КД (план)",
       responsibleName: "Коммерческий директор", responsibleRole: "Коммерческий директор",
-      deadline: kdDeadline, actualAt: pa.kd.decidedAt, ...r3,
+      deadline: kdDeadline, actualAt: pa.kd.decidedAt, unit: "work", ...r3,
     });
 
     // 4) Согласование ОД — deadline = согл. КД + 3 раб. дн.
@@ -146,7 +162,7 @@ export function buildPlanControlPoints(ref: Date = new Date()): ControlPoint[] {
       ...base, id: `cp-plan-${c.id}-od`,
       checkpoint: "Согласование ОД (план)",
       responsibleName: "Операционный директор", responsibleRole: "Операционный директор",
-      deadline: odDeadline, actualAt: pa.od.decidedAt, ...r4,
+      deadline: odDeadline, actualAt: pa.od.decidedAt, unit: "work", ...r4,
     });
 
     // Доведение плана до КМ (informational).
@@ -163,6 +179,14 @@ export function buildPlanControlPoints(ref: Date = new Date()): ControlPoint[] {
 }
 
 const KM_ROLE: PromoRole = "Категорийный менеджер (КМ)";
+
+/**
+ * ФИО старшего КМ. ВАЖНО: это же значение обязано возвращать `participantsFor("Старший КМ")` —
+ * рейтинг сопоставляет участника с точками по `responsibleName`, и рассинхрон producer/consumer
+ * оставляет строку старшего КМ пустой (дефект, пойманный whole-branch ревью E-3).
+ */
+const SENIOR_KM_NAME =
+  CATEGORY_MANAGERS.find((m) => m.senior)?.name ?? "Старший КМ";
 
 /** Promo/report control points (spec §11.9 tab 2). */
 export function buildPromoControlPoints(ref: Date = new Date()): ControlPoint[] {
@@ -183,6 +207,8 @@ export function buildPromoControlPoints(ref: Date = new Date()): ControlPoint[] 
       promoNo: formatPromoNo(c.id),
       promoName: c.name,
       promoPeriod: { start: c.startDate, end: c.endDate },
+      // По умолчанию календарные дни; этапы согласования переопределяют на рабочие.
+      unit: "cal" as const,
     };
     const fillDeadline = c.fillDeadlineOverride ?? addCalendarDays(c.startDate, -KM_FILL_SLA_CALENDAR_DAYS);
     const versions = getCampaignVersions(c.id);
@@ -218,14 +244,14 @@ export function buildPromoControlPoints(ref: Date = new Date()): ControlPoint[] 
       const seniorDeadline = addWorkingDays(submitted, REVIEW_SLA_WORKING_DAYS);
       const senior = seniorOverdueInfo(it, ref); // defined only when auto-escalated (senior missed)
       const km = getCategoryManager(it.kmId);
-      const seniorName = "Старший КМ";
+      const seniorName = SENIOR_KM_NAME;
       if (senior) {
         // Senior missed → auto-forward. Attribute the overdue to the Старший КМ.
         points.push({
           ...base, id: `cp-promo-${c.id}-senior-${it.kmId}`,
           checkpoint: "Решение старшего КМ",
           responsibleName: seniorName, responsibleRole: "Старший КМ",
-          deadline: seniorDeadline, actualAt: undefined,
+          deadline: seniorDeadline, actualAt: undefined, unit: "work",
           result: "Просрочено", overdueDays: senior.seniorSlaDays,
           comment: "Срок согласования старшего КМ истёк.",
         });
@@ -233,16 +259,18 @@ export function buildPromoControlPoints(ref: Date = new Date()): ControlPoint[] 
           ...base, id: `cp-promo-${c.id}-autofwd-${it.kmId}`,
           checkpoint: "Авто-передача КД (просрочка старшего КМ)",
           responsibleName: seniorName, responsibleRole: "Старший КМ",
-          deadline: senior.autoForwardedAt, actualAt: senior.autoForwardedAt,
+          deadline: senior.autoForwardedAt, actualAt: senior.autoForwardedAt, unit: "work",
           result: "Просрочено", overdueDays: senior.seniorSlaDays,
-          comment: `КМ: ${km?.name ?? "—"} · передано автоматически.`,
+          // 5C, вкладка 2 п. 6: ответственный за просрочку — старший КМ, а не КМ.
+          comment: `Старший КМ: ${seniorName} — просрочил срок согласования, промо автоматически передано КД (КМ: ${km?.name ?? "—"}).`,
         });
       } else if (it.kmStatus === "На согласовании у старшего КМ") {
         points.push({
           ...base, id: `cp-promo-${c.id}-senior-${it.kmId}`,
           checkpoint: "Решение старшего КМ",
           responsibleName: seniorName, responsibleRole: "Старший КМ",
-          deadline: seniorDeadline, actualAt: undefined, ...resolve(seniorDeadline, undefined, ref),
+          deadline: seniorDeadline, actualAt: undefined, unit: "work",
+          ...resolve(seniorDeadline, undefined, ref),
         });
       } else {
         // Passed senior → decided at the КД-stage start (or submitted for seeds starting at КД).
@@ -252,7 +280,7 @@ export function buildPromoControlPoints(ref: Date = new Date()): ControlPoint[] 
           ...base, id: `cp-promo-${c.id}-senior-${it.kmId}`,
           checkpoint: "Решение старшего КМ",
           responsibleName: seniorName, responsibleRole: "Старший КМ",
-          deadline: seniorDeadline, actualAt: decided,
+          deadline: seniorDeadline, actualAt: decided, unit: "work",
           result: overdueDays > 0 ? "Просрочено" : "В срок", overdueDays,
         });
       }
@@ -270,7 +298,7 @@ export function buildPromoControlPoints(ref: Date = new Date()): ControlPoint[] 
           ...base, id: `cp-promo-${c.id}-kd-${it.kmId}`,
           checkpoint: "Решение КД",
           responsibleName: "Коммерческий директор", responsibleRole: "Коммерческий директор",
-          deadline: kdDeadline, actualAt: decided,
+          deadline: kdDeadline, actualAt: decided, unit: "work",
           result: overdueDays > 0 ? "Просрочено" : "В срок", overdueDays,
         });
       } else if (
@@ -280,7 +308,8 @@ export function buildPromoControlPoints(ref: Date = new Date()): ControlPoint[] 
           ...base, id: `cp-promo-${c.id}-kd-${it.kmId}`,
           checkpoint: "Решение КД",
           responsibleName: "Коммерческий директор", responsibleRole: "Коммерческий директор",
-          deadline: kdDeadline, actualAt: undefined, ...resolve(kdDeadline, undefined, ref),
+          deadline: kdDeadline, actualAt: undefined, unit: "work",
+          ...resolve(kdDeadline, undefined, ref),
         });
       }
 
@@ -378,6 +407,7 @@ export interface ParticipantTask {
   deadline: Date;
   actualAt?: Date;
   overdueDays: number;
+  unit: "cal" | "work";
   comment?: string;
 }
 
@@ -399,7 +429,7 @@ function participantsFor(role: PromoRole): string[] {
     return CATEGORY_MANAGERS.filter((m) => !m.senior).map((m) => m.name);
   }
   if (role === "Старший КМ") {
-    return ["Старший КМ"]; // control points attribute senior decisions to the role label
+    return [SENIOR_KM_NAME]; // должно совпадать с responsibleName точек старшего КМ
   }
   return [role]; // КД / дир. маркетинга / ОД — role label as the single aggregate row
 }
@@ -459,6 +489,6 @@ export function buildParticipantTasks(
     .map((p) => ({
       campaignId: p.campaignId, promoNo: p.promoNo, promoName: p.promoName,
       checkpoint: p.checkpoint, deadline: p.deadline, actualAt: p.actualAt,
-      overdueDays: p.overdueDays, comment: p.comment,
+      overdueDays: p.overdueDays, unit: p.unit, comment: p.comment,
     }));
 }
