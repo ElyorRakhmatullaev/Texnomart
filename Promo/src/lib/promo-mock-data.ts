@@ -4057,8 +4057,8 @@ export type AuditActionType =
   | "сброс пароля"
   | "назначение прав"
   | "отзыв прав"
-  | "блокировка"
-  | "разблокировка"
+  | "деактивация"
+  | "восстановление"
   | "смена пароля"
   | "изменение профиля"
   | "изменение ролей"
@@ -4091,8 +4091,8 @@ export const AUDIT_ACTION_META: Record<
   "сброс пароля": { bg: "bg-sky-50 dark:bg-sky-500/15", text: "text-sky-700 dark:text-sky-300" },
   "назначение прав": { bg: "bg-indigo-50 dark:bg-indigo-500/15", text: "text-indigo-700 dark:text-indigo-300" },
   "отзыв прав": { bg: "bg-orange-50 dark:bg-orange-500/15", text: "text-orange-700 dark:text-orange-300" },
-  "блокировка": { bg: "bg-rose-100 dark:bg-rose-500/20", text: "text-rose-800 dark:text-rose-300" },
-  "разблокировка": { bg: "bg-green-50 dark:bg-green-500/15", text: "text-green-700 dark:text-green-300" },
+  "деактивация": { bg: "bg-rose-100 dark:bg-rose-500/20", text: "text-rose-800 dark:text-rose-300" },
+  "восстановление": { bg: "bg-green-50 dark:bg-green-500/15", text: "text-green-700 dark:text-green-300" },
   "смена пароля": { bg: "bg-cyan-50 dark:bg-cyan-500/15", text: "text-cyan-700 dark:text-cyan-300" },
   "изменение профиля": { bg: "bg-slate-100 dark:bg-slate-500/20", text: "text-slate-700 dark:text-slate-300" },
   "изменение ролей": { bg: "bg-purple-50 dark:bg-purple-500/15", text: "text-purple-700 dark:text-purple-300" },

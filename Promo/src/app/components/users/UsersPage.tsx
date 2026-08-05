@@ -161,7 +161,7 @@ export function UsersPage() {
       if (action === "toggle-status") {
         if (user.status === "blocked") {
           setUserStatus(user.id, "active");
-          audit("разблокировка", user, "Учётная запись активирована");
+          audit("восстановление", user, "Учётная запись активирована");
           toast.success("Пользователь активирован");
         } else {
           if (!canDeactivate(user.id)) {
@@ -169,7 +169,7 @@ export function UsersPage() {
             return;
           }
           setUserStatus(user.id, "blocked");
-          audit("блокировка", user, "Учётная запись деактивирована");
+          audit("деактивация", user, "Учётная запись деактивирована");
           toast.success("Пользователь деактивирован");
         }
         reload();

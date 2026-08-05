@@ -59,6 +59,7 @@ import {
   AUDIT_ACTION_META,
   buildAuditLog,
   type AuditActionType,
+  type AuditFieldChange,
 } from "../../../lib/promo-mock-data";
 import { UserFormDialog, type UserFormValue } from "./UserFormDialog";
 import { TempPasswordDialog } from "./TempPasswordDialog";
@@ -123,7 +124,11 @@ export function UserDetailPage() {
   }, [user?.id, user?.adminScope]);
 
   const audit = React.useCallback(
-    (action: AuditActionType, comment: string) => {
+    (
+      action: AuditActionType,
+      comment: string,
+      extra?: { changes?: AuditFieldChange[]; reason?: string }
+    ) => {
       if (!user) return;
       appendAuditEvent({
         user: currentUser?.fullName ?? "—",
@@ -133,6 +138,8 @@ export function UserDetailPage() {
         objectLabel: user.fullName,
         targetUserId: user.id,
         comment,
+        changes: extra?.changes,
+        reason: extra?.reason,
       });
     },
     [user, currentUser, currentRole]
@@ -217,12 +224,23 @@ export function UserDetailPage() {
       return;
     }
 
-    const profileChanged =
-      value.fullName !== user.fullName ||
-      value.email !== user.email ||
-      (value.department ?? "") !== (user.department ?? "") ||
-      (value.position ?? "") !== (user.position ?? "") ||
-      (value.managerId ?? "") !== (user.managerId ?? "");
+    // «Прежнее → новое значение» по каждому полю (5D, стр. 71 п. 3).
+    const profileChanges: AuditFieldChange[] = [];
+    const track = (field: string, before?: string, after?: string) => {
+      if ((before ?? "") !== (after ?? "")) {
+        profileChanges.push({ field, before: before || "—", after: after || "—" });
+      }
+    };
+    track("ФИО", user.fullName, value.fullName);
+    track("Email", user.email, value.email);
+    track("Подразделение", user.department, value.department);
+    track("Должность", user.position, value.position);
+    track(
+      "Руководитель",
+      allUsers.find((u) => u.id === user.managerId)?.fullName,
+      allUsers.find((u) => u.id === value.managerId)?.fullName
+    );
+    const profileChanged = profileChanges.length > 0;
     // Сравниваем РЕЕСТР, а не плоский список: иначе правка периода или
     // основания временной роли не считалась бы изменением.
     const rolesChanged =
@@ -238,10 +256,34 @@ export function UserDetailPage() {
     setRoleAssignments(user.id, value.assignments);
 
     if (profileChanged) {
-      audit("изменение профиля", `Изменены данные профиля пользователя «${value.fullName}»`);
+      audit(
+        "изменение профиля",
+        `Изменены данные профиля пользователя «${value.fullName}»`,
+        { changes: profileChanges }
+      );
     }
     if (rolesChanged) {
-      audit("изменение ролей", `Новый набор ролей: ${value.roles.join(", ")}`);
+      const describe = (list: typeof value.assignments) =>
+        list
+          .map((a) =>
+            a.kind === "temporary"
+              ? `${a.role} (временно ${ruDateOnly(a.from)}–${ruDateOnly(a.to)})`
+              : a.role
+          )
+          .join(", ");
+      const temporaryReason = value.assignments.find(
+        (a) => a.kind === "temporary" && a.reason
+      )?.reason;
+      audit("изменение ролей", `Новый набор ролей: ${value.roles.join(", ")}`, {
+        changes: [
+          {
+            field: "Роли",
+            before: describe(prevAssignments),
+            after: describe(value.assignments),
+          },
+        ],
+        reason: temporaryReason,
+      });
     }
     setEditOpen(false);
     refresh();
@@ -262,7 +304,7 @@ export function UserDetailPage() {
     if (!user) return;
     if (user.status === "blocked") {
       setUserStatus(user.id, "active");
-      audit("разблокировка", "Учётная запись активирована");
+      audit("восстановление", "Учётная запись активирована");
       toast.success("Пользователь активирован");
     } else {
       if (!canDeactivate(user.id)) {
@@ -270,7 +312,7 @@ export function UserDetailPage() {
         return;
       }
       setUserStatus(user.id, "blocked");
-      audit("блокировка", "Учётная запись деактивирована");
+      audit("деактивация", "Учётная запись деактивирована");
       toast.success("Пользователь деактивирован");
     }
     refresh();
@@ -584,8 +626,21 @@ export function UserDetailPage() {
                       >
                         {e.action}
                       </span>
-                      <span className="min-w-0 flex-1 text-sm text-gray-700 dark:text-gray-200">
-                        {e.comment ?? "—"}
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="text-sm text-gray-700 dark:text-gray-200">
+                          {e.comment ?? "—"}
+                        </span>
+                        {e.changes?.map((c, i) => (
+                          <span key={i} className="text-xs text-gray-500 dark:text-gray-400">
+                            {c.field}: <span className="line-through">{c.before}</span> →{" "}
+                            <span className="text-gray-700 dark:text-gray-200">{c.after}</span>
+                          </span>
+                        ))}
+                        {e.reason && (
+                          <span className="text-xs text-muted-foreground">
+                            Основание: {e.reason}
+                          </span>
+                        )}
                       </span>
                       <span className="shrink-0 text-xs text-gray-400 dark:text-gray-500 sm:ml-auto">
                         {e.user} · {e.role}

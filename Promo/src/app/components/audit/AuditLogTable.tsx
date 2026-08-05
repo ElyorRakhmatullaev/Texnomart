@@ -43,7 +43,15 @@ import type { AuditAccess } from "./AuditPage";
 const LOG_EXPORT_HEADER = [
   "ID", "Дата и время", "Пользователь", "Роль", "Действие",
   "Тип объекта", "Объект", "№ промо", "Статус до", "Статус после", "Комментарий",
+  // 5D: в файле места хватает, поэтому изменения и основание — отдельными колонками
+  // (в таблице они рендерятся внутри «Комментария» ради компактности, «7-я часть» §6.2).
+  "Изменения", "Основание",
 ];
+
+/** «Поле: было → стало; …» — одной строкой для выгрузки. */
+function changesText(e: AuditEvent): string {
+  return (e.changes ?? []).map((c) => `${c.field}: ${c.before} → ${c.after}`).join("; ");
+}
 
 function logExportRows(events: AuditEvent[]): (string | number)[][] {
   return events.map((e) => [
@@ -58,7 +66,36 @@ function logExportRows(events: AuditEvent[]): (string | number)[][] {
     e.statusFrom ?? "",
     e.statusTo ?? "",
     e.comment ?? "",
+    changesText(e),
+    e.reason ?? "",
   ]);
+}
+
+/**
+ * Комментарий + «Поле: было → стало» + основание (5D, стр. 71 п. 3).
+ * Отдельной колонки намеренно нет: таблица уже сжата по «7-й части» §6.2.
+ */
+function CommentCell({ event }: { event: AuditEvent }) {
+  const empty = !event.comment && !event.changes?.length && !event.reason;
+  if (empty) {
+    return <span className="text-xs text-gray-400 dark:text-gray-500">—</span>;
+  }
+  return (
+    <div className="flex flex-col gap-0.5">
+      {event.comment && (
+        <span className="text-sm text-gray-700 dark:text-gray-200">{event.comment}</span>
+      )}
+      {event.changes?.map((c, i) => (
+        <span key={i} className="text-xs text-gray-500 dark:text-gray-400">
+          {c.field}: <span className="line-through">{c.before}</span> →{" "}
+          <span className="text-gray-700 dark:text-gray-200">{c.after}</span>
+        </span>
+      ))}
+      {event.reason && (
+        <span className="text-xs text-muted-foreground">Основание: {event.reason}</span>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -70,7 +107,7 @@ function logExportRows(events: AuditEvent[]): (string | number)[][] {
 const NON_KEY_ACTIONS = new Set<AuditEvent["action"]>([
   "создание", "изменение", "смена пароля", "изменение профиля",
   "сброс пароля", "назначение прав", "отзыв прав",
-  "блокировка", "разблокировка", "изменение ролей",
+  "деактивация", "восстановление", "изменение ролей",
   "назначение замещения", "снятие замещения",
 ]);
 
@@ -327,9 +364,7 @@ export function AuditLogTable({
                         <StatusTransition event={e} />
                       </TableCell>
                       <TableCell className="text-sm text-gray-600 dark:text-gray-300">
-                        {e.comment ?? (
-                          <span className="text-gray-300 dark:text-gray-600">—</span>
-                        )}
+                        <CommentCell event={e} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -355,8 +390,10 @@ export function AuditLogTable({
                 <div className="mt-2">
                   <StatusTransition event={e} />
                 </div>
-                {e.comment && (
-                  <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">{e.comment}</p>
+                {(e.comment || e.changes?.length || e.reason) && (
+                  <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+                    <CommentCell event={e} />
+                  </div>
                 )}
                 <div className="mt-2 flex items-center justify-between border-t border-gray-100 dark:border-border pt-2 text-[11px] text-gray-500 dark:text-gray-400">
                   <span>
