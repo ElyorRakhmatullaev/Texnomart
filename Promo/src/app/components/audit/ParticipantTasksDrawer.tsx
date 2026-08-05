@@ -4,13 +4,14 @@ import * as React from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@texnomart/ui/sheet";
 import { RuDate } from "../../../components/RuDate";
 import {
-  buildParticipantTasks, overdueLabel, type ParticipantFilters,
+  buildParticipantTasks, overdueLabel, METRIC_LABEL,
+  type MetricKey, type ParticipantFilters,
 } from "../../../lib/audit-control";
 import type { AuditScope } from "../../../lib/audit-access";
 import type { PromoRole } from "../../role-context";
 
 export function ParticipantTasksDrawer({
-  name, role, scope, filters, open, onOpenChange,
+  name, role, scope, filters, metric = "all", open, onOpenChange,
 }: {
   name: string | null;
   role: PromoRole;
@@ -18,17 +19,23 @@ export function ParticipantTasksDrawer({
   scope?: AuditScope;
   /** Тот же отбор, что применён к рейтингу, — иначе панель покажет не те задачи. */
   filters?: ParticipantFilters;
+  /** Показатель, по которому кликнули: панель раскрывает только его (п. 10). */
+  metric?: MetricKey;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
   const tasks = React.useMemo(
-    () => (name ? buildParticipantTasks(name, role, new Date(), { scope, filters }) : []),
-    [name, role, scope, filters]
+    () => (name ? buildParticipantTasks(name, role, new Date(), { scope, filters }, metric) : []),
+    [name, role, scope, filters, metric]
   );
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full max-w-md overflow-y-auto">
-        <SheetHeader><SheetTitle>Задачи: {name}</SheetTitle></SheetHeader>
+        <SheetHeader>
+          <SheetTitle>
+            Задачи: {name} — {METRIC_LABEL[metric]}: {tasks.length}
+          </SheetTitle>
+        </SheetHeader>
         <div className="flex flex-col gap-2.5 px-4 pb-6">
           {tasks.length === 0 && <p className="text-sm text-muted-foreground">Нет задач за период.</p>}
           {tasks.map((t, i) => (

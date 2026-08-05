@@ -416,8 +416,12 @@ export interface ParticipantMetricRow {
   dueCount: number;      // промо/задач с наступившим дедлайном
   onTime: number;
   overdue: number;
-  timelinessPct: number; // 0 when dueCount === 0
-  band: TimelinessBand;
+  /**
+   * null, когда задач с наступившим дедлайном нет (5C, вкладка 3 п. 5): «0% · Низкая»
+   * в таком случае — ложное обвинение, участник просто ещё не должен был ничего сдать.
+   */
+  timelinessPct: number | null;
+  band: TimelinessBand | null;
   avgOverdueDays: number;
   returns: number;       // возвраты на корректировку
   resends: number;       // повторные отправки
@@ -554,7 +558,7 @@ export function buildParticipantMetrics(
     const onTime = due.filter((p) => p.result === "В срок").length;
     const overdue = due.filter((p) => p.overdueDays > 0).length;
     const dueCount = due.length;
-    const timelinessPct = dueCount ? Math.round((onTime / dueCount) * 100) : 0;
+    const timelinessPct = dueCount ? Math.round((onTime / dueCount) * 100) : null;
     const overdueDaysArr = due.filter((p) => p.overdueDays > 0).map((p) => p.overdueDays);
     const avgOverdueDays = overdueDaysArr.length
       ? Math.round(overdueDaysArr.reduce((s, d) => s + d, 0) / overdueDaysArr.length)
@@ -565,13 +569,43 @@ export function buildParticipantMetrics(
     const resends = versionPoints.filter((p) => myCampaigns.has(p.campaignId)).length;
     return {
       rank: 0, name, dueCount, onTime, overdue, timelinessPct,
-      band: timelinessBand(timelinessPct), avgOverdueDays, returns, resends,
+      band: timelinessPct === null ? null : timelinessBand(timelinessPct),
+      avgOverdueDays, returns, resends,
     };
   });
 
+  // Сортировка по своевременности от большего к меньшему; строки без данных — вниз,
+  // иначе «нет задач» встаёт вперемешку с реальными результатами.
   return rows
-    .sort((a, b) => b.timelinessPct - a.timelinessPct || b.dueCount - a.dueCount)
+    .sort((a, b) => {
+      if (a.timelinessPct === null && b.timelinessPct === null) return 0;
+      if (a.timelinessPct === null) return 1;
+      if (b.timelinessPct === null) return -1;
+      return b.timelinessPct - a.timelinessPct || b.dueCount - a.dueCount;
+    })
     .map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
+/**
+ * Какой показатель раскрывает боковая панель (5C, вкладка 3 п. 10).
+ * "all" — клик по ФИО (все задачи участника).
+ */
+export type MetricKey = "all" | "due" | "onTime" | "overdue";
+
+export const METRIC_LABEL: Record<MetricKey, string> = {
+  all: "Все задачи",
+  due: "Промо с дедлайном",
+  onTime: "Вовремя",
+  overdue: "С просрочкой",
+};
+
+/** Отбор задач под конкретный показатель — теми же предикатами, что считают метрики. */
+function matchesMetric(p: ControlPoint, metric: MetricKey, ref: Date): boolean {
+  if (metric === "all") return true;
+  const due = p.deadline.getTime() <= ref.getTime();
+  if (metric === "due") return due;
+  if (metric === "onTime") return due && p.result === "В срок";
+  return due && p.overdueDays > 0; // overdue
 }
 
 /** Drill-down: the control points measured for one participant. */
@@ -579,10 +613,12 @@ export function buildParticipantTasks(
   responsibleName: string,
   role: PromoRole,
   ref: Date = new Date(),
-  opts?: ParticipantOptions
+  opts?: ParticipantOptions,
+  metric: MetricKey = "all"
 ): ParticipantTask[] {
   return roleControlPoints(role, ref, opts)
     .filter((p) => p.responsibleName === responsibleName)
+    .filter((p) => matchesMetric(p, metric, ref))
     .sort((a, b) => b.deadline.getTime() - a.deadline.getTime())
     .map((p) => ({
       campaignId: p.campaignId, promoNo: p.promoNo, promoName: p.promoName,
