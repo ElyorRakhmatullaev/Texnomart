@@ -167,7 +167,8 @@ export function KdSubstitutionPanel() {
                 <p className="text-xs text-muted-foreground">Основание: {active.reason}</p>
               )}
             </div>
-            <div className="flex shrink-0 gap-2">
+            {/* flex-wrap: на 390px две кнопки в ряд упираются в край карточки. */}
+            <div className="flex shrink-0 flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => setAssignOpen(true)}>
                 Назначить другого
               </Button>
