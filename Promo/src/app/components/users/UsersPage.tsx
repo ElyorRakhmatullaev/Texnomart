@@ -108,9 +108,11 @@ export function UsersPage() {
         email: value.email,
         role: value.roles[0],
         roles: value.roles,
+        roleAssignments: value.assignments,
         department: value.department,
         position: value.position,
         managerId: value.managerId,
+        createdBy: currentUser?.fullName ?? "Администратор",
       });
       audit("создание", user, `Создан пользователь · роль «${user.role}»`);
       setCreateOpen(false);
@@ -120,7 +122,7 @@ export function UsersPage() {
       reload();
       toast.success("Пользователь создан");
     },
-    [audit, reload]
+    [audit, reload, currentUser]
   );
 
   const handleAction = React.useCallback(

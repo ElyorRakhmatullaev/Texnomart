@@ -40,14 +40,20 @@ import {
   getUserById,
   getUsers,
   resetPassword,
-  rolesOf,
   setDeptAdmin,
-  setUserRoles,
+  setRoleAssignments,
   setUserStatus,
   updateUser,
   usableAdminCount,
   type UserStatus,
 } from "../../../lib/users-store";
+import {
+  assignmentsOf,
+  isAssignmentExpired,
+  permanentRolesOf,
+  primaryRoleOf,
+} from "../../../lib/user-roles";
+import { substitutionBadgeFor } from "../../../lib/kd-substitution-store";
 import { getLiveAuditEvents, appendAuditEvent } from "../../../lib/audit-store";
 import {
   AUDIT_ACTION_META,
@@ -63,8 +69,20 @@ const TAB_TRIGGER =
 const STATUS_META: Record<UserStatus, { label: string; cls: string }> = {
   active: { label: "Активен", cls: "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
   "temp-password": { label: "Временный пароль", cls: "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300" },
-  blocked: { label: "Заблокирован", cls: "bg-gray-200 dark:bg-muted text-gray-600 dark:text-gray-300" },
+  blocked: { label: "Деактивирован", cls: "bg-gray-200 dark:bg-muted text-gray-600 dark:text-gray-300" },
 };
+
+const ROLE_GROUP_LABEL = {
+  primary: "Основная роль",
+  additional: "Дополнительные роли",
+  temporary: "Временные роли",
+} as const;
+
+/** «01.09.2026» из date-only «2026-09-01». */
+function ruDateOnly(iso?: string): string {
+  if (!iso) return "—";
+  return iso.slice(0, 10).split("-").reverse().join(".");
+}
 
 /** Sentinel for the optional department Select — Radix disallows an empty-string item value. */
 const NO_DEPT = "__no_department__";
@@ -153,8 +171,10 @@ export function UserDetailPage() {
     );
   }
 
-  const roles = rolesOf(user);
-  const primary = roles[0];
+  const assignments = assignmentsOf(user);
+  const roles = permanentRolesOf(user);
+  const primary = primaryRoleOf(user);
+  const substitution = substitutionBadgeFor(user);
   // Scope of the VIEWED user's own admin grant (for the "Область
   // администрирования" display below) — distinct from the ACTOR's scope.
   const targetScope = effectiveAdminScope(user);
@@ -174,7 +194,9 @@ export function UserDetailPage() {
 
   function handleEditSubmit(value: UserFormValue) {
     if (!user) return;
-    const prevRoles = rolesOf(user);
+    // ПОСТОЯННЫЕ роли: гейты ниже касаются постоянных прав администратора.
+    const prevAssignments = assignmentsOf(user);
+    const prevRoles = permanentRolesOf(user);
 
     // Belt-and-suspenders gate on the «Администратор» role: the form dialog
     // already locks the chip for non-global-admins (adminRoleLocked below),
@@ -201,9 +223,10 @@ export function UserDetailPage() {
       (value.department ?? "") !== (user.department ?? "") ||
       (value.position ?? "") !== (user.position ?? "") ||
       (value.managerId ?? "") !== (user.managerId ?? "");
+    // Сравниваем РЕЕСТР, а не плоский список: иначе правка периода или
+    // основания временной роли не считалась бы изменением.
     const rolesChanged =
-      value.roles.length !== prevRoles.length ||
-      value.roles.some((r, i) => r !== prevRoles[i]);
+      JSON.stringify(prevAssignments) !== JSON.stringify(value.assignments);
 
     updateUser(user.id, {
       fullName: value.fullName,
@@ -212,7 +235,7 @@ export function UserDetailPage() {
       position: value.position,
       managerId: value.managerId,
     });
-    setUserRoles(user.id, value.roles);
+    setRoleAssignments(user.id, value.assignments);
 
     if (profileChanged) {
       audit("изменение профиля", `Изменены данные профиля пользователя «${value.fullName}»`);
@@ -328,6 +351,7 @@ export function UserDetailPage() {
               <InfoRow label="Должность" value={user.position ?? "—"} />
               <InfoRow label="Руководитель" value={managerName} />
               <InfoRow label="Создан" value={<RuDate value={new Date(user.createdAt)} />} />
+              <InfoRow label="Кем создана" value={user.createdBy ?? "—"} />
               {user.lastPasswordChangeAt && (
                 <InfoRow
                   label="Последняя смена пароля"
@@ -344,21 +368,76 @@ export function UserDetailPage() {
             <CardHeader>
               <CardTitle className="text-base">Роли</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-2 pt-0">
-              {roles.map((r) => (
-                <span
-                  key={r}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-                    r === primary
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-gray-100 dark:bg-muted text-gray-700 dark:text-gray-200"
-                  )}
-                >
-                  {r}
-                  {r === primary && <span className="opacity-70">· основная</span>}
-                </span>
-              ))}
+            <CardContent className="space-y-4 pt-0">
+              {(["primary", "additional", "temporary"] as const).map((kind) => {
+                const items = assignments.filter((a) => a.kind === kind);
+                if (items.length === 0) return null;
+                return (
+                  <div key={kind} className="space-y-1.5">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {ROLE_GROUP_LABEL[kind]}
+                    </p>
+                    <ul className="flex flex-col gap-1.5">
+                      {items.map((a, i) => {
+                        const expired = isAssignmentExpired(a);
+                        return (
+                          <li
+                            key={`${a.role}-${i}`}
+                            className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"
+                          >
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium",
+                                kind === "primary"
+                                  ? "bg-primary text-primary-foreground"
+                                  : kind === "temporary"
+                                  ? "border border-amber-300 dark:border-amber-500/40 text-amber-800 dark:text-amber-300"
+                                  : "bg-gray-100 dark:bg-muted text-gray-700 dark:text-gray-200",
+                                expired && "opacity-60"
+                              )}
+                            >
+                              {a.role}
+                            </span>
+                            {kind === "temporary" && (
+                              <span className="text-xs text-muted-foreground">
+                                с {ruDateOnly(a.from)} по {ruDateOnly(a.to)}
+                              </span>
+                            )}
+                            {expired && (
+                              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                срок истёк
+                              </span>
+                            )}
+                            {a.assignedBy && (
+                              <span className="text-xs text-muted-foreground">
+                                · назначил(а): {a.assignedBy}
+                              </span>
+                            )}
+                            {a.reason && (
+                              <span className="text-xs text-muted-foreground">· {a.reason}</span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
+              {substitution && (
+                <div className="space-y-1.5 border-t border-gray-100 dark:border-border pt-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Временное замещение
+                  </p>
+                  <p className="text-sm text-violet-800 dark:text-violet-300">
+                    {substitution.label} — с {ruDateOnly(substitution.from)} по{" "}
+                    {ruDateOnly(substitution.to)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Права ограничены этапом согласования КД: администрирование учётных записей
+                    замещение не даёт.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
