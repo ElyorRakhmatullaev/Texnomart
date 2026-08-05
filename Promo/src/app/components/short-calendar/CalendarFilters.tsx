@@ -21,6 +21,7 @@ import {
   type PromoCampaign,
 } from "../../../lib/promo-mock-data";
 import { PromoNoFilter } from "./PromoNoFilter";
+import { useRole } from "../../role-context";
 
 // Filters split by purpose (client feedback §1): operational (№ промо, тип, КМ,
 // статус КМ по акции) · control (период-диапазон, общий статус акции) · distribution
@@ -200,6 +201,19 @@ export function CalendarFilters({
   campaigns,
   showReportSend = true,
 }: CalendarFiltersProps) {
+  const { currentRole } = useRole();
+
+  /**
+   * Волна 6 (стр. 73 п. 7 / стр. 74 п. 7): пока блок свёрнут, КМ не видит, что
+   * коммерческий директор распределил акции по дням и категориям. Зелёная точка
+   * привлекает внимание; раскрытие блока снимает её само, поэтому состояние
+   * «просмотрено» хранить не нужно. Пульсация под `motion-safe:` — буквально
+   * мигающий элемент нарушает доступность, а клиент дал формулировку «например».
+   */
+  const showDistributionHint =
+    !distExpanded &&
+    currentRole === "Категорийный менеджер (КМ)" &&
+    campaigns.some((c) => (c.categoryDistribution ?? []).length > 0);
   const categoryOptions: Option[] = React.useMemo(() => {
     const set = new Set<string>();
     for (const c of campaigns)
@@ -351,6 +365,12 @@ export function CalendarFilters({
             <ChevronsLeftRight className="size-4" />
           )}
           Распределение по категориям — {distExpanded ? "свернуть" : "развернуть"}
+          {showDistributionHint && (
+            <span
+              title="По акциям есть распределение по категориям — раскройте блок"
+              className="ml-1.5 inline-flex size-2.5 rounded-full bg-emerald-500 motion-safe:animate-pulse"
+            />
+          )}
         </Button>
         {isFilterActive(values) && (
           <Button
