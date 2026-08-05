@@ -68,6 +68,41 @@ export function getActiveSubstitution(ref: Date = new Date()): KdSubstitution | 
   );
 }
 
+/**
+ * Состояние записи замещения для истории (5D, стр. 70 п. 3).
+ * «scheduled» — окно ещё не наступило: называть его «активно» было бы неверно
+ * (диалог назначения разрешает будущие даты), а «срок истёк» — тем более.
+ */
+export type SubstitutionState = "active" | "scheduled" | "revoked" | "expired";
+
+export function substitutionState(
+  s: KdSubstitution,
+  ref: Date = new Date()
+): SubstitutionState {
+  if (s.revokedAt) return "revoked";
+  const day = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()).getTime();
+  if (localMidnight(s.to) < day) return "expired";
+  if (localMidnight(s.from) > day) return "scheduled";
+  return "active";
+}
+
+/**
+ * Отображаемый признак «Уполномоченное лицо КД» (5D, стр. 70 п. 2).
+ * НАМЕРЕННО не роль: «Уполномоченное лицо КД» нет в PROMO_ROLES, а маппинг на
+ * «Коммерческий директор» расширил бы права (permissions / матрица прав /
+ * навигация), тогда как замещение ограничено этапом согласования КД.
+ * Гейтинг остаётся за `canActAsKd` — эта функция только для отображения.
+ */
+export function substitutionBadgeFor(
+  user: Pick<PromoUser, "id"> | null,
+  ref: Date = new Date()
+): { label: string; from: string; to: string } | null {
+  if (!user) return null;
+  const active = getActiveSubstitution(ref);
+  if (!active || active.substituteUserId !== user.id) return null;
+  return { label: "Уполномоченное лицо КД", from: active.from, to: active.to };
+}
+
 export function getSubstitutionHistory(): KdSubstitution[] {
   return [...read()].sort((a, b) => b.assignedAt.localeCompare(a.assignedAt));
 }

@@ -58,7 +58,7 @@ const ALL = "all";
 const STATUS_OPTIONS: { value: PromoUser["status"]; label: string }[] = [
   { value: "active", label: "Активен" },
   { value: "temp-password", label: "Временный пароль" },
-  { value: "blocked", label: "Заблокирован" },
+  { value: "blocked", label: "Деактивирован" },
 ];
 
 export function UsersFilters({
