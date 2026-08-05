@@ -65,9 +65,12 @@ import {
   reviveOverrides,
   reviveRows,
 } from "../../../lib/plan-store";
+import { applyDistribution } from "../../../lib/distribution-store";
 
 // Only PLANNED campaigns appear in the short calendar (spec §4.1).
-const PLANNED = CAMPAIGNS.filter((c) => c.planned);
+// Это СИД: введённое КД распределение по категориям подмешивается ниже
+// (`applyDistribution`) — Волна 6.
+const PLANNED_SEED = CAMPAIGNS.filter((c) => c.planned);
 
 // «Срок отчёта» / «Отправка смежным отделам» (columns + filter) are visible ONLY to
 // these roles, plus the active «уполномоченное лицо КД» (checked separately below) —
@@ -107,6 +110,8 @@ export function ShortCalendarPage() {
   const [hideCancelled, setHideCancelled] = React.useState(true);
   // «Распределение по категориям» collapsed by default — «используется не во всех акциях» (§2).
   const [distExpanded, setDistExpanded] = React.useState(false);
+  // Бампится после сохранения распределения в «Плане акций» — стор не реактивен.
+  const [distTick, setDistTick] = React.useState(0);
   // The whole filter block is collapsible (§7) — open by default, with the active-facet
   // count surfaced on the toggle so a collapsed block still signals it's filtering.
   const [filtersOpen, setFiltersOpen] = React.useState(true);
@@ -133,11 +138,14 @@ export function ShortCalendarPage() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
+  /** Сид + введённое КД распределение (Волна 6). Единственный источник для всех потребителей страницы. */
+  const planned = React.useMemo(() => applyDistribution(PLANNED_SEED), [distTick]);
+
   const filtered = React.useMemo(() => {
     const from = parseDate(filters.periodFrom);
     const to = parseDate(filters.periodTo, true);
 
-    return PLANNED.filter((c) => {
+    return planned.filter((c) => {
       if (hideCancelled && c.cancelled) return false;
       // №5 — КМ видит только полностью утверждённые руководителями планы.
       if (isKm && !isPlanApprovedByDirectors(c)) return false;
@@ -181,7 +189,7 @@ export function ShortCalendarPage() {
         return false;
       return true;
     });
-  }, [filters, hideCancelled, isKm, canSeeReportSend]);
+  }, [planned, filters, hideCancelled, isKm, canSeeReportSend]);
 
   // A distribution filter implies the block is relevant — auto-expand so the
   // matching rows are visible (§1, §2).
@@ -191,7 +199,7 @@ export function ShortCalendarPage() {
   // created drafts, edits and deletions are reflected, so the CSV matches the tab
   // («7-я часть» §9.5). Read fresh at export time (not memoized).
   function effectivePlanRows() {
-    const base = PLANNED.filter((c) => !c.cancelled).map((c) => ({
+    const base = planned.filter((c) => !c.cancelled).map((c) => ({
       id: c.id,
       type: c.type,
       name: c.name,
@@ -349,7 +357,7 @@ export function ShortCalendarPage() {
               onHideCancelledChange={setHideCancelled}
               distExpanded={distExpanded}
               onDistExpandedChange={setDistExpanded}
-              campaigns={PLANNED}
+              campaigns={planned}
               showReportSend={canSeeReportSend}
             />
           )}
@@ -393,7 +401,10 @@ export function ShortCalendarPage() {
         </TabsContent>
 
         <TabsContent value="plan">
-          <PlanMode campaigns={PLANNED.filter((c) => !c.cancelled)} />
+          <PlanMode
+            campaigns={planned.filter((c) => !c.cancelled)}
+            onDistributionSaved={() => setDistTick((t) => t + 1)}
+          />
         </TabsContent>
       </Tabs>
     </div>
