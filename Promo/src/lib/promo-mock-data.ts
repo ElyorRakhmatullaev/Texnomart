@@ -4132,6 +4132,20 @@ export interface AuditEvent {
   comment?: string;
   /** Для журнала конкретного пользователя (E-4) — id затронутой учётки. */
   targetUserId?: string;
+  /**
+   * Изменённые поля «прежнее → новое» (5D, стр. 71 п. 3).
+   * Для парольных действий НЕ заполняется — фиксируется только факт.
+   */
+  changes?: AuditFieldChange[];
+  /** Основание/комментарий действия (5D, стр. 69 п. 4 / стр. 70 п. 6). */
+  reason?: string;
+}
+
+/** Одно изменённое поле в аудит-записи (5D). */
+export interface AuditFieldChange {
+  field: string;
+  before: string;
+  after: string;
 }
 
 // A curated, seed-consistent action log. Dates align with the version chains and

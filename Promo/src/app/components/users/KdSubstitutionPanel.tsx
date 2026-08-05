@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { History, ShieldOff, UserCog } from "lucide-react";
+import { ChevronDown, History, ShieldOff, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@texnomart/ui/card";
 import { Button, buttonVariants } from "@texnomart/ui/button";
@@ -40,11 +40,17 @@ import { useRole } from "../../role-context";
 import { getUsers, rolesOf } from "../../../lib/users-store";
 import { appendAuditEvent } from "../../../lib/audit-store";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@texnomart/ui/collapsible";
+import {
   getActiveSubstitution,
   getSubstitutionHistory,
   assignSubstitution,
   revokeSubstitution,
   substituteName,
+  substitutionState,
 } from "../../../lib/kd-substitution-store";
 
 /** ISO «YYYY-MM-DD» → local-midnight Date (avoids the UTC-parse off-by-one RuDate would show). */
@@ -62,6 +68,8 @@ export function KdSubstitutionPanel() {
   const [tick, setTick] = React.useState(0);
   const [assignOpen, setAssignOpen] = React.useState(false);
   const [revokeOpen, setRevokeOpen] = React.useState(false);
+  // 5D, стр. 66 п. 6: история свёрнута по умолчанию — в заголовке только счётчик.
+  const [historyOpen, setHistoryOpen] = React.useState(false);
 
   const active = React.useMemo(() => getActiveSubstitution(), [tick]);
   const history = React.useMemo(() => getSubstitutionHistory(), [tick]);
@@ -92,7 +100,8 @@ export function KdSubstitutionPanel() {
       action: "назначение замещения" | "снятие замещения",
       targetUserId: string,
       objectLabel: string,
-      comment: string
+      comment: string,
+      reason?: string
     ) => {
       appendAuditEvent({
         user: currentUser?.fullName ?? "—",
@@ -102,6 +111,7 @@ export function KdSubstitutionPanel() {
         objectLabel,
         targetUserId,
         comment,
+        reason,
       });
     },
     [currentUser, currentRole]
@@ -121,7 +131,8 @@ export function KdSubstitutionPanel() {
       "назначение замещения",
       substituteId,
       substitute?.fullName ?? "—",
-      `Замещение КД: c ${formatDateFull(parseDateOnly(from))} по ${formatDateFull(parseDateOnly(to))}`
+      `Замещение КД: c ${formatDateFull(parseDateOnly(from))} по ${formatDateFull(parseDateOnly(to))}`,
+      reason.trim()
     );
     setAssignOpen(false);
     setTick((t) => t + 1);
@@ -152,6 +163,9 @@ export function KdSubstitutionPanel() {
                 c <RuDate value={parseDateOnly(active.from)} /> по <RuDate value={parseDateOnly(active.to)} />
               </p>
               <p className="text-xs text-muted-foreground">Назначил: {active.assignedBy}</p>
+              {active.reason && (
+                <p className="text-xs text-muted-foreground">Основание: {active.reason}</p>
+              )}
             </div>
             <div className="flex shrink-0 gap-2">
               <Button variant="outline" size="sm" onClick={() => setAssignOpen(true)}>
@@ -176,42 +190,77 @@ export function KdSubstitutionPanel() {
           </div>
         )}
 
-        <div>
-          <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100">
-            <History className="size-4" /> История замещений
-          </p>
-          {history.length === 0 ? (
-            <p className="text-sm text-muted-foreground">История пуста.</p>
-          ) : (
-            <ul className="flex flex-col gap-1.5">
-              {history.map((s) => (
-                <li
-                  key={s.id}
-                  className="flex flex-col gap-0.5 rounded-md border border-gray-200 dark:border-border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{substituteName(s)}</span>
-                  <span className="text-gray-600 dark:text-gray-300">
-                    c <RuDate value={parseDateOnly(s.from)} /> по <RuDate value={parseDateOnly(s.to)} />
-                  </span>
-                  <span
-                    className={cn(
-                      "text-xs",
-                      s.revokedAt
-                        ? "text-gray-500 dark:text-gray-400"
-                        : "font-medium text-emerald-600 dark:text-emerald-400"
-                    )}
-                  >
-                    {s.revokedAt ? (
-                      <>Снято <RuDate value={new Date(s.revokedAt)} withTime /></>
-                    ) : (
-                      <>Назначено <RuDate value={new Date(s.assignedAt)} withTime /> · активно</>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
+          {/* Триггер — нативный <button>: shared <Button> не передаёт ref под
+              asChild, и Radix отрисовал бы контент мимо экрана (уроки Волны 1). */}
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center gap-1.5 rounded-md px-1 py-1.5 text-sm font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-accent"
+            >
+              <History className="size-4" />
+              История замещений
+              <span className="tabular-nums text-muted-foreground">({history.length})</span>
+              <ChevronDown
+                className={cn("ml-auto size-4 transition-transform", historyOpen && "rotate-180")}
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2">
+            {history.length === 0 ? (
+              <p className="text-sm text-muted-foreground">История пуста.</p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {history.map((s) => {
+                  const state = substitutionState(s);
+                  return (
+                    <li
+                      key={s.id}
+                      className="flex flex-col gap-0.5 rounded-md border border-gray-200 dark:border-border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <span className="font-medium text-gray-900 dark:text-gray-100">
+                        {substituteName(s)}
+                      </span>
+                      <span className="text-gray-600 dark:text-gray-300">
+                        c <RuDate value={parseDateOnly(s.from)} /> по{" "}
+                        <RuDate value={parseDateOnly(s.to)} />
+                      </span>
+                      <span
+                        className={cn(
+                          "text-xs",
+                          state === "active"
+                            ? "font-medium text-emerald-600 dark:text-emerald-400"
+                            : "text-gray-500 dark:text-gray-400"
+                        )}
+                      >
+                        {state === "revoked" && (
+                          <>
+                            Снято досрочно <RuDate value={new Date(s.revokedAt!)} withTime />
+                          </>
+                        )}
+                        {state === "expired" && (
+                          <>
+                            Срок истёк <RuDate value={parseDateOnly(s.to)} />
+                          </>
+                        )}
+                        {state === "scheduled" && (
+                          <>
+                            Запланировано с <RuDate value={parseDateOnly(s.from)} />
+                          </>
+                        )}
+                        {state === "active" && (
+                          <>
+                            Назначено <RuDate value={new Date(s.assignedAt)} withTime /> · активно
+                          </>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
 
       {/* Assign dialog */}
