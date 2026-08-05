@@ -37,7 +37,11 @@ export interface ControlPoint {
   campaignId: string;
   promoNo: string;
   promoName: string;
-  planPeriod?: string;
+  /**
+   * Плановый период — диапазон дат (5C, вкладка 1 п. 2: «01.11.2026 — 30.11.2026»,
+   * а не «Ноябрь 2026»). `label` остаётся как дополнительная группировка, не вместо периода.
+   */
+  planPeriod?: { start: Date; end: Date; label: string };
   promoPeriod?: { start: Date; end: Date };
   checkpoint: string;
   responsibleName: string;
@@ -49,10 +53,12 @@ export interface ControlPoint {
   comment?: string;
 }
 
-/** Capitalised «LLLL yyyy» plan period, e.g. «Июль 2026». */
-function planPeriodLabel(d: Date): string {
+/** Плановый период = календарный месяц старта акции: границы + подпись-группировка. */
+function planPeriodOf(d: Date): { start: Date; end: Date; label: string } {
+  const start = new Date(d.getFullYear(), d.getMonth(), 1);
+  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
   const s = format(d, "LLLL yyyy", { locale: ru });
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  return { start, end, label: s.charAt(0).toUpperCase() + s.slice(1) };
 }
 
 /** Result + overdue days from a deadline and an actual/ref date. */
@@ -80,7 +86,7 @@ export function buildPlanControlPoints(ref: Date = new Date()): ControlPoint[] {
       campaignId: c.id,
       promoNo: formatPromoNo(c.id),
       promoName: c.name,
-      planPeriod: planPeriodLabel(c.startDate),
+      planPeriod: planPeriodOf(c.startDate),
     };
 
     // 1) Ознакомление плана — deadline start − 63 кал. дн.

@@ -14,13 +14,16 @@ import {
 import { ControlDeadlinesTable } from "./ControlDeadlinesTable";
 
 const PLAN_EXPORT_HEADER = [
-  "Период плана", "Контрольная точка", "Ответственный · роль",
+  "Период плана (начало)", "Период плана (окончание)", "Период плана",
+  "Контрольная точка", "Ответственный · роль",
   "Дедлайн", "Факт", "Результат", "Просрочка", "Комментарий",
 ];
 
 function planExportRows(points: ControlPoint[]): (string | number)[][] {
   return points.map((p) => [
-    p.planPeriod ?? "",
+    p.planPeriod ? fmtAuditDate(p.planPeriod.start) : "",
+    p.planPeriod ? fmtAuditDate(p.planPeriod.end) : "",
+    p.planPeriod?.label ?? "",
     p.checkpoint,
     `${p.responsibleName} · ${p.responsibleRole}`,
     fmtAuditDate(p.deadline, true),

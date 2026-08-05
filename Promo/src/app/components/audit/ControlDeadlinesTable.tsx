@@ -47,7 +47,7 @@ export function ControlDeadlinesTable({
             <thead className="sticky top-0 z-10">
               <tr>
                 {lead === "plan" ? (
-                  <th className={cn(th, "w-[130px]")}>Период плана</th>
+                  <th className={cn(th, "w-[190px]")}>Период плана</th>
                 ) : (
                   <>
                     <th className={cn(th, "w-[240px]")}>№ и название промо</th>
@@ -67,7 +67,18 @@ export function ControlDeadlinesTable({
               {points.map((p) => (
                 <tr key={p.id} className="hover:bg-gray-50/60 dark:hover:bg-muted/20">
                   {lead === "plan" ? (
-                    <td className={cn(td, "whitespace-nowrap font-medium text-gray-900 dark:text-gray-100")}>{p.planPeriod}</td>
+                    <td className={cn(td, "whitespace-nowrap font-medium text-gray-900 dark:text-gray-100")}>
+                      {p.planPeriod && (
+                        <>
+                          <span className="tabular-nums">
+                            <RuDate value={p.planPeriod.start} /> — <RuDate value={p.planPeriod.end} />
+                          </span>
+                          <span className="block text-[11px] font-normal text-gray-400 dark:text-gray-500">
+                            {p.planPeriod.label}
+                          </span>
+                        </>
+                      )}
+                    </td>
                   ) : (
                     <>
                       <td className={td}>
@@ -105,7 +116,18 @@ export function ControlDeadlinesTable({
               <ResultChip p={p} />
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {lead === "plan" ? p.planPeriod : <><span className="font-mono">{p.promoNo}</span> · {p.promoName}</>}
+              {lead === "plan" ? (
+                p.planPeriod && (
+                  <>
+                    <span className="tabular-nums">
+                      <RuDate value={p.planPeriod.start} /> — <RuDate value={p.planPeriod.end} />
+                    </span>
+                    {" · "}{p.planPeriod.label}
+                  </>
+                )
+              ) : (
+                <><span className="font-mono">{p.promoNo}</span> · {p.promoName}</>
+              )}
             </p>
             <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
               <span>Ответственный: <span className="text-gray-700 dark:text-gray-200">{p.responsibleName}</span></span>
