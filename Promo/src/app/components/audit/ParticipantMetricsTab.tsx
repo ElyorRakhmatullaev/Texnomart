@@ -10,7 +10,6 @@ import {
 import {
   buildParticipantMetrics, PARTICIPANT_ROLES, type ParticipantMetricRow, type TimelinessBand,
 } from "../../../lib/audit-control";
-import { getCategoryManager } from "../../../lib/promo-mock-data";
 import { exportAuditXlsx } from "../../../lib/audit-xlsx";
 import { exportStamp } from "../../../lib/promo-export";
 import type { PromoRole } from "../../role-context";
@@ -25,15 +24,16 @@ const BAND_TINT: Record<TimelinessBand, string> = {
 
 export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
   const isKm = access.role === "Категорийный менеджер (КМ)";
-  const ownName = getCategoryManager(access.ownKmId)?.name;
 
   const [role, setRole] = React.useState<PromoRole>("Категорийный менеджер (КМ)");
   const effectiveRole = isKm ? "Категорийный менеджер (КМ)" : role;
   const [drillName, setDrillName] = React.useState<string | null>(null);
-  const rows = React.useMemo(() => {
-    const all = buildParticipantMetrics(effectiveRole);
-    return isKm ? all.filter((r) => r.name === ownName) : all;
-  }, [effectiveRole, isKm, ownName]);
+  // Скоуп по матрице прав (5C) сужает набор точек внутри деривации, поэтому строка КМ,
+  // которому записи не видны, здесь просто не появится — отдельный фильтр по ФИО не нужен.
+  const rows = React.useMemo(
+    () => buildParticipantMetrics(effectiveRole, new Date(), access.scope),
+    [effectiveRole, access.scope]
+  );
   const dueLabel = effectiveRole === "Категорийный менеджер (КМ)" ? "Промо с дедлайном" : "Задач с дедлайном";
 
   const th = "border-b border-r border-gray-200 dark:border-border bg-gray-50 dark:bg-muted/40 px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap";
@@ -134,6 +134,7 @@ export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
       <ParticipantTasksDrawer
         name={drillName}
         role={effectiveRole}
+        scope={access.scope}
         open={drillName !== null}
         onOpenChange={(v) => { if (!v) setDrillName(null); }}
       />

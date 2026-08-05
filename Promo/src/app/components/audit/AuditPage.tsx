@@ -9,9 +9,11 @@ import {
 } from "@texnomart/ui/select";
 import { PageHeader } from "@texnomart/shared/components/page-header";
 import { useRole } from "../../role-context";
+import { useCurrentUser } from "../../current-user-context";
 import { OWN_AUDIT_KM_ID } from "../../../lib/promo-mock-data";
 import type { PromoRole } from "../../role-context";
 import { PARTICIPANT_ROLES } from "../../../lib/audit-control";
+import { auditScopeFor, type AuditScope } from "../../../lib/audit-access";
 import { AuditLogTable } from "./AuditLogTable";
 import { PlanDeadlinesTab } from "./PlanDeadlinesTab";
 import { PromoDeadlinesTab } from "./PromoDeadlinesTab";
@@ -24,6 +26,8 @@ export interface AuditAccess {
   role: PromoRole;
   ownKmId: string;
   isAdmin: boolean;
+  /** Область видимости по матрице прав (5C) — одна на все четыре вкладки. */
+  scope: AuditScope;
 }
 export interface AuditGlobalFilters {
   from: string;
@@ -34,13 +38,21 @@ const EMPTY_GLOBAL: AuditGlobalFilters = { from: "", to: "", role: "all" };
 
 export function AuditPage() {
   const { currentRole } = useRole();
+  const { currentUser } = useCurrentUser();
   const [tab, setTab] = React.useState("plan");
   const [globals, setGlobals] = React.useState<AuditGlobalFilters>(EMPTY_GLOBAL);
 
+  // Скоуп собирается в том же useMemo, что и access, — вкладки получают ОДИН объект
+  // и не могут разойтись в трактовке прав.
   const access: AuditAccess = React.useMemo(() => {
     const isAdmin = currentRole === "Администратор";
-    return { role: currentRole, ownKmId: OWN_AUDIT_KM_ID, isAdmin };
-  }, [currentRole]);
+    return {
+      role: currentRole,
+      ownKmId: OWN_AUDIT_KM_ID,
+      isAdmin,
+      scope: auditScopeFor(currentRole, currentUser?.id),
+    };
+  }, [currentRole, currentUser?.id]);
 
   const patch = (p: Partial<AuditGlobalFilters>) => setGlobals((g) => ({ ...g, ...p }));
   const reset = () => setGlobals(EMPTY_GLOBAL);

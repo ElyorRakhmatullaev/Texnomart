@@ -4,6 +4,7 @@ import * as React from "react";
 import { Download } from "lucide-react";
 import { Button } from "@texnomart/ui/button";
 import { buildPlanControlPoints, type ControlPoint } from "../../../lib/audit-control";
+import { scopeControlPoints } from "../../../lib/audit-access";
 import { exportAuditXlsx, fmtAuditDate } from "../../../lib/audit-xlsx";
 import { exportStamp } from "../../../lib/promo-export";
 import type { AuditAccess, AuditGlobalFilters } from "./AuditPage";
@@ -34,19 +35,21 @@ export function PlanDeadlinesTab({
   access, globals,
 }: { access: AuditAccess; globals: AuditGlobalFilters }) {
   const all = React.useMemo(() => buildPlanControlPoints(), []);
-  const isKm = access.role === "Категорийный менеджер (КМ)";
-  // Plan points have no per-КМ attribution → a plain КМ sees none (documented limit).
-  const scoped = React.useMemo(() => (isKm ? [] : all), [all, isKm]);
+  // Скоуп по матрице прав (5C) — применяется ДО пользовательских фильтров.
+  const scoped = React.useMemo(
+    () => scopeControlPoints(all, access.scope),
+    [all, access.scope]
+  );
   const [filters, setFilters] = React.useState<ControlFilters>(EMPTY_CONTROL_FILTERS);
   const shownPoints = React.useMemo(
     () => applyControlFilters(scoped, filters, globals),
     [scoped, filters, globals]
   );
 
-  if (isKm) {
+  if (scoped.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center text-sm text-muted-foreground">
-        Раздел «Сроки по плану» относится к согласованию плана руководителями и не содержит данных по вашим промо.
+        Показаны записи в рамках ваших прав: {access.scope.label}. По этой вкладке доступных записей нет.
       </div>
     );
   }

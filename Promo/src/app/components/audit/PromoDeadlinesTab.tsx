@@ -4,7 +4,7 @@ import * as React from "react";
 import { Download } from "lucide-react";
 import { Button } from "@texnomart/ui/button";
 import { buildPromoControlPoints, type ControlPoint } from "../../../lib/audit-control";
-import { getCategoryManager } from "../../../lib/promo-mock-data";
+import { scopeControlPoints } from "../../../lib/audit-access";
 import { exportAuditXlsx, fmtAuditDate } from "../../../lib/audit-xlsx";
 import { exportStamp } from "../../../lib/promo-export";
 import type { AuditAccess, AuditGlobalFilters } from "./AuditPage";
@@ -38,18 +38,24 @@ export function PromoDeadlinesTab({
   access, globals,
 }: { access: AuditAccess; globals: AuditGlobalFilters }) {
   const all = React.useMemo(() => buildPromoControlPoints(), []);
-  const isKm = access.role === "Категорийный менеджер (КМ)";
-  const scoped = React.useMemo(() => {
-    if (!isKm) return all;
-    // Plain КМ → only rows where they are the responsible КМ (representative ownKmId).
-    const myName = getCategoryManager(access.ownKmId)?.name;
-    return all.filter((p) => p.responsibleName === myName);
-  }, [all, isKm, access.ownKmId]);
+  // Скоуп по матрице прав (5C) — применяется ДО пользовательских фильтров.
+  const scoped = React.useMemo(
+    () => scopeControlPoints(all, access.scope),
+    [all, access.scope]
+  );
   const [filters, setFilters] = React.useState<ControlFilters>(EMPTY_CONTROL_FILTERS);
   const shownPoints = React.useMemo(
     () => applyControlFilters(scoped, filters, globals),
     [scoped, filters, globals]
   );
+
+  if (scoped.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center text-sm text-muted-foreground">
+        Показаны записи в рамках ваших прав: {access.scope.label}. По этой вкладке доступных записей нет.
+      </div>
+    );
+  }
 
   const handleExport = () => {
     exportAuditXlsx({

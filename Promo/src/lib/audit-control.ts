@@ -1,6 +1,7 @@
 import { ru } from "date-fns/locale";
 import { format } from "date-fns";
 import type { PromoRole } from "../app/role-context";
+import { scopeControlPoints, type AuditScope } from "./audit-access";
 import {
   PLAN_APPROVALS,
   PLAN_MARKETING_REVIEW_LEAD_DAYS,
@@ -374,10 +375,16 @@ export interface ParticipantTask {
   comment?: string;
 }
 
-/** The control points a given role is measured on (across plan + promo). */
-function roleControlPoints(role: PromoRole, ref: Date): ControlPoint[] {
+/**
+ * The control points a given role is measured on (across plan + promo).
+ * `scope` (5C) сужает набор по матрице прав ДО расчёта метрик — иначе рейтинг покажет
+ * участников, чьи записи роли не видны на вкладках 1–2, и цифры перестанут сходиться.
+ */
+function roleControlPoints(role: PromoRole, ref: Date, scope?: AuditScope): ControlPoint[] {
   const checkpoints = ROLE_CHECKPOINTS[role] ?? [];
-  return buildControlPoints(ref).filter((p) => checkpoints.includes(p.checkpoint));
+  const all = buildControlPoints(ref);
+  const scoped = scope ? scopeControlPoints(all, scope) : all;
+  return scoped.filter((p) => checkpoints.includes(p.checkpoint));
 }
 
 /** Distinct measured people for a role. КМ → the roster; other roles → single representative row. */
@@ -393,13 +400,17 @@ function participantsFor(role: PromoRole): string[] {
 
 export function buildParticipantMetrics(
   role: PromoRole,
-  ref: Date = new Date()
+  ref: Date = new Date(),
+  scope?: AuditScope
 ): ParticipantMetricRow[] {
-  const points = roleControlPoints(role, ref);
-  const returnPoints = buildControlPoints(ref).filter((p) =>
+  const points = roleControlPoints(role, ref, scope);
+  const allPoints = scope
+    ? scopeControlPoints(buildControlPoints(ref), scope)
+    : buildControlPoints(ref);
+  const returnPoints = allPoints.filter((p) =>
     p.checkpoint === "Возврат на корректировку" || p.checkpoint === "Возврат плана на корректировку"
   );
-  const versionPoints = buildControlPoints(ref).filter((p) =>
+  const versionPoints = allPoints.filter((p) =>
     p.checkpoint.startsWith("Новая версия отчёта") || p.checkpoint === "Повторная отправка плана"
   );
 
@@ -433,9 +444,10 @@ export function buildParticipantMetrics(
 export function buildParticipantTasks(
   responsibleName: string,
   role: PromoRole,
-  ref: Date = new Date()
+  ref: Date = new Date(),
+  scope?: AuditScope
 ): ParticipantTask[] {
-  return roleControlPoints(role, ref)
+  return roleControlPoints(role, ref, scope)
     .filter((p) => p.responsibleName === responsibleName)
     .sort((a, b) => b.deadline.getTime() - a.deadline.getTime())
     .map((p) => ({

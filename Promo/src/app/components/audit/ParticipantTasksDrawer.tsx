@@ -4,19 +4,22 @@ import * as React from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@texnomart/ui/sheet";
 import { RuDate } from "../../../components/RuDate";
 import { buildParticipantTasks } from "../../../lib/audit-control";
+import type { AuditScope } from "../../../lib/audit-access";
 import type { PromoRole } from "../../role-context";
 
 export function ParticipantTasksDrawer({
-  name, role, open, onOpenChange,
+  name, role, scope, open, onOpenChange,
 }: {
   name: string | null;
   role: PromoRole;
+  /** Область видимости по матрице прав (5C) — тот же скоуп, что у таблицы рейтинга. */
+  scope?: AuditScope;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
   const tasks = React.useMemo(
-    () => (name ? buildParticipantTasks(name, role) : []),
-    [name, role]
+    () => (name ? buildParticipantTasks(name, role, new Date(), scope) : []),
+    [name, role, scope]
   );
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

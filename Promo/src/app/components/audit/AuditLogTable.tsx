@@ -22,6 +22,7 @@ import {
 import { PromoStatusBadge } from "../../../components/PromoStatusBadge";
 import { RuDate } from "../../../components/RuDate";
 import { getLiveAuditEvents } from "../../../lib/audit-store";
+import { scopeAuditEvents } from "../../../lib/audit-access";
 import { exportAuditXlsx, fmtAuditDate } from "../../../lib/audit-xlsx";
 import { exportStamp } from "../../../lib/promo-export";
 import {
@@ -29,7 +30,6 @@ import {
   AUDIT_OBJECT_LABEL,
   buildAuditLog,
   formatPromoNo,
-  getCategoryManager,
   type AuditEvent,
 } from "../../../lib/promo-mock-data";
 import {
@@ -133,21 +133,14 @@ export function AuditLogTable({
   const [filters, setFilters] = React.useState<AuditFilters>(EMPTY_AUDIT_FILTERS);
   const [sheetOpen, setSheetOpen] = React.useState(false);
 
-  const isKm = access?.role === "Категорийный менеджер (КМ)";
-
+  // Скоуп по матрице прав (5C) — применяется ДО пользовательских фильтров, поэтому
+  // списки значений в фильтрах (users/roles ниже) строятся уже из суженного набора.
   const scopedEvents = React.useMemo(() => {
-    const myName = getCategoryManager(access?.ownKmId ?? "")?.name;
-    return events.filter((e) => {
-      // action scope
-      if (!(isAdmin && showAll) && NON_KEY_ACTIONS.has(e.action)) return false;
-      // role-scoped rows: only the КМ role is own-scoped — every other role sees all
-      if (isKm) {
-        if (e.role !== "Категорийный менеджер (КМ)") return false;
-        if (myName && e.user !== myName) return false;
-      }
-      return true;
-    });
-  }, [events, isAdmin, showAll, isKm, access]);
+    const byScope = access ? scopeAuditEvents(events, access.scope) : events;
+    return byScope.filter(
+      (e) => (isAdmin && showAll) || !NON_KEY_ACTIONS.has(e.action)
+    );
+  }, [events, isAdmin, showAll, access]);
 
   const users = React.useMemo(
     () => Array.from(new Set(scopedEvents.map((e) => e.user))).sort(),
