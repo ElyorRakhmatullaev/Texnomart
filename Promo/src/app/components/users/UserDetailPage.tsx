@@ -30,7 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@texnomart/ui/tabs";
 import { cn } from "@texnomart/ui/utils";
 import { RuDate } from "../../../components/RuDate";
 import { useCurrentUser } from "../../current-user-context";
-import { useRole } from "../../role-context";
+import { useRole, type PromoRole } from "../../role-context";
 import {
   canDeactivate,
   canManageUser,
@@ -527,7 +527,11 @@ export function UserDetailPage() {
         initial={user}
         allUsers={allUsers}
         onSubmit={handleEditSubmit}
-        adminRoleLocked={!isGlobalAdmin}
+        lockedRoles={
+          isGlobalAdmin
+            ? []
+            : (["Администратор", "Коммерческий директор"] as PromoRole[])
+        }
       />
 
       <TempPasswordDialog

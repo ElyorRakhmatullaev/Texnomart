@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Clock, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,12 @@ import {
 } from "@texnomart/ui/select";
 import { cn } from "@texnomart/ui/utils";
 import { PROMO_ROLES, type PromoRole } from "../../role-context";
-import { DEPARTMENTS, rolesOf, type PromoUser } from "../../../lib/users-store";
+import { DEPARTMENTS, type PromoUser } from "../../../lib/users-store";
+import {
+  assignmentsOf,
+  permanentRolesOf,
+  type RoleAssignment,
+} from "../../../lib/user-roles";
 
 /** Sentinel values for the optional Select fields — Radix Select disallows an empty-string item value. */
 const NO_DEPARTMENT = "__no_department__";
@@ -32,7 +37,10 @@ const DEFAULT_ROLE: PromoRole = "Категорийный менеджер (КМ
 export interface UserFormValue {
   fullName: string;
   email: string;
+  /** ПОСТОЯННЫЕ роли, roles[0] — основная. Производное от `assignments`. */
   roles: PromoRole[];
+  /** Полный реестр, включая временные роли с периодом (5D). */
+  assignments: RoleAssignment[];
   department?: string;
   position?: string;
   managerId?: string;
@@ -48,17 +56,13 @@ interface UserFormDialogProps {
   allUsers: PromoUser[];
   onSubmit: (value: UserFormValue) => void;
   /**
-   * When true, the «Администратор» role chip is locked: it can neither be
-   * added nor removed from the form. Used when the acting user is not a
-   * global admin, so they can't grant/revoke global admin rights via the
-   * edit dialog (that decision is gated elsewhere — see `canToggleGlobalAdmin`
-   * / `canRevokeAdmin` on the row-menu path). Defaults to false (current
-   * create-flow behavior — all roles freely toggleable).
+   * Роли, которые нельзя ни выдать, ни снять в этой форме — ни постоянно, ни
+   * временно. Для администратора подразделения это ["Администратор",
+   * "Коммерческий директор"] (5D, стр. 67: он не создаёт и не изменяет
+   * администраторов и не назначает роль КД). Пусто = все роли доступны.
    */
-  adminRoleLocked?: boolean;
+  lockedRoles?: PromoRole[];
 }
-
-const ADMIN_ROLE: PromoRole = "Администратор";
 
 export function UserFormDialog({
   open,
@@ -67,11 +71,12 @@ export function UserFormDialog({
   initial,
   allUsers,
   onSubmit,
-  adminRoleLocked = false,
+  lockedRoles = [],
 }: UserFormDialogProps) {
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [roles, setRoles] = React.useState<PromoRole[]>([DEFAULT_ROLE]);
+  const [temporary, setTemporary] = React.useState<RoleAssignment[]>([]);
   const [department, setDepartment] = React.useState<string | undefined>(undefined);
   const [position, setPosition] = React.useState("");
   const [managerId, setManagerId] = React.useState<string | undefined>(undefined);
@@ -82,6 +87,7 @@ export function UserFormDialog({
       setFullName("");
       setEmail("");
       setRoles([DEFAULT_ROLE]);
+      setTemporary([]);
       setDepartment(undefined);
       setPosition("");
       setManagerId(undefined);
@@ -93,7 +99,8 @@ export function UserFormDialog({
     if (mode === "edit" && initial && open) {
       setFullName(initial.fullName);
       setEmail(initial.email);
-      setRoles(rolesOf(initial));
+      setRoles(permanentRolesOf(initial));
+      setTemporary(assignmentsOf(initial).filter((a) => a.kind === "temporary"));
       setDepartment(initial.department);
       setPosition(initial.position ?? "");
       setManagerId(initial.managerId);
@@ -103,10 +110,21 @@ export function UserFormDialog({
   const emailValid = /\S+@\S+\.\S+/.test(email);
   const nameValid = fullName.trim().length >= 2;
   const rolesValid = roles.length > 0;
-  const isValid = nameValid && emailValid && rolesValid;
+
+  const temporaryError = React.useMemo(() => {
+    for (const a of temporary) {
+      if (!a.from || !a.to) return "У временной роли укажите обе даты периода.";
+      if (a.to < a.from) return "Дата окончания временной роли раньше даты начала.";
+      if (roles.includes(a.role))
+        return `Роль «${a.role}» уже назначена постоянно — временная не нужна.`;
+    }
+    return null;
+  }, [temporary, roles]);
+
+  const isValid = nameValid && emailValid && rolesValid && !temporaryError;
 
   const toggleRole = (r: PromoRole) => {
-    if (adminRoleLocked && r === ADMIN_ROLE) return;
+    if (lockedRoles.includes(r)) return;
     setRoles((prev) =>
       prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]
     );
@@ -117,10 +135,17 @@ export function UserFormDialog({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid) return;
+    const assignments: RoleAssignment[] = [
+      ...roles.map(
+        (role, i): RoleAssignment => ({ role, kind: i === 0 ? "primary" : "additional" })
+      ),
+      ...temporary,
+    ];
     onSubmit({
       fullName: fullName.trim(),
       email: email.trim(),
       roles,
+      assignments,
       department,
       position: position.trim() || undefined,
       managerId,
@@ -163,17 +188,17 @@ export function UserFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Роли</Label>
+            <Label>Постоянные роли</Label>
             <div className="flex flex-wrap gap-2">
               {PROMO_ROLES.map((r) => {
                 const checked = roles.includes(r);
-                const locked = adminRoleLocked && r === ADMIN_ROLE;
+                const locked = lockedRoles.includes(r);
                 return (
                   <button
                     key={r}
                     type="button"
                     disabled={locked}
-                    title={locked ? "Изменять роль «Администратор» может только глобальный администратор" : undefined}
+                    title={locked ? "Изменять эту роль может только глобальный администратор" : undefined}
                     onClick={() => toggleRole(r)}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
@@ -196,8 +221,125 @@ export function UserFormDialog({
             ) : (
               <p className="text-xs text-muted-foreground">
                 Основная роль: <span className="font-medium text-gray-700 dark:text-gray-200">{roles[0]}</span>
-                {roles.length > 1 ? " (первая выбранная роль — основная)" : ""}
+                {roles.length > 1 ? " (первая выбранная роль — основная, остальные — дополнительные)" : ""}
               </p>
+            )}
+          </div>
+
+          {/* Временные роли (5D, стр. 69 п. 3): действуют только внутри периода —
+              по его окончании снимаются сами (см. `activeRolesOf`). */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">
+              <Clock className="size-3.5" /> Временные роли
+            </Label>
+            {temporary.length === 0 && (
+              <p className="text-xs text-muted-foreground">Временные роли не назначены.</p>
+            )}
+            <div className="flex flex-col gap-2">
+              {temporary.map((a, i) => (
+                <div
+                  key={i}
+                  className="space-y-2 rounded-lg border border-gray-200 dark:border-border p-2.5"
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <Select
+                        value={a.role}
+                        onValueChange={(v) =>
+                          setTemporary((p) =>
+                            p.map((x, j) => (j === i ? { ...x, role: v as PromoRole } : x))
+                          )
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PROMO_ROLES.filter((r) => !lockedRoles.includes(r)).map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {r}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Удалить временную роль"
+                      onClick={() => setTemporary((p) => p.filter((_, j) => j !== i))}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">С даты</Label>
+                      <Input
+                        type="date"
+                        value={a.from ?? ""}
+                        onChange={(e) =>
+                          setTemporary((p) =>
+                            p.map((x, j) => (j === i ? { ...x, from: e.target.value } : x))
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">По дату</Label>
+                      <Input
+                        type="date"
+                        value={a.to ?? ""}
+                        min={a.from || undefined}
+                        onChange={(e) =>
+                          setTemporary((p) =>
+                            p.map((x, j) => (j === i ? { ...x, to: e.target.value } : x))
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                  <Input
+                    placeholder="Основание (необязательно)"
+                    value={a.reason ?? ""}
+                    onChange={(e) =>
+                      setTemporary((p) =>
+                        p.map((x, j) => (j === i ? { ...x, reason: e.target.value } : x))
+                      )
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setTemporary((p) => [
+                  ...p,
+                  {
+                    // Первая роль, которая ещё не выдана постоянно и не заблокирована:
+                    // иначе блок открывался бы сразу с ошибкой «уже назначена постоянно».
+                    role:
+                      PROMO_ROLES.find(
+                        (r) =>
+                          !roles.includes(r) &&
+                          !lockedRoles.includes(r) &&
+                          !p.some((x) => x.role === r)
+                      ) ?? DEFAULT_ROLE,
+                    kind: "temporary",
+                    from: "",
+                    to: "",
+                  },
+                ])
+              }
+            >
+              + Добавить временную роль
+            </Button>
+            {temporaryError && (
+              <p className="text-xs text-red-600 dark:text-red-400">{temporaryError}</p>
             )}
           </div>
 
