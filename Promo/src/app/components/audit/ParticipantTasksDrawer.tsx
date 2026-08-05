@@ -3,23 +3,27 @@
 import * as React from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@texnomart/ui/sheet";
 import { RuDate } from "../../../components/RuDate";
-import { buildParticipantTasks, overdueLabel } from "../../../lib/audit-control";
+import {
+  buildParticipantTasks, overdueLabel, type ParticipantFilters,
+} from "../../../lib/audit-control";
 import type { AuditScope } from "../../../lib/audit-access";
 import type { PromoRole } from "../../role-context";
 
 export function ParticipantTasksDrawer({
-  name, role, scope, open, onOpenChange,
+  name, role, scope, filters, open, onOpenChange,
 }: {
   name: string | null;
   role: PromoRole;
   /** Область видимости по матрице прав (5C) — тот же скоуп, что у таблицы рейтинга. */
   scope?: AuditScope;
+  /** Тот же отбор, что применён к рейтингу, — иначе панель покажет не те задачи. */
+  filters?: ParticipantFilters;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
   const tasks = React.useMemo(
-    () => (name ? buildParticipantTasks(name, role, new Date(), scope) : []),
-    [name, role, scope]
+    () => (name ? buildParticipantTasks(name, role, new Date(), { scope, filters }) : []),
+    [name, role, scope, filters]
   );
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

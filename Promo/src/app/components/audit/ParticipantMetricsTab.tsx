@@ -1,14 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Download } from "lucide-react";
+import { Download, RotateCcw } from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
 import { Button } from "@texnomart/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@texnomart/ui/select";
+import { PromoNoFilter } from "../short-calendar/PromoNoFilter";
 import {
-  buildParticipantMetrics, PARTICIPANT_ROLES, type ParticipantMetricRow, type TimelinessBand,
+  buildParticipantMetrics, participantFilterOptions, EMPTY_PARTICIPANT_FILTERS,
+  PARTICIPANT_ROLES,
+  type ParticipantFilters, type ParticipantMetricRow, type TimelinessBand,
 } from "../../../lib/audit-control";
 import { exportAuditXlsx } from "../../../lib/audit-xlsx";
 import { exportStamp } from "../../../lib/promo-export";
@@ -28,12 +31,31 @@ export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
   const [role, setRole] = React.useState<PromoRole>("Категорийный менеджер (КМ)");
   const effectiveRole = isKm ? "Категорийный менеджер (КМ)" : role;
   const [drillName, setDrillName] = React.useState<string | null>(null);
-  // Скоуп по матрице прав (5C) сужает набор точек внутри деривации, поэтому строка КМ,
-  // которому записи не видны, здесь просто не появится — отдельный фильтр по ФИО не нужен.
-  const rows = React.useMemo(
-    () => buildParticipantMetrics(effectiveRole, new Date(), access.scope),
+  const [filters, setFilters] = React.useState<ParticipantFilters>(EMPTY_PARTICIPANT_FILTERS);
+  const patch = (p: Partial<ParticipantFilters>) => setFilters((f) => ({ ...f, ...p }));
+  // Варианты строятся из НЕотфильтрованного набора той же роли, иначе выбранное значение
+  // исчезнет из своего же списка после применения.
+  const options = React.useMemo(
+    () => participantFilterOptions(effectiveRole, new Date(), access.scope),
     [effectiveRole, access.scope]
   );
+  // Скоуп по матрице прав (5C) сужает набор точек внутри деривации, поэтому строка КМ,
+  // которому записи не видны, здесь просто не появится.
+  const rows = React.useMemo(
+    () => buildParticipantMetrics(effectiveRole, new Date(), { scope: access.scope, filters }),
+    [effectiveRole, access.scope, filters]
+  );
+  const activeFilters =
+    (filters.from || filters.to ? 1 : 0) +
+    (filters.promoIds.length ? 1 : 0) +
+    (filters.checkpoint !== "all" ? 1 : 0) +
+    (filters.participant !== "all" ? 1 : 0);
+
+  // Смена роли обнуляет отбор: этапы и участники у ролей разные, иначе фильтр
+  // остаётся выбранным, но не соответствует ни одной строке.
+  React.useEffect(() => {
+    setFilters(EMPTY_PARTICIPANT_FILTERS);
+  }, [effectiveRole]);
   const dueLabel = effectiveRole === "Категорийный менеджер (КМ)" ? "Промо с дедлайном" : "Задач с дедлайном";
 
   const th = "border-b border-r border-gray-200 dark:border-border bg-gray-50 dark:bg-muted/40 px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap";
@@ -60,14 +82,74 @@ export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Роль</span>
-          <Select value={effectiveRole} onValueChange={(v) => setRole(v as PromoRole)} disabled={isKm}>
-            <SelectTrigger className="h-9 w-full max-w-xs bg-white dark:bg-card text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {PARTICIPANT_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Роль</span>
+            <Select value={effectiveRole} onValueChange={(v) => setRole(v as PromoRole)} disabled={isKm}>
+              <SelectTrigger className="h-9 w-[240px] bg-white dark:bg-card text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PARTICIPANT_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Период дедлайна</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="date" value={filters.from} onChange={(e) => patch({ from: e.target.value })}
+                className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
+                aria-label="Период дедлайна показателей, с"
+              />
+              <span className="text-gray-400">—</span>
+              <input
+                type="date" value={filters.to} onChange={(e) => patch({ to: e.target.value })}
+                className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
+                aria-label="Период дедлайна показателей, по"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">№ промо</span>
+            <PromoNoFilter
+              options={options.promos}
+              selected={filters.promoIds}
+              onChange={(ids) => patch({ promoIds: ids })}
+              width="w-[220px]"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Тип задачи / этап</span>
+            <Select value={filters.checkpoint} onValueChange={(v) => patch({ checkpoint: v })}>
+              <SelectTrigger className="h-9 w-[240px] bg-white dark:bg-card text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все этапы</SelectItem>
+                {options.checkpoints.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Участник</span>
+            <Select value={filters.participant} onValueChange={(v) => patch({ participant: v })}>
+              <SelectTrigger className="h-9 w-[200px] bg-white dark:bg-card text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все участники</SelectItem>
+                {options.participants.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {activeFilters > 0 && (
+            <Button
+              variant="outline" size="sm" className="h-9 gap-1.5"
+              onClick={() => setFilters(EMPTY_PARTICIPANT_FILTERS)}
+            >
+              <RotateCcw className="size-4" /> Сбросить фильтры
+            </Button>
+          )}
         </div>
         <Button
           variant="secondary"
@@ -135,6 +217,7 @@ export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
         name={drillName}
         role={effectiveRole}
         scope={access.scope}
+        filters={filters}
         open={drillName !== null}
         onOpenChange={(v) => { if (!v) setDrillName(null); }}
       />

@@ -435,16 +435,79 @@ export interface ParticipantTask {
   comment?: string;
 }
 
+/** Фильтры вкладки «Показатели участников» (5C, вкладка 3, пп. 1–3). */
+export interface ParticipantFilters {
+  /** «Период дедлайна» (ISO yyyy-mm-dd). Пусто = весь доступный период. */
+  from: string;
+  to: string;
+  /** Выбранные акции; пусто = все. */
+  promoIds: string[];
+  /** «Тип задачи / этап»: "all" | точное название контрольной точки. */
+  checkpoint: string;
+  /** «Участник»: "all" | ФИО. */
+  participant: string;
+}
+
+export const EMPTY_PARTICIPANT_FILTERS: ParticipantFilters = {
+  from: "", to: "", promoIds: [], checkpoint: "all", participant: "all",
+};
+
+export interface ParticipantOptions {
+  scope?: AuditScope;
+  filters?: ParticipantFilters;
+}
+
 /**
  * The control points a given role is measured on (across plan + promo).
  * `scope` (5C) сужает набор по матрице прав ДО расчёта метрик — иначе рейтинг покажет
  * участников, чьи записи роли не видны на вкладках 1–2, и цифры перестанут сходиться.
+ * `filters` — пользовательский отбор той же вкладки; применяется к тому же набору,
+ * поэтому показатели и drill-down не могут разойтись.
  */
-function roleControlPoints(role: PromoRole, ref: Date, scope?: AuditScope): ControlPoint[] {
+function roleControlPoints(role: PromoRole, ref: Date, opts?: ParticipantOptions): ControlPoint[] {
   const checkpoints = ROLE_CHECKPOINTS[role] ?? [];
   const all = buildControlPoints(ref);
-  const scoped = scope ? scopeControlPoints(all, scope) : all;
-  return scoped.filter((p) => checkpoints.includes(p.checkpoint));
+  const scoped = opts?.scope ? scopeControlPoints(all, opts.scope) : all;
+  const byRole = scoped.filter((p) => checkpoints.includes(p.checkpoint));
+  return applyParticipantFilters(byRole, opts?.filters);
+}
+
+function applyParticipantFilters(
+  points: ControlPoint[],
+  f: ParticipantFilters | undefined
+): ControlPoint[] {
+  if (!f) return points;
+  const fromTs = f.from ? new Date(`${f.from}T00:00:00`).getTime() : null;
+  const toTs = f.to ? new Date(`${f.to}T23:59:59`).getTime() : null;
+  return points.filter((p) => {
+    const ts = p.deadline.getTime();
+    if (fromTs !== null && ts < fromTs) return false;
+    if (toTs !== null && ts > toTs) return false;
+    if (f.promoIds.length > 0 && !f.promoIds.includes(p.campaignId)) return false;
+    if (f.checkpoint !== "all" && p.checkpoint !== f.checkpoint) return false;
+    if (f.participant !== "all" && p.responsibleName !== f.participant) return false;
+    return true;
+  });
+}
+
+/** Варианты для фильтров вкладки 3 — строятся из того же набора, что и метрики. */
+export function participantFilterOptions(
+  role: PromoRole,
+  ref: Date = new Date(),
+  scope?: AuditScope
+): { checkpoints: string[]; participants: string[]; promos: { id: string; no: string; name: string }[] } {
+  const points = roleControlPoints(role, ref, { scope });
+  const promos = new Map<string, { id: string; no: string; name: string }>();
+  for (const p of points) {
+    if (!promos.has(p.campaignId)) {
+      promos.set(p.campaignId, { id: p.campaignId, no: p.promoNo, name: p.promoName });
+    }
+  }
+  return {
+    checkpoints: Array.from(new Set(points.map((p) => p.checkpoint))).sort(),
+    participants: Array.from(new Set(points.map((p) => p.responsibleName))).sort(),
+    promos: Array.from(promos.values()).sort((a, b) => a.no.localeCompare(b.no, "ru", { numeric: true })),
+  };
 }
 
 /** Distinct measured people for a role. КМ → the roster; other roles → single representative row. */
@@ -461,11 +524,11 @@ function participantsFor(role: PromoRole): string[] {
 export function buildParticipantMetrics(
   role: PromoRole,
   ref: Date = new Date(),
-  scope?: AuditScope
+  opts?: ParticipantOptions
 ): ParticipantMetricRow[] {
-  const points = roleControlPoints(role, ref, scope);
-  const allPoints = scope
-    ? scopeControlPoints(buildControlPoints(ref), scope)
+  const points = roleControlPoints(role, ref, opts);
+  const allPoints = opts?.scope
+    ? scopeControlPoints(buildControlPoints(ref), opts.scope)
     : buildControlPoints(ref);
   const returnPoints = allPoints.filter((p) =>
     p.checkpoint === "Возврат на корректировку" || p.checkpoint === "Возврат плана на корректировку"
@@ -476,7 +539,16 @@ export function buildParticipantMetrics(
     p.checkpoint === "Повторная отправка после корректировки"
   );
 
-  const rows = participantsFor(role).map((name) => {
+  // Ростер, а не список из точек: участник без задач обязан быть виден (со строкой
+  // «Нет данных»). Фильтр «Участник» сужает и его, иначе остальные дадут пустые строки.
+  const roster = participantsFor(role).filter(
+    (name) =>
+      !opts?.filters ||
+      opts.filters.participant === "all" ||
+      opts.filters.participant === name
+  );
+
+  const rows = roster.map((name) => {
     const mine = points.filter((p) => p.responsibleName === name);
     const due = mine.filter((p) => p.deadline.getTime() <= ref.getTime());
     const onTime = due.filter((p) => p.result === "В срок").length;
@@ -507,9 +579,9 @@ export function buildParticipantTasks(
   responsibleName: string,
   role: PromoRole,
   ref: Date = new Date(),
-  scope?: AuditScope
+  opts?: ParticipantOptions
 ): ParticipantTask[] {
-  return roleControlPoints(role, ref, scope)
+  return roleControlPoints(role, ref, opts)
     .filter((p) => p.responsibleName === responsibleName)
     .sort((a, b) => b.deadline.getTime() - a.deadline.getTime())
     .map((p) => ({
