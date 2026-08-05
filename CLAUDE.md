@@ -25,6 +25,9 @@ Monorepo containing Texnomart web applications with a shared design system, comp
 - **Animations**: Motion (framer-motion successor), tw-animate-css
 - **Drag-and-drop**: react-dnd + HTML5 backend
 - **Dates**: date-fns with `ru` locale
+- **Toasts**: sonner (в Promo — `closeButton` + автозакрытие 5 с)
+- **Excel-выгрузки**: SheetJS (`xlsx`) — только Promo: отчёты, аудит, матрица прав, пользователи (CSV-экспорты пишутся вручную, без библиотеки)
+- **Формы**: react-hook-form (используется точечно; большинство форм проекта — контролируемые `useState`)
 - **Font**: Inter (400, 500, 600, 700)
 - **Primary Color**: `#FFD60A` (Texnomart yellow)
 
