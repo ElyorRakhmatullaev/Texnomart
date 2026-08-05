@@ -4063,7 +4063,14 @@ export type AuditActionType =
   | "изменение профиля"
   | "изменение ролей"
   | "назначение замещения"
-  | "снятие замещения";
+  | "снятие замещения"
+  // 5C, вкладка 4 п. 6 — ключевые действия, которых в аудите не было вовсе.
+  // Маппинг на существующие типы не подходит: тогда фильтр «Тип действия»
+  // не сможет их выделить.
+  | "автопередача по SLA"
+  | "повторная отправка"
+  | "новая версия отчёта"
+  | "изменение дедлайна";
 
 /** What an action acted on. */
 export type AuditObjectType = "акция" | "строка" | "отчёт" | "план" | "пользователь";
@@ -4091,6 +4098,10 @@ export const AUDIT_ACTION_META: Record<
   "изменение ролей": { bg: "bg-purple-50 dark:bg-purple-500/15", text: "text-purple-700 dark:text-purple-300" },
   "назначение замещения": { bg: "bg-fuchsia-50 dark:bg-fuchsia-500/15", text: "text-fuchsia-700 dark:text-fuchsia-300" },
   "снятие замещения": { bg: "bg-stone-100 dark:bg-stone-500/20", text: "text-stone-700 dark:text-stone-300" },
+  "автопередача по SLA": { bg: "bg-orange-100 dark:bg-orange-500/20", text: "text-orange-800 dark:text-orange-300" },
+  "повторная отправка": { bg: "bg-cyan-100 dark:bg-cyan-500/20", text: "text-cyan-800 dark:text-cyan-300" },
+  "новая версия отчёта": { bg: "bg-teal-100 dark:bg-teal-500/20", text: "text-teal-800 dark:text-teal-300" },
+  "изменение дедлайна": { bg: "bg-amber-100 dark:bg-amber-500/20", text: "text-amber-800 dark:text-amber-300" },
 };
 
 export const AUDIT_OBJECT_LABEL: Record<AuditObjectType, string> = {
@@ -4128,6 +4139,58 @@ export interface AuditEvent {
 // and the role taxonomy. Ordered oldest-first here; `buildAuditLog` returns it
 // newest-first.
 const AUDIT_EVENTS_SEED: Omit<AuditEvent, "id">[] = [
+  // ── 5C, вкладка 4 п. 6 — четыре ключевых действия, которых в аудите не было ──
+  // Даты согласованы с теми же сидами, из которых строятся вкладки сроков:
+  // автопередача — PR-2026-002~km-5 (старший КМ пропустил 2 раб. дн.), повторная
+  // отправка — PR-2026-001~km-2 (returnedDays: 9 → отправка 4 раб. дн. назад),
+  // новая версия отчёта — v4 из CAMPAIGN_VERSIONS["PR-2026-003"].
+  {
+    user: "Исмаилов Жасур",
+    role: "Старший КМ",
+    at: new Date(2026, 7, 4, 9, 0),
+    action: "автопередача по SLA",
+    objectType: "акция",
+    objectLabel: "Рассрочка на технику к Новому году / набор КМ Тошматов Фаррух",
+    campaignId: "PR-2026-002",
+    statusFrom: "На согласовании у старшего КМ",
+    statusTo: "На согласовании у коммерческого директора",
+    comment:
+      "Срок согласования старшего КМ истёк — промо автоматически передано коммерческому директору.",
+  },
+  {
+    user: "Юсупова Нигора",
+    role: "Категорийный менеджер (КМ)",
+    at: new Date(2026, 6, 30, 12, 31),
+    action: "повторная отправка",
+    objectType: "акция",
+    objectLabel: "Чёрная пятница 2026 / набор номенклатуры",
+    campaignId: "PR-2026-001",
+    statusFrom: "Переотправлено на корректировку КМ",
+    statusTo: "На согласовании у коммерческого директора",
+    comment: "Набор отправлен повторно после возврата на корректировку.",
+  },
+  {
+    user: "Каримов Шохрух",
+    role: "Категорийный менеджер (КМ)",
+    at: new Date(2026, 8, 29, 16, 5),
+    action: "новая версия отчёта",
+    objectType: "отчёт",
+    objectLabel: "1+1 на мелкую бытовую технику / отчёт в.4",
+    campaignId: "PR-2026-003",
+    comment: "Сформирована версия отчёта и отправлена смежным отделам.",
+  },
+  {
+    user: "Коммерческий директор",
+    role: "Коммерческий директор",
+    at: new Date(2026, 7, 3, 15, 20),
+    action: "изменение дедлайна",
+    objectType: "акция",
+    objectLabel: "Скидки на климатическую технику / срок заполнения КМ",
+    campaignId: "PR-2026-006",
+    comment:
+      "Срок заполнения данных КМ перенесён на 3 календарных дня — согласовано операционным директором.",
+  },
+
   // ── PR-2026-003 «1+1 на мелкую бытовую технику» — full cycle incl. a LATE report send ──
   {
     user: "Директор маркетинга",
