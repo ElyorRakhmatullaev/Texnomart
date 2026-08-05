@@ -388,7 +388,7 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
     const row = distributeId ? rowById(distributeId) : undefined;
     if (row) {
       logPlan(
-        "изменение",
+        "распределение по КМ",
         row,
         "Распределение промо по КМ, дням и категориям",
         undefined,

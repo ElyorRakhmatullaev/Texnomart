@@ -4070,7 +4070,12 @@ export type AuditActionType =
   | "автопередача по SLA"
   | "повторная отправка"
   | "новая версия отчёта"
-  | "изменение дедлайна";
+  | "изменение дедлайна"
+  // Волна 6 — распределение промо по КМ / дням / категориям. Отдельный тип, а не
+  // «изменение»: «изменение» отнесено 5C к НЕ-ключевым действиям, и КД не увидел бы
+  // собственное распределение в режиме «Ключевые действия», хотя весь смысл пункта —
+  // прозрачность того, кто и как распределил акцию.
+  | "распределение по КМ";
 
 /** What an action acted on. */
 export type AuditObjectType = "акция" | "строка" | "отчёт" | "план" | "пользователь";
@@ -4098,6 +4103,7 @@ export const AUDIT_ACTION_META: Record<
   "изменение ролей": { bg: "bg-purple-50 dark:bg-purple-500/15", text: "text-purple-700 dark:text-purple-300" },
   "назначение замещения": { bg: "bg-fuchsia-50 dark:bg-fuchsia-500/15", text: "text-fuchsia-700 dark:text-fuchsia-300" },
   "снятие замещения": { bg: "bg-stone-100 dark:bg-stone-500/20", text: "text-stone-700 dark:text-stone-300" },
+  "распределение по КМ": { bg: "bg-lime-50 dark:bg-lime-500/15", text: "text-lime-700 dark:text-lime-300" },
   "автопередача по SLA": { bg: "bg-orange-100 dark:bg-orange-500/20", text: "text-orange-800 dark:text-orange-300" },
   "повторная отправка": { bg: "bg-cyan-100 dark:bg-cyan-500/20", text: "text-cyan-800 dark:text-cyan-300" },
   "новая версия отчёта": { bg: "bg-teal-100 dark:bg-teal-500/20", text: "text-teal-800 dark:text-teal-300" },
