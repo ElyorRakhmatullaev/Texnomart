@@ -1,5 +1,10 @@
 import type { PromoRole } from "../app/role-context";
-import { activeRolesOf, type RoleAssignment } from "./user-roles";
+import {
+  activeRolesOf,
+  assignmentsOf as assignments,
+  permanentRolesOf as permanentRoles,
+  type RoleAssignment,
+} from "./user-roles";
 
 export type { RoleAssignment, RoleKind, RoleCarrier } from "./user-roles";
 export {
@@ -76,6 +81,10 @@ export interface NewUserInput {
   department?: string;
   position?: string;
   managerId?: string;
+  /** ФИО создателя учётной записи (5D, стр. 66 п. 2). */
+  createdBy?: string;
+  /** Полный реестр ролей (5D). Если не передан — строится из `roles`/`role`. */
+  roleAssignments?: RoleAssignment[];
 }
 
 const STORAGE_KEY = "promo:users";
@@ -199,6 +208,13 @@ export function createUser(input: NewUserInput): { user: PromoUser; tempPassword
     department: input.department,
     position: input.position,
     managerId: input.managerId,
+    createdBy: input.createdBy,
+    roleAssignments:
+      input.roleAssignments && input.roleAssignments.length > 0
+        ? input.roleAssignments
+        : (input.roles && input.roles.length > 0 ? input.roles : [input.role]).map(
+            (role, i): RoleAssignment => ({ role, kind: i === 0 ? "primary" : "additional" })
+          ),
   };
   write([...users, user]);
   return { user, tempPassword };
@@ -217,14 +233,105 @@ export function resetPassword(id: string): string {
   return tempPassword;
 }
 
+/** Роль по умолчанию, когда у пользователя не осталось ни одной постоянной. */
+const FALLBACK_ROLE: PromoRole = "Сотрудник закупа";
+
 export function setUserRole(id: string, role: PromoRole): void {
   write(read().map((u) => (u.id === id ? { ...u, role } : u)));
 }
 
-/** Multi-role edit (E-4) — roles[0] becomes the primary `role`. */
+/**
+ * Реестр ролей — источник истины; `role`/`roles` синхронизируются, чтобы ни один
+ * существующий потребитель (auth, /profile, экспорт, уведомления) не увидел
+ * рассинхрона. `roles` держит ПОСТОЯННЫЕ роли: временные живут только в реестре
+ * и попадают в набор через `activeRolesOf` по дате.
+ */
+function withAssignments(user: PromoUser, next: RoleAssignment[]): PromoUser {
+  const temporary = next.filter((a) => a.kind === "temporary");
+  let permanentList = next.filter((a) => a.kind !== "temporary");
+
+  // Инвариант: постоянных ролей всегда ≥1 и ровно одна из них — основная.
+  // Пустой реестр недопустим: `assignmentsOf` трактует пустой массив как
+  // «реестра нет» и восстановил бы роль из legacy-поля `role` — снятая роль
+  // молча вернулась бы (и гвард ≥2 администраторов посчитал бы не то состояние).
+  if (permanentList.length === 0) {
+    permanentList = [{ role: FALLBACK_ROLE, kind: "primary" }];
+  } else if (!permanentList.some((a) => a.kind === "primary")) {
+    permanentList = permanentList.map((a, i) => (i === 0 ? { ...a, kind: "primary" } : a));
+  }
+
+  const normalized = [...permanentList, ...temporary];
+  const permanent = permanentRoles({ ...user, roleAssignments: normalized });
+  const primary = permanentList.find((a) => a.kind === "primary")?.role ?? permanent[0];
+  return { ...user, roleAssignments: normalized, role: primary, roles: permanent };
+}
+
+/** Полная замена реестра ролей пользователя (5D). */
+export function setRoleAssignments(id: string, next: RoleAssignment[]): void {
+  write(read().map((u) => (u.id === id ? withAssignments(u, next) : u)));
+}
+
+/** Выдать роль на срок (5D, стр. 69 п. 3). */
+export function addTemporaryRole(
+  id: string,
+  input: { role: PromoRole; from: string; to: string; assignedBy: string; reason?: string }
+): void {
+  write(
+    read().map((u) => {
+      if (u.id !== id) return u;
+      const next: RoleAssignment[] = [
+        ...assignments(u),
+        {
+          role: input.role,
+          kind: "temporary",
+          from: input.from,
+          to: input.to,
+          assignedBy: input.assignedBy,
+          assignedAt: new Date().toISOString(),
+          reason: input.reason?.trim() || undefined,
+        },
+      ];
+      return withAssignments(u, next);
+    })
+  );
+}
+
+/** Снять запись реестра (по роли и типу) — досрочное снятие временной роли. */
+export function removeAssignment(
+  id: string,
+  role: PromoRole,
+  kind: RoleAssignment["kind"]
+): void {
+  write(
+    read().map((u) =>
+      u.id === id
+        ? withAssignments(
+            u,
+            assignments(u).filter((a) => !(a.role === role && a.kind === kind))
+          )
+        : u
+    )
+  );
+}
+
+/**
+ * Плоский список ПОСТОЯННЫХ ролей → реестр (roles[0] — основная).
+ * Временные записи сохраняются: иначе любой вызов из старого кода
+ * (`UsersPage` toggle-admin) молча стирал бы срочные права.
+ */
 export function setUserRoles(id: string, roles: PromoRole[]): void {
-  const next = roles.length > 0 ? roles : (["Сотрудник закупа"] as PromoRole[]);
-  write(read().map((u) => (u.id === id ? { ...u, role: next[0], roles: next } : u)));
+  const next = roles.length > 0 ? roles : [FALLBACK_ROLE];
+  write(
+    read().map((u) => {
+      if (u.id !== id) return u;
+      const temporary = assignments(u).filter((a) => a.kind === "temporary");
+      const permanent: RoleAssignment[] = next.map((role, i) => ({
+        role,
+        kind: i === 0 ? "primary" : "additional",
+      }));
+      return withAssignments(u, [...permanent, ...temporary]);
+    })
+  );
 }
 
 /** Grant/clear «Администратор подразделения» (E-4). */
@@ -283,19 +390,30 @@ export function updateUserName(id: string, fullName: string): void {
   write(read().map((u) => (u.id === id ? { ...u, fullName: trimmed } : u)));
 }
 
-/** Администраторы, способные войти (роль «Администратор» в наборе ролей и не заблокированы). */
+/**
+ * Администраторы, способные войти. Считаются ПОСТОЯННЫЕ роли (5D): временный
+ * «Администратор» не держит пул ≥2 — в день истечения окна система осталась бы
+ * без администраторов, а гвард отчитался бы, что всё в порядке.
+ */
 export function usableAdminCount(users: PromoUser[] = read()): number {
-  return users.filter((u) => rolesOf(u).includes("Администратор") && u.status !== "blocked").length;
+  return users.filter(
+    (u) => permanentRoles(u).includes("Администратор") && u.status !== "blocked"
+  ).length;
 }
 
 /** Можно ли отозвать у пользователя права администратора, не уронив пул < 2. */
 export function canRevokeAdmin(id: string): boolean {
   const users = read();
   const target = users.find((u) => u.id === id);
-  if (!target || !rolesOf(target).includes("Администратор")) return false;
+  if (!target || !permanentRoles(target).includes("Администратор")) return false;
+  // Симуляция отзыва: снимаем только ПОСТОЯННУЮ запись «Администратор»,
+  // временные записи сохраняем — иначе гвард посчитает не то состояние, которое наступит.
   const after = users.map((u) =>
     u.id === id
-      ? { ...u, role: "Сотрудник закупа" as PromoRole, roles: ["Сотрудник закупа" as PromoRole] }
+      ? withAssignments(
+          u,
+          assignments(u).filter((a) => !(a.role === "Администратор" && a.kind !== "temporary"))
+        )
       : u
   );
   return usableAdminCount(after) >= 2;
