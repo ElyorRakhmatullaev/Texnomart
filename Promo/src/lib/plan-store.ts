@@ -77,6 +77,18 @@ export interface PlanStageDecision {
 }
 
 /**
+ * Снимок видимых согласующему данных строки на момент отправки цикла
+ * (11-я часть, R29): диф двух соседних снимков даёт «Было / Стало» в истории.
+ * Даты — ISO, чтобы снапшот оставался JSON-safe.
+ */
+export interface PlanRowSnapshot {
+  type: string;
+  name: string;
+  start: string;
+  end: string;
+}
+
+/**
  * Один цикл согласования строки плана: отправка → решение КД → решение ОД.
  * Правка отправленной строки и «Вернуть на доработку» ЗАКРЫВАЮТ цикл
  * (`closedAt`/`closedReason`), повторная отправка открывает следующий (R30.1) —
@@ -88,6 +100,8 @@ export interface PlanApprovalCycle {
   /** ISO — дата (повторной) отправки на согласование. */
   sentAt: string;
   sentBy: string;
+  /** Данные строки на момент отправки (R29); в старых снапшотах отсутствует. */
+  row?: PlanRowSnapshot;
   kd?: PlanStageDecision;
   od?: PlanStageDecision;
   closedAt?: string;

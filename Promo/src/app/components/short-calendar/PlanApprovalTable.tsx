@@ -456,7 +456,8 @@ export function PlanApprovalTable({
                 </th>
               )}
               <th className={cn(HEAD, "w-[130px]")}>Статус строки</th>
-              <th className={cn(HEAD, "w-[120px]")}>Код акции</th>
+              {/* 11-я часть R28.3: «№ промо» — единый термин вместо «Код акции». */}
+              <th className={cn(HEAD, "w-[120px]")}>№ промо</th>
               <th className={cn(HEAD, "w-[140px]")}>Тип акции</th>
               <th className={cn(HEAD, "min-w-[200px]")}>Наименование акции</th>
               <th className={cn(HEAD, "w-[180px]")}>Период действия</th>

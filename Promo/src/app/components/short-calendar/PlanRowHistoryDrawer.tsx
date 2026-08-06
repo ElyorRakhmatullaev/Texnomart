@@ -20,7 +20,11 @@ import {
 import { Button } from "@texnomart/ui/button";
 import { cn } from "@texnomart/ui/utils";
 import { formatPromoNo } from "../../../lib/promo-mock-data";
-import { STAGE_LABEL } from "../../../lib/plan-approval";
+import {
+  STAGE_LABEL,
+  cycleChanges,
+  type CycleFieldChange,
+} from "../../../lib/plan-approval";
 import type {
   PlanApprovalCycle,
   PlanRejectionEvent,
@@ -61,6 +65,14 @@ function fmtDateTime(iso?: string): string {
   );
 }
 
+/** Дата правки для «Изменено после цикла N−1» — закрытие предыдущего цикла. */
+function prevClosedAt(
+  journal: PlanRowJournal | undefined,
+  cycle: PlanApprovalCycle
+): string | undefined {
+  return journal?.cycles.find((c) => c.no === cycle.no - 1)?.closedAt;
+}
+
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
@@ -75,9 +87,15 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 function CycleBlock({
   cycle,
   current,
+  changes,
+  changedAt,
 }: {
   cycle: PlanApprovalCycle;
   current?: boolean;
+  /** 11-я часть R29 — «Было / Стало» относительно предыдущего цикла. */
+  changes?: CycleFieldChange[];
+  /** Дата правки = закрытие предыдущего цикла (`closedReason: "edit"`). */
+  changedAt?: string;
 }) {
   const stages: PlanReviewerStage[] = ["kd", "od"];
   return (
@@ -100,6 +118,37 @@ function CycleBlock({
       <div className="text-xs text-muted-foreground">
         Отправил: {cycle.sentBy}
       </div>
+
+      {/* R29: что изменилось после предыдущего согласования — согласующий видит
+          сравнение «Было / Стало» и дату правки, а не голый факт нового цикла. */}
+      {changes && changes.length > 0 && (
+        <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50/60 p-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
+              Изменено после цикла {cycle.no - 1}
+            </span>
+            {changedAt && (
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {fmtDateTime(changedAt)}
+              </span>
+            )}
+          </div>
+          <ul className="space-y-1">
+            {changes.map((ch) => (
+              <li key={ch.label} className="text-xs leading-snug">
+                <span className="text-muted-foreground">{ch.label}: </span>
+                <span className="text-gray-500 line-through dark:text-gray-400">
+                  {ch.was}
+                </span>{" "}
+                <span aria-hidden>→</span>{" "}
+                <span className="font-medium text-gray-900 dark:text-gray-100">
+                  {ch.now}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {stages.map((s) => {
         const d = cycle[s];
@@ -392,7 +441,12 @@ export function PlanRowHistoryDrawer({
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Текущий цикл
                   </h3>
-                  <CycleBlock cycle={current} current />
+                  <CycleBlock
+                    cycle={current}
+                    current
+                    changes={cycleChanges(journal, current)}
+                    changedAt={prevClosedAt(journal, current)}
+                  />
                 </div>
               )}
 
@@ -403,7 +457,12 @@ export function PlanRowHistoryDrawer({
                   </h3>
                   <div className="space-y-2">
                     {previous.map((c) => (
-                      <CycleBlock key={c.no} cycle={c} />
+                      <CycleBlock
+                        key={c.no}
+                        cycle={c}
+                        changes={cycleChanges(journal, c)}
+                        changedAt={prevClosedAt(journal, c)}
+                      />
                     ))}
                   </div>
                 </div>

@@ -23,6 +23,7 @@ import type {
   PlanRemovalRequest,
   PlanReviewerStage,
   PlanRowJournal,
+  PlanRowSnapshot,
   PlanStageDecision,
   PlanStageDecisionKind,
 } from "./plan-store";
@@ -324,7 +325,8 @@ function cloneJournal(j?: PlanRowJournal): PlanRowJournal {
 export function withSend(
   j: PlanRowJournal | undefined,
   at: Date,
-  by: string
+  by: string,
+  row?: PlanRowSnapshot
 ): PlanRowJournal {
   const next = cloneJournal(j);
   const last = next.cycles[next.cycles.length - 1];
@@ -333,8 +335,50 @@ export function withSend(
     no: (last?.no ?? 0) + 1,
     sentAt: at.toISOString(),
     sentBy: by,
+    // R29: снимок данных строки на момент отправки — диф соседних циклов
+    // даёт «Было / Стало» в истории согласования.
+    row,
   });
   return next;
+}
+
+/** Одна изменённая позиция «Было / Стало» между циклами (R29). */
+export interface CycleFieldChange {
+  label: string;
+  was: string;
+  now: string;
+}
+
+const fmtSnapDate = (iso: string): string => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("ru-RU");
+};
+
+/**
+ * Что изменилось в строке между отправкой цикла `cycle` и предыдущим циклом
+ * (R29). Пустой массив — изменений нет или у одного из циклов нет снимка
+ * (старые снапшоты localStorage писались до появления `row`).
+ */
+export function cycleChanges(
+  j: PlanRowJournal | undefined,
+  cycle: PlanApprovalCycle
+): CycleFieldChange[] {
+  const prev = j?.cycles.find((c) => c.no === cycle.no - 1);
+  const a = prev?.row;
+  const b = cycle.row;
+  if (!a || !b) return [];
+  const out: CycleFieldChange[] = [];
+  if (a.type !== b.type)
+    out.push({ label: "Тип акции", was: a.type || "—", now: b.type || "—" });
+  if (a.name !== b.name)
+    out.push({ label: "Наименование", was: a.name, now: b.name });
+  if (a.start !== b.start || a.end !== b.end)
+    out.push({
+      label: "Период действия",
+      was: `${fmtSnapDate(a.start)} — ${fmtSnapDate(a.end)}`,
+      now: `${fmtSnapDate(b.start)} — ${fmtSnapDate(b.end)}`,
+    });
+  return out;
 }
 
 /**
@@ -351,11 +395,36 @@ export function ensureOpenCycle(
 ): PlanRowJournal {
   if (openCycle(j)) return j as PlanRowJournal;
   const seed = getPlanApproval(rowId);
-  return withSend(
+  const next = withSend(
     j,
     seed?.marketing.sentAt ?? fallbackSentAt,
     seed ? "Директор маркетинга" : sentBy
   );
+  // Сид-решения директоров материализуются ВМЕСТЕ с циклом №1 (11-я часть,
+  // R28.1). Иначе первое живое решение по одному этапу — например, ОД согласует
+  // строку, чьё согласование КД существует только в сиде, — создало бы цикл без
+  // другого этапа, и деривация, читающая открытый цикл вместо сида, «стёрла» бы
+  // сид-согласование из таблицы. Семантика сид-этапа — как в approvedStages:
+  // `decidedAt` при статусе ≠ waiting считается согласованием.
+  if (seed) {
+    const idx = next.cycles.length - 1;
+    let cyc = next.cycles[idx];
+    if (cyc) {
+      const materialize = (
+        s: { decidedAt?: Date; status: PlanStageStatus } | undefined,
+        role: string
+      ): PlanStageDecision | undefined =>
+        s?.decidedAt && s.status !== "waiting"
+          ? { decision: "approved", at: s.decidedAt.toISOString(), by: role, role }
+          : undefined;
+      const kd = materialize(seed.kd, "Коммерческий директор");
+      const od = materialize(seed.od, "Операционный директор");
+      if (kd && !cyc.kd) cyc = { ...cyc, kd };
+      if (od && !cyc.od) cyc = { ...cyc, od };
+      next.cycles[idx] = cyc;
+    }
+  }
+  return next;
 }
 
 /** Решение КД/ОД в текущем цикле (цикл при необходимости материализуется). */

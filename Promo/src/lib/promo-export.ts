@@ -20,6 +20,7 @@ import {
 } from "./promo-mock-data";
 import { getPlanState } from "./plan-store";
 import {
+  approvedStages,
   currentCycle,
   directorStageCell,
   latestJournalRejection,
@@ -287,11 +288,20 @@ export function buildPlanCsv(rows: PlanExportRow[]): string {
   const lifecycleOf = (id: string): string => {
     const d = state?.decisions?.[id];
     // Та же композиция, что у `rowDecision` в PlanMode: отклонение любого этапа
-    // важнее согласования, «Согласовано» — только у утверждённого плана.
+    // важнее согласования. 11-я часть (R28.3): «Согласовано» ставится, когда оба
+    // директорских этапа согласованы ПО ЭТОЙ СТРОКЕ (журнал или сид) — раньше
+    // статус ждал утверждения всего плана, и в выгрузке строка с «В срок» в
+    // колонках КД и ОД значилась «Отправлено», что клиент прочитал как
+    // некорректные данные.
+    const bothApproved = (() => {
+      const s = approvedStages(id, journalOf(id));
+      return s.includes("kd") && s.includes("od");
+    })();
     const decision =
       d?.kd === "rejected" || d?.od === "rejected"
         ? ("rejected" as const)
-        : state?.planStatus === "Утверждён" && sendOf(id) === "sent"
+        : sendOf(id) === "sent" &&
+            (bothApproved || state?.planStatus === "Утверждён")
           ? ("approved" as const)
           : undefined;
     return LIFECYCLE_LABEL[
@@ -300,7 +310,7 @@ export function buildPlanCsv(rows: PlanExportRow[]): string {
   };
 
   const header = [
-    "Код акции",
+    "№ промо",
     "Статус строки",
     "Цикл согласования",
     "Тип акции",
@@ -319,7 +329,14 @@ export function buildPlanCsv(rows: PlanExportRow[]): string {
     "Дата и время отклонения",
     "Комментарий отклонения",
   ];
-  const out = rows.map((r) => {
+  // 11-я часть (R28.3): выгрузка идёт в том же порядке, что и таблица —
+  // по периоду, ближайший старт первым (R29.7). Раньше строки шли в порядке
+  // сида, и файл не совпадал с экраном построчно.
+  const sorted = [...rows].sort(
+    (a, b) =>
+      a.startDate.getTime() - b.startDate.getTime() || a.id.localeCompare(b.id)
+  );
+  const out = sorted.map((r) => {
     const j = journalOf(r.id);
     const ref = { id: r.id, startDate: r.startDate };
     const m = marketingStageCell(ref, j);

@@ -76,6 +76,7 @@ import {
 } from "../../../lib/plan-store";
 import {
   approvedStages,
+  currentCycle,
   pendingRemovalStageFor,
   removalFullyApproved,
   removalNeedsApproval,
@@ -254,15 +255,47 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
   const currentActor = actorForPlanStatus(planStatus);
   const isApproved = planStatus === "Утверждён";
   const isRejected = planStatus === "Отклонён";
-  const canAct = currentActor !== undefined && currentRole === currentActor;
 
+  // 11-я часть (R28.1): этап проверяющего выводится из РОЛИ, а не только из
+  // агрегатного `planStatus`. Раньше ОД получал чекбоксы и кнопки лишь после
+  // того, как КД согласует ВСЕ строки и план целиком перейдёт «На согл. с ОД» —
+  // хотя таблица уже показывала строки с согласованием КД, и Б/А читал это как
+  // «у ОД нет доступа». Теперь ОД решает по строкам, согласованным КД, не
+  // дожидаясь завершения всего этапа КД; его пул — только такие строки.
   const reviewerStage: ReviewerStage | undefined =
-    currentActor === "Коммерческий директор"
+    currentRole === "Коммерческий директор" && planStatus === "На согл. с КД"
       ? "kd"
-      : currentActor === "Операционный директор"
+      : currentRole === "Операционный директор" &&
+          (planStatus === "На согл. с КД" || planStatus === "На согл. с ОД")
         ? "od"
         : undefined;
+  const canAct = reviewerStage !== undefined;
   const stageLabel = reviewerStage === "kd" ? "КД" : "ОД";
+
+  /**
+   * Решение этапа по строке из всех трёх источников в порядке приоритета:
+   * живой DecisionMap → открытый цикл журнала → сид (`decidedAt` при статусе
+   * ≠ waiting = согласовано — семантика approvedStages). Без сид-ветки пулы и
+   * счётчики расходились бы с колонками КД/ОД таблицы, которые рендерятся из
+   * той же деривации.
+   */
+  const stageDecided = (
+    id: string,
+    stage: ReviewerStage,
+    live: DecisionMap = decisions
+  ): RowDecision | undefined => {
+    const l = live[id]?.[stage];
+    if (l) return l;
+    const cyc = currentCycle(journalOf(id));
+    if (cyc) {
+      if (cyc.closedAt) return undefined; // возврат/правка сбросили решения
+      const d = stage === "kd" ? cyc.kd : cyc.od;
+      return d?.decision;
+    }
+    const seed = getPlanApproval(id);
+    const s = stage === "kd" ? seed?.kd : seed?.od;
+    return s?.decidedAt && s.status !== "waiting" ? "approved" : undefined;
+  };
 
   // Sent rows participate in review; drafts are the marketing send pool.
   const sentRows = rows.filter((r) => sendOf(r.id) === "sent");
@@ -278,10 +311,15 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
   const sendMode = isMarketing && draftRows.length > 0;
   const selectable = reviewMode || sendMode;
 
-  // The rows that can be checked in the active mode.
+  // The rows that can be checked in the active mode. Пул ОД — строки, чей этап
+  // КД уже согласован (живым решением или сидом): остальные ещё «не переданы
+  // на этап ОД» (R28.1).
   const selectablePool: PlanRow[] = reviewMode
     ? sentRows.filter(
-        (r) => !decisions[r.id]?.[reviewerStage!] && !journalOf(r.id)?.removal
+        (r) =>
+          !stageDecided(r.id, reviewerStage!) &&
+          !journalOf(r.id)?.removal &&
+          (reviewerStage !== "od" || stageDecided(r.id, "kd") === "approved")
       )
     : sendMode
       ? sendableDrafts.filter((r) => !journalOf(r.id)?.removal)
@@ -296,8 +334,9 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
   const someSelected = selectedIds.size > 0 && !allSelected;
 
   const approvedCount = reviewerStage
-    ? gatingRows.filter((r) => decisions[r.id]?.[reviewerStage] === "approved")
-        .length
+    ? gatingRows.filter(
+        (r) => stageDecided(r.id, reviewerStage) === "approved"
+      ).length
     : 0;
 
   /** Combined per-row lifecycle decision for the badge + row tint (№4). */
@@ -305,7 +344,15 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
     const d = decisions[id] ?? {};
     if (d.kd === "rejected" || d.od === "rejected") return "rejected";
     if (isApproved && sendOf(id) === "sent") return "approved";
-    if (reviewerStage && d[reviewerStage] === "approved") return "approved";
+    // R28.3: строка, согласованная ОБОИМИ этапами, — «Согласовано» для любой
+    // роли (и в CSV та же композиция), не дожидаясь утверждения всего плана.
+    if (
+      stageDecided(id, "kd") === "approved" &&
+      stageDecided(id, "od") === "approved"
+    )
+      return "approved";
+    if (reviewerStage && stageDecided(id, reviewerStage) === "approved")
+      return "approved";
     return undefined;
   }
 
@@ -450,7 +497,24 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
     const sentBy = currentUser?.fullName ?? PLAN_EDITOR;
     setRowJournal((prev) => {
       const next = { ...prev };
-      for (const id of ids) next[id] = withSend(next[id], now, sentBy);
+      for (const id of ids) {
+        // R29: снимок данных строки уезжает в цикл — история покажет
+        // «Было / Стало» между повторными отправками.
+        const row = rowById(id);
+        next[id] = withSend(
+          next[id],
+          now,
+          sentBy,
+          row
+            ? {
+                type: row.type,
+                name: row.name,
+                start: row.startDate.toISOString(),
+                end: row.endDate.toISOString(),
+              }
+            : undefined
+        );
+      }
       return next;
     });
     for (const id of ids) {
@@ -472,14 +536,11 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
       setPlanStatus("На согл. с КД");
     }
 
-    // Warn about dates the whole plan leaves uncovered (№7).
-    const afterSent = [
-      ...sentRows,
-      ...rows.filter((r) => ids.includes(r.id)),
-    ];
-    const gaps = findCoverageGaps(
-      afterSent.map((r) => ({ start: r.startDate, end: r.endDate }))
-    );
+    // Warn about dates the whole plan leaves uncovered (№7). 11-я часть (R30):
+    // тот же набор, что у баннера — ВЕСЬ план, включая черновики. Раньше тост
+    // считал пробелы только по отправленным строкам, и на экране жили два
+    // разных списка дат.
+    const gaps = planGaps;
     if (gaps.length > 0) {
       const list = gaps
         .map((g) => `${fmt(g.start)}–${fmt(g.end)} (${g.days} дн.)`)
@@ -519,19 +580,33 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
       if (row) logPlan("согласование", row, `Согласовано на этапе ${stageLabel}`);
     }
 
-    const allApproved = gatingRows.every(
-      (r) => next[r.id]?.[reviewerStage] === "approved"
-    );
+    // Продвижение цепочки — по объединённому состоянию (живое → журнал → сид),
+    // а не только по live-решениям этой сессии: иначе счётчик и таблица (они
+    // читают деривацию) считали бы этап завершённым, а цепочка — нет (R28.1).
+    const stageDone = (stage: ReviewerStage) =>
+      gatingRows.every((r) => stageDecided(r.id, stage, next) === "approved");
+    const allApproved = stageDone(reviewerStage);
     if (allApproved) {
-      if (reviewerStage === "kd")
-        advance(
-          "На согл. с ОД",
-          "План согласован КД и передан операционному директору"
+      if (reviewerStage === "kd") {
+        // Этапы теперь идут по строкам параллельно: к моменту завершения КД
+        // ОД мог уже согласовать всё — тогда план сразу «Утверждён».
+        if (stageDone("od")) advance("Утверждён", "План утверждён");
+        else
+          advance(
+            "На согл. с ОД",
+            "План согласован КД и передан операционному директору"
+          );
+      } else if (stageDone("kd")) {
+        advance("Утверждён", "План утверждён");
+      } else {
+        // ОД закончил раньше КД — план остаётся на этапе КД.
+        toast.success(
+          `Согласовано акций: ${ids.length}. Этап ОД завершён — ожидается завершение этапа КД.`
         );
-      else advance("Утверждён", "План утверждён");
+      }
     } else {
       const remaining = gatingRows.filter(
-        (r) => !next[r.id]?.[reviewerStage]
+        (r) => !stageDecided(r.id, reviewerStage, next)
       ).length;
       toast.success(`Согласовано акций: ${ids.length}. Осталось: ${remaining}`);
     }
@@ -827,6 +902,12 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
                   </b>
                 </span>
               )}
+              {/* R28.1: ОД действует параллельно с КД — поясняем, какие строки ему доступны. */}
+              {reviewerStage === "od" && planStatus === "На согл. с КД" && (
+                <span className="text-xs text-muted-foreground">
+                  Этап КД ещё идёт — вам доступны строки, уже согласованные КД
+                </span>
+              )}
 
               {/* Marketing (send mode): the plan owner picks drafts to send below. */}
               {sendMode && (
@@ -850,7 +931,12 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
                   <b className="tabular-nums text-gray-700 dark:text-gray-200">
                     {gatingRows.length}
                   </b>{" "}
-                  на этапе {stageLabel} — отметьте акции в таблице ниже
+                  на этапе {stageLabel}
+                  {selectablePool.length > 0
+                    ? " — отметьте акции в таблице ниже"
+                    : reviewerStage === "kd"
+                      ? " — этап завершён, решение за ОД"
+                      : " — новых строк, согласованных КД, пока нет"}
                 </span>
               )}
 
