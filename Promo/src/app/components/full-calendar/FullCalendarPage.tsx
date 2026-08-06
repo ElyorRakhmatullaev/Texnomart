@@ -4,8 +4,10 @@ import * as React from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   Ban,
   Check,
+  ChevronRight,
   Clock,
   Copy,
   Download,
@@ -44,7 +46,16 @@ import { ExcelImportDialog } from "./ExcelImportDialog";
 import { CreateCampaignDialog } from "./CreateCampaignDialog";
 import { LineEditSheet } from "./LineEditSheet";
 import { VersionHistoryDrawer } from "../../../components/VersionHistoryDrawer";
-import { DEFAULT_VISIBLE_GROUPS, type ColumnGroupKey } from "./gridFields";
+import {
+  DEFAULT_VISIBLE_GROUPS,
+  requiredFieldLabel,
+  type ColumnGroupKey,
+} from "./gridFields";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@texnomart/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -77,7 +88,7 @@ import {
   getFullCalendarAccess,
   getNomenclatureItem,
   isApprovedCampaign,
-  isLineValid,
+  missingRequiredFields,
   parseImportCsv,
   type CampaignChangeSet,
   type CampaignStatus,
@@ -528,15 +539,21 @@ export function FullCalendarPage() {
 
   // Live validation — lines missing any required field (forecast / gift fields).
   // Removed («исключённые») lines are out of the promo and never gate the send.
-  const invalidLines = React.useMemo(() => {
-    let n = 0;
+  //
+  // Держим СПИСОК, а не счётчик: по голому числу строку не найти. «Прогноз продаж»
+  // видно сразу, а «Подарок (1)» — 30-я колонка из 38, почти 5000 px правее видимой
+  // части сетки, поэтому КМ упирался в «N строк не заполнены» без единой зацепки.
+  const invalidLineList = React.useMemo(() => {
+    const out: InvalidLine[] = [];
     for (const c of filtered) {
-      for (const l of displayLinesFor(c.id))
-        if (!l.removed && !isLineValid(l, c)) n++;
+      for (const l of displayLinesFor(c.id)) {
+        if (l.removed) continue;
+        const missing = missingRequiredFields(l, c);
+        if (missing.length > 0) out.push({ line: l, campaign: c, missing });
+      }
     }
-    return n;
+    return out;
   }, [filtered, displayLinesFor]);
-
   // Lines saved as draft awaiting a 1С re-check (§8.3) — block send until cleared.
   const pending1CCount = React.useMemo(() => {
     let n = 0;
@@ -546,6 +563,54 @@ export function FullCalendarPage() {
     }
     return n;
   }, [filtered, displayLinesFor]);
+
+  // ── Выборочная отправка ─────────────────────────────────────────────────────
+  // Отправка «всё или ничего» означала, что ОДНА незаполненная строка (пусть даже
+  // в чужой акции) блокирует отправку всего остального. Поэтому: если КМ отметил
+  // строки галочками, на согласование уходит только выбранное — и проверка
+  // обязательных полей идёт по тому же набору. Пустой выбор = прежнее поведение.
+  const hasSelection = selectedIds.size > 0;
+
+  const selectableLineIds = React.useMemo(() => {
+    const out = new Set<string>();
+    for (const c of filtered)
+      for (const l of displayLinesFor(c.id)) if (!l.removed) out.add(l.id);
+    return out;
+  }, [filtered, displayLinesFor]);
+
+  /** Строки, которые уйдут на согласование по нажатию кнопки. */
+  const sendScopeIds = React.useMemo(() => {
+    if (!hasSelection) return selectableLineIds;
+    // Выбор переживает смену фильтров, поэтому пересекаем его с видимым набором.
+    return new Set([...selectedIds].filter((id) => selectableLineIds.has(id)));
+  }, [hasSelection, selectedIds, selectableLineIds]);
+
+  /** Незаполненные строки ВНУТРИ отправляемого набора — только они блокируют. */
+  const blockingLines = React.useMemo(
+    () => invalidLineList.filter((i) => sendScopeIds.has(i.line.id)),
+    [invalidLineList, sendScopeIds]
+  );
+  const invalidLines = blockingLines.length;
+
+  /** Незаполненные строки ВНЕ выбора — их можно дозаполнить потом, они не блокируют. */
+  const deferredInvalidCount = invalidLineList.length - invalidLines;
+
+  const blocking1CCount = React.useMemo(() => {
+    if (!hasSelection) return pending1CCount;
+    let n = 0;
+    for (const c of filtered)
+      for (const l of displayLinesFor(c.id))
+        if (!l.removed && l.pending1CCheck && sendScopeIds.has(l.id)) n++;
+    return n;
+  }, [hasSelection, pending1CCount, filtered, displayLinesFor, sendScopeIds]);
+
+  // Названия недостающих полей без повторов — для тултипа заблокированной кнопки.
+  const missingFieldsSummary = React.useMemo(() => {
+    const seen = new Set<string>();
+    for (const item of blockingLines)
+      for (const f of item.missing) seen.add(requiredFieldLabel(f));
+    return [...seen].join(", ");
+  }, [blockingLines]);
 
   // Campaigns the КМ can import into (visible + non-cancelled).
   const importTargets = React.useMemo(
@@ -1157,17 +1222,37 @@ export function FullCalendarPage() {
   };
 
   const submitForApproval = () => {
+    // Акции, чьи строки реально уходят — только их «первая отправка» закрывается.
+    const sentCampaignIds = new Set<string>();
+    for (const id of sendScopeIds) {
+      const l = lines.get(id);
+      if (l) sentCampaignIds.add(l.campaignId);
+    }
     // First send locks the тип/период of unplanned campaigns (§10).
     setVisibleCampaigns((prev) =>
       prev.map((c) =>
-        !c.planned && !c.firstSendDone ? { ...c, firstSendDone: true } : c
+        !c.planned && !c.firstSendDone && sentCampaignIds.has(c.id)
+          ? { ...c, firstSendDone: true }
+          : c
       )
     );
-    toast.success("Отправлено на согласование старшему КМ");
+    const n = sendScopeIds.size;
+    toast.success(
+      `Отправлено на согласование старшему КМ: ${n} ${pluralLines(n)}`,
+      deferredInvalidCount > 0
+        ? {
+            description: `Не отправлено (не заполнены обязательные поля): ${deferredInvalidCount} ${pluralLines(deferredInvalidCount)}.`,
+          }
+        : undefined
+    );
+    setSelectedIds(new Set());
   };
 
   const canSubmit =
-    access.canEditOwnLines && invalidLines === 0 && pending1CCount === 0;
+    access.canEditOwnLines &&
+    sendScopeIds.size > 0 &&
+    invalidLines === 0 &&
+    blocking1CCount === 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -1299,6 +1384,11 @@ export function FullCalendarPage() {
               <span className="font-medium text-gray-900 dark:text-gray-100">
                 Выбрано {selectedIds.size} {pluralLines(selectedIds.size)}
               </span>
+              {access.canEditOwnLines && (
+                <span className="text-muted-foreground">
+                  · на согласование уйдут только они
+                </span>
+              )}
               <span className="text-muted-foreground">·</span>
               <span className="text-muted-foreground">{bulkLabel}:</span>
               <Button size="sm" variant="secondary" onClick={() => applyBulk(true)}>
@@ -1602,13 +1692,20 @@ export function FullCalendarPage() {
           <div className="flex flex-col gap-0.5">
             <p className="text-sm text-muted-foreground">
               {invalidLines > 0 ? (
-                <span className="text-red-600 dark:text-red-400">
-                  {invalidLines} {pluralLines(invalidLines)}: не заполнены
-                  обязательные поля
-                </span>
-              ) : pending1CCount > 0 ? (
+                <InvalidLinesPopover
+                  items={blockingLines}
+                  hasSelection={hasSelection}
+                  onPick={onLineTap}
+                />
+              ) : blocking1CCount > 0 ? (
                 <span className="text-amber-700 dark:text-amber-300">
-                  {pending1CCount} {pluralLines(pending1CCount)} ожидают проверки 1С
+                  {blocking1CCount} {pluralLines(blocking1CCount)} ожидают проверки
+                  1С
+                </span>
+              ) : hasSelection ? (
+                <span className="text-emerald-700 dark:text-emerald-400">
+                  Готово к отправке: {sendScopeIds.size}{" "}
+                  {pluralLines(sendScopeIds.size)} из выбранных
                 </span>
               ) : (
                 "Все обязательные поля заполнены"
@@ -1617,27 +1714,137 @@ export function FullCalendarPage() {
             {/* §3: no «Сохранить черновик» button — changes autosave until submit. */}
             {access.canEditOwnLines && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                Изменения номенклатуры и полей сохраняются автоматически
+                {deferredInvalidCount > 0 ? (
+                  <>
+                    <Info className="size-3.5 text-muted-foreground" />
+                    Не заполнено ещё: {deferredInvalidCount}{" "}
+                    {pluralLines(deferredInvalidCount)} — можно отправить позже
+                  </>
+                ) : (
+                  <>
+                    <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                    Изменения номенклатуры и полей сохраняются автоматически
+                  </>
+                )}
               </span>
             )}
           </div>
           <SubmitButton
             canSubmit={canSubmit}
+            count={hasSelection ? sendScopeIds.size : 0}
             reason={
               !access.canEditOwnLines
                 ? "Доступно только для категорийного менеджера, заполняющего свои строки"
-                : invalidLines > 0
-                  ? `Заполните обязательные поля (${invalidLines} ${pluralLines(invalidLines)})`
-                  : pending1CCount > 0
-                    ? `Дождитесь проверки 1С (${pending1CCount} ${pluralLines(pending1CCount)})`
-                    : ""
+                : sendScopeIds.size === 0
+                  ? "Нет строк для отправки"
+                  : invalidLines > 0
+                    ? hasSelection
+                      ? `Среди выбранных не заполнены обязательные поля (${invalidLines} ${pluralLines(invalidLines)}): ${missingFieldsSummary}. Снимите эти строки с выбора или заполните их.`
+                      : `Заполните обязательные поля (${invalidLines} ${pluralLines(invalidLines)}): ${missingFieldsSummary}. Либо отметьте галочками только готовые строки — уйдут только они.`
+                    : blocking1CCount > 0
+                      ? `Дождитесь проверки 1С (${blocking1CCount} ${pluralLines(blocking1CCount)})`
+                      : ""
             }
             onClick={submitForApproval}
           />
         </div>
       </div>
     </div>
+  );
+}
+
+/** Строка, блокирующая отправку, вместе с перечнем незаполненных полей. */
+interface InvalidLine {
+  line: PromoLine;
+  campaign: PromoCampaign;
+  /** id полей из `missingRequiredFields` (подписи — через `requiredFieldLabel`). */
+  missing: string[];
+}
+
+/**
+ * Действенная подсказка вместо голого счётчика: какие именно строки не заполнены и
+ * каких полей в них не хватает. Клик по строке открывает её карточку редактирования —
+ * там все поля собраны в один список, поэтому искать колонку горизонтальной
+ * прокруткой сетки (6590 px при видимых ~600) не нужно.
+ */
+function InvalidLinesPopover({
+  items,
+  hasSelection,
+  onPick,
+}: {
+  items: InvalidLine[];
+  /** Выбор активен → блокируют только выбранные строки, подсказка другая. */
+  hasSelection: boolean;
+  onPick: (lineId: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        {/* Нативный <button>: shared <Button> не форвардит ref, и под Radix asChild
+            поповер отрисовался бы вне экрана (tasks/lessons.md, S2 Phase 1). */}
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded text-sm font-medium text-red-600 underline decoration-dotted underline-offset-2 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+        >
+          <AlertTriangle className="size-3.5 shrink-0" />
+          {items.length} {pluralLines(items.length)}: не заполнены обязательные поля
+          <ChevronRight className="size-3.5 shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="top"
+        className="w-[380px] max-w-[calc(100vw-2rem)] p-0"
+      >
+        <div className="border-b px-3 py-2">
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            Что мешает отправить
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Нажмите на строку — откроется её карточка с незаполненными полями.
+          </p>
+        </div>
+        {!hasSelection && (
+          <div className="border-b bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Не обязательно заполнять всё сразу: отметьте галочками в таблице
+            готовые строки — на согласование уйдут только они.
+          </div>
+        )}
+        <div className="max-h-[320px] overflow-y-auto py-1">
+          {items.map(({ line, campaign, missing }) => (
+            <button
+              key={line.id}
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onPick(line.id);
+              }}
+              className="flex w-full flex-col gap-1 px-3 py-2 text-left hover:bg-accent"
+            >
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-mono">{formatPromoNo(campaign.id)}</span>
+                <span className="truncate">{campaign.name}</span>
+              </span>
+              <span className="text-sm text-gray-900 dark:text-gray-100">
+                {getNomenclatureItem(line.nomenclatureId)?.name ??
+                  line.nomenclatureId}
+              </span>
+              <span className="flex flex-wrap gap-1">
+                {missing.map((f) => (
+                  <span
+                    key={f}
+                    className="rounded bg-red-50 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300"
+                  >
+                    {requiredFieldLabel(f)}
+                  </span>
+                ))}
+              </span>
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -1734,10 +1941,13 @@ function PeriodEditDialog({
 
 function SubmitButton({
   canSubmit,
+  count,
   reason,
   onClick,
 }: {
   canSubmit: boolean;
+  /** Размер выбора; 0 = выбора нет, отправляется весь видимый набор. */
+  count: number;
   reason: string;
   onClick: () => void;
 }) {
@@ -1748,7 +1958,7 @@ function SubmitButton({
       className="min-h-11 sm:min-h-9"
     >
       <Send className="size-4" />
-      Отправить на согласование
+      {count > 0 ? `Отправить выбранные (${count})` : "Отправить на согласование"}
     </Button>
   );
   if (canSubmit) return btn;
