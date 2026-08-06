@@ -349,7 +349,8 @@ function GiftEditor({
   return (
     <div className="space-y-2">
       <Label>
-        {choice ? "Подарки на выбор" : "Подарки"}
+        {/* R43: имя блока совпадает с колонками полного календаря. */}
+        {choice ? "Подарок на выбор (1)" : "Подарки"}
         <span className="ml-0.5 text-red-500 dark:text-red-400">*</span>
       </Label>
       {gifts.length === 0 && (

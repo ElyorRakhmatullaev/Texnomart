@@ -76,8 +76,12 @@ function isGift1Col(id: string): boolean {
 function isGift2Col(id: string): boolean {
   return id.startsWith("gift2");
 }
+// 11-я часть R43: механика «Подарок на выбор» выделена в СВОЙ блок столбцов.
+function isGiftChoiceCol(id: string): boolean {
+  return id.startsWith("giftChoice");
+}
 function isGiftCol(id: string): boolean {
-  return isGift1Col(id) || isGift2Col(id);
+  return isGift1Col(id) || isGift2Col(id) || isGiftChoiceCol(id);
 }
 type GiftField = "nom" | "avail" | "stock";
 function giftField(id: string): GiftField {
@@ -86,14 +90,17 @@ function giftField(id: string): GiftField {
   return "stock";
 }
 
-/** Height of one line (choice lines grow to fit their caption + gift sub-rows + add row). */
+/**
+ * Height of one line (choice lines grow to fit their gift sub-rows + add row).
+ * R43: подпись-строка «Подарок на выбор» внутри ячейки упразднена — её роль
+ * выполняет заголовок блока столбцов «Подарок на выбор (1)».
+ */
 function lineHeightPx(line: PromoLine, isChoice: boolean, editable: boolean): number {
   if (!isChoice) return ROW_H_PX;
   const giftCount = line.gifts?.length ?? 0;
   const contentRows = Math.max(giftCount, 1);
   const addRow = editable ? 1 : 0;
-  const captionRow = 1; // «Подарок на выбор» caption (R44)
-  return Math.max(ROW_H_PX, (captionRow + contentRows + addRow) * GIFT_SUBROW_H);
+  return Math.max(ROW_H_PX, (contentRows + addRow) * GIFT_SUBROW_H);
 }
 
 // Unified styling with the short calendar (feedback §9): a darker-gray, bold header
@@ -1031,11 +1038,12 @@ export function FullCalendarGrid({
 }
 
 /**
- * Gift columns (feedback §8). Renders a «Подарок №1/№2» cell for a line:
+ * Gift columns (feedback §8 + 11-я часть R43 — механики разделены по блокам):
  *  • non-gift campaign → «—» (giftOnly).
- *  • fixed gift type («Товар в подарок» / «1+1») → gifts[slot] {номенклатура/наличие/остаток}.
- *  • «Подарок на выбор» → «Подарок №1» stacks one gift per sub-row (with a remove
- *    control + «+ Добавить подарок»); «Подарок №2» is unused («—»).
+ *  • fixed gift type («Товар в подарок» / «1+1») → «Подарок (1)/(2)» = gifts[slot]
+ *    {номенклатура/наличие/остаток}; блок «Подарок на выбор (1)» показывает «—».
+ *  • «Подарок на выбор» → варианты живут ТОЛЬКО в блоке «Подарок на выбор (1)»,
+ *    по одному на подстроку (+ «Добавить подарок»); «Подарок (1)/(2)» → «—».
  */
 function GiftCell({
   col,
@@ -1051,9 +1059,11 @@ function GiftCell({
   const width = col.width;
   const slot = isGift1Col(col.id) ? 0 : 1;
   const field = giftField(col.id);
+  const choiceCol = isGiftChoiceCol(col.id);
 
-  // Non-gift campaign → placeholder.
-  if (!ctx.gift) {
+  // Non-gift campaign → placeholder. Чужой блок механики — тоже «—» (R43):
+  // фиксированные подарки не показываются в блоке выбора и наоборот.
+  if (!ctx.gift || choiceCol !== ctx.giftChoice) {
     return (
       <div
         className={cn("flex items-center justify-center px-3", CELL)}
@@ -1064,37 +1074,12 @@ function GiftCell({
     );
   }
 
-  // «Подарок на выбор» → only «Подарок №1» carries the per-gift sub-rows.
+  // «Подарок на выбор» → per-gift sub-rows в своём блоке «Подарок на выбор (1)».
   if (ctx.giftChoice) {
-    if (slot === 1) {
-      return (
-        <div
-          className={cn("flex items-center justify-center px-3", CELL)}
-          style={colStyle(width)}
-        >
-          <Dash />
-        </div>
-      );
-    }
     const gifts = line.gifts ?? [];
     const rows: (GiftItem | null)[] = gifts.length > 0 ? gifts : [null];
     return (
       <div className={cn("flex flex-col", CELL)} style={colStyle(width)}>
-        {/* R44: caption the choice block so the mechanic is unmistakable. */}
-        {field === "nom" ? (
-          <div
-            className="flex items-center gap-1 border-b border-gray-100 px-3 text-[11px] font-semibold text-orange-700 dark:border-border dark:text-orange-300"
-            style={{ height: GIFT_SUBROW_H }}
-          >
-            <Gift className="size-3" />
-            Подарок на выбор
-          </div>
-        ) : (
-          <div
-            className="border-b border-gray-100 dark:border-border"
-            style={{ height: GIFT_SUBROW_H }}
-          />
-        )}
         {rows.map((g, i) => (
           <div
             key={i}
