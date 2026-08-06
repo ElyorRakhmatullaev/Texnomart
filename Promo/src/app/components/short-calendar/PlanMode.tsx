@@ -10,6 +10,7 @@ import {
   ThumbsDown,
   ThumbsUp,
   TriangleAlert,
+  Users,
   X,
 } from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
@@ -415,6 +416,14 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
   // отложенно: тот же клик иначе ловится DismissableLayer как outside-interaction
   // (урок S2 Phase 3, рецидив в этом же файле на «Создать строку плана»).
   const openDistribute = (id: string) => setTimeout(() => setDistributeId(id), 0);
+
+  // «11-я часть» (визуал PM): распределение доступно и из полосы выбора —
+  // кнопка активна при ровно одной выбранной строке, которую можно распределять.
+  const isKdActor =
+    currentRole === "Коммерческий директор" || canActAsKd(currentUser);
+  const soloSelectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
+  const canDistributeSolo =
+    soloSelectedId !== null && canDistribute(soloSelectedId);
 
   const distributeCampaign = React.useMemo(
     () => campaigns.find((c) => c.id === distributeId) ?? null,
@@ -1073,7 +1082,25 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
                     </Button>
                   </div>
                 ) : (
-                  <div className="ml-auto flex items-center gap-2">
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    {isKdActor && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!canDistributeSolo}
+                        title={
+                          canDistributeSolo
+                            ? undefined
+                            : "Выберите одну акцию для распределения"
+                        }
+                        onClick={() =>
+                          soloSelectedId && openDistribute(soloSelectedId)
+                        }
+                      >
+                        <Users className="size-4" />
+                        Распределить по категориям / КМ
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"

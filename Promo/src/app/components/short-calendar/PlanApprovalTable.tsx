@@ -362,6 +362,8 @@ function RowActions({
           variant="ghost"
           size="sm"
           className="h-8 px-2 text-xs"
+          title="Распределить по категориям / КМ"
+          aria-label="Распределить по категориям / КМ"
           onClick={() => onDistribute?.(id)}
         >
           <Users className="size-3.5" />
