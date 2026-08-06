@@ -131,7 +131,7 @@ export const COLUMNS: ColumnDef[] = [
   // + наличие в магазинах, % и остаток (из 1С, read-only). Для механики «Подарок на выбор»
   // блок «Подарок (1)» показывает варианты списком (подпись «Подарок на выбор», по одному на
   // подстроку); «Подарок (2)» не используется.
-  { id: "gift1Nomenclature", label: "Подарок (1)", width: 220, group: "marketing", source: "km", kind: "text", giftOnly: true },
+  { id: "gift1Nomenclature", label: "Подарок (1)", width: 220, group: "marketing", source: "km", kind: "text", required: true, giftOnly: true },
   { id: "gift1Availability", label: "Подарок (1): наличие, %", width: 160, group: "marketing", source: "1c", kind: "percent", giftOnly: true },
   { id: "gift1Stock", label: "Подарок (1): остаток", width: 150, group: "marketing", source: "1c", kind: "number", giftOnly: true },
   { id: "gift2Nomenclature", label: "Подарок (2)", width: 220, group: "marketing", source: "km", kind: "text", giftOnly: true },
@@ -143,3 +143,12 @@ export const COLUMNS: ColumnDef[] = [
   { id: "advRecommendedKm", label: "В рекламу (КМ)", width: 130, group: "marketing", source: "km", kind: "checkbox" },
   { id: "advSelectedMarketing", label: "В рекламу (маркетинг)", width: 160, group: "marketing", source: "marketing", kind: "checkbox" },
 ];
+
+/**
+ * Человекочитаемое имя обязательного поля по id, который возвращает
+ * `missingRequiredFields` (`salesForecast` / `gift1Nomenclature`). Оба id совпадают
+ * с id колонок, поэтому подпись берётся из одного словаря — расходиться нечему.
+ */
+export function requiredFieldLabel(fieldId: string): string {
+  return COLUMNS.find((c) => c.id === fieldId)?.label ?? fieldId;
+}

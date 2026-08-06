@@ -144,11 +144,17 @@ function cellEditable(col: ColumnDef, ctx: CellCtx): boolean {
   return col.source === "km";
 }
 
-/** Is this column required for the given campaign (drives the red marker)? */
-function isRequiredFor(colId: string, gift: boolean): boolean {
-  if (colId === "salesForecast") return true;
-  if (gift && (colId === "giftNomenclature" || colId === "giftStock")) return true;
-  return false;
+/**
+ * Is this column required (drives the red «не заполнено» marker)?
+ *
+ * Только для колонок, которые рендерит `CellValue`. Подарочные колонки сюда не
+ * попадают — их отправляет на отрисовку `GiftCell` (см. `isGiftCol` в теле грида),
+ * и обязательность «Подарок (1)» она считает сама (по слоту и типу акции).
+ * Прежняя ветка проверяла id `giftNomenclature`/`giftStock`, исчезнувшие при
+ * переработке подарков 01.07.2026 (§8), т.е. была мёртвой.
+ */
+function isRequiredFor(colId: string): boolean {
+  return colId === "salesForecast";
 }
 
 interface CellCtx {
@@ -182,7 +188,7 @@ function CellValue({
   if (col.giftOnly && !ctx.gift) return <Dash />;
   const old = nom?.oldRetailPrice ?? 0;
   const editable = cellEditable(col, ctx);
-  const required = isRequiredFor(col.id, ctx.gift);
+  const required = isRequiredFor(col.id);
   const edit = (patch: Partial<PromoLine>) => ctx.onEdit(line.id, patch);
 
   switch (col.id) {
@@ -578,9 +584,24 @@ export function FullCalendarGrid({
                   style={colStyle(col.width)}
                 >
                   <span className={CLAMP2}>{col.label}</span>
-                  {col.required && (
-                    <span className="text-red-500 dark:text-red-400">*</span>
-                  )}
+                  {col.required &&
+                    (col.giftOnly ? (
+                      // Шапка одна на все акции сетки, а подарок обязателен только для
+                      // подарочных типов — поясняем звёздочку, чтобы она не читалась
+                      // как «обязательно всегда».
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help text-red-500 dark:text-red-400">
+                            *
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Обязательно для подарочных типов промо
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <span className="text-red-500 dark:text-red-400">*</span>
+                    ))}
                   {isLocked(col.source) && (
                     <Tooltip>
                       <TooltipTrigger asChild>
