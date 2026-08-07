@@ -6,6 +6,16 @@ import { toast } from "sonner";
 import { AlertTriangle, Clock, FileX2, Forward, History, UserCog } from "lucide-react";
 import { DetailPageHero } from "@texnomart/shared/components/detail-page-hero";
 import { InfoRow } from "@texnomart/shared/components/info-row";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@texnomart/ui/alert-dialog";
 import { Badge } from "@texnomart/ui/badge";
 import { Button } from "@texnomart/ui/button";
 import { Card, CardContent, CardHeader } from "@texnomart/ui/card";
@@ -137,6 +147,17 @@ export function ApprovalDetailPage() {
   const detailsRow = detailsId
     ? rows.find((r) => r.line.id === detailsId)
     : undefined;
+  // 11-я часть (Блок 4): согласование строки из панели идёт через подтверждение.
+  const [confirmApproveId, setConfirmApproveId] = React.useState<string | null>(
+    null
+  );
+  // Отклонение первичного потока — показываем его и в панели деталей.
+  const detailsFb = detailsRow ? item?.lineFeedback[detailsRow.line.id] : undefined;
+  const detailsPrimaryRejected = Boolean(
+    detailsRow &&
+      !detailsRow.isRepeat &&
+      (detailsFb ? detailsFb.rejected : detailsRow.line.rejected)
+  );
 
   // Live auto-escalation (a breached Старший-КМ item is now acted on by the КД).
   const autoEscalated = isAutoEscalated(item);
@@ -524,12 +545,6 @@ export function ApprovalDetailPage() {
                 selectedIds={selected}
                 onToggle={toggle}
                 onToggleAll={toggleAll}
-                onRejectLine={(lineId) =>
-                  openFlow({
-                    kind: isRepeat ? "reject-repeat" : "reject-lines",
-                    lineIds: [lineId],
-                  })
-                }
                 onOpenRow={(lineId) => setTimeout(() => setDetailsId(lineId), 0)}
                 showCounters={isRepeat}
               />
@@ -581,7 +596,9 @@ export function ApprovalDetailPage() {
         />
       )}
 
-      {/* §7/§15 — детали повторного действия + решение прямо из панели */}
+      {/* §7/§15 — детали строки + решение прямо из панели. 11-я часть (Блок 4):
+          согласование — через подтверждение; отклонение — обязательный комментарий
+          (ReasonDialog); первичный поток отклоняется по-строчно тем же диалогом. */}
       <LineChangeDrawer
         open={detailsId !== null}
         onOpenChange={(o) => {
@@ -591,12 +608,54 @@ export function ApprovalDetailPage() {
         row={detailsRow}
         sla={sla}
         canAct={canAct}
-        onApprove={(lineId) => handleApproveRepeat([lineId])}
+        primaryRejection={
+          detailsPrimaryRejected
+            ? {
+                comment:
+                  detailsFb?.comment ?? detailsRow?.line.rejectComment,
+              }
+            : undefined
+        }
+        onApprove={(lineId) =>
+          setTimeout(() => setConfirmApproveId(lineId), 0)
+        }
         onReject={(lineId) => {
           setDetailsId(null);
-          openFlow({ kind: "reject-repeat", lineIds: [lineId] });
+          openFlow({
+            kind: detailsRow?.isRepeat ? "reject-repeat" : "reject-lines",
+            lineIds: [lineId],
+          });
         }}
       />
+
+      {/* 11-я часть (Блок 4) — подтверждение согласования строки. */}
+      <AlertDialog
+        open={confirmApproveId !== null}
+        onOpenChange={(o) => {
+          if (!o) setConfirmApproveId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Согласовать строку?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Новые значения станут актуальными, подсветка изменений будет снята.
+              Действие фиксируется в истории согласования.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmApproveId) handleApproveRepeat([confirmApproveId]);
+                setConfirmApproveId(null);
+              }}
+            >
+              Согласовать
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ReasonDialog
         open={flow !== null}

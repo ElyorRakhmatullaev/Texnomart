@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, Ban, Check, Clock, Pencil, Plus, X } from "lucide-react";
+import { AlertTriangle, Ban, Check, Clock, Eye, Pencil, Plus, X } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -32,6 +32,8 @@ export interface LineChangeDrawerProps {
   canAct?: boolean;
   onApprove?: (lineId: string) => void;
   onReject?: (lineId: string) => void;
+  /** 11-я часть (Блок 4): отклонение первичного потока — панель показывает его тоже. */
+  primaryRejection?: { comment?: string };
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -109,12 +111,24 @@ export function LineChangeDrawer({
   canAct = false,
   onApprove,
   onReject,
+  primaryRejection,
 }: LineChangeDrawerProps) {
   const line = row?.line;
   const nom = line ? getNomenclatureItem(line.nomenclatureId) : undefined;
   const km = line ? getCategoryManager(line.kmId) : undefined;
+  // 11-я часть (Блок 4): панель открывается для ЛЮБОЙ строки — повторные действия
+  // с иконкой типа изменения, остальные (первичный поток, контекст) — просмотр.
+  const isRepeatView = Boolean(
+    row && (row.isRepeat || row.kind === "rejected-repeat")
+  );
   const Icon =
-    row?.kind === "addition" ? Plus : row?.kind === "removal" ? Ban : Pencil;
+    row?.kind === "addition"
+      ? Plus
+      : row?.kind === "removal"
+        ? Ban
+        : isRepeatView
+          ? Pencil
+          : Eye;
 
   const diffEntries =
     row?.kind === "removal"
@@ -133,8 +147,11 @@ export function LineChangeDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
+      {/* 11-я часть (06.08, Блок 4): SheetContent не несёт паддинга — телу панели
+          нужны явные горизонтальные отступы (то же исправление, что в панели
+          «Детали изменений» полного календаря). */}
       <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-[440px]">
-        <SheetHeader className="space-y-1">
+        <SheetHeader className="space-y-1 px-6 pt-5">
           <SheetTitle className="flex items-center gap-2">
             <Icon className="size-4 text-orange-600 dark:text-orange-400" />
             {row ? rowMarkerLabel(row) : "Детали строки"}
@@ -145,7 +162,7 @@ export function LineChangeDrawer({
         </SheetHeader>
 
         {campaign && line && row && (
-          <div className="mt-4 space-y-3">
+          <div className="mt-2 space-y-3 px-6 pb-4">
             <Section title="Информация об акции">
               <Row label="№ промо" value={formatPromoNo(campaign.id)} />
               <Row label="Название акции" value={campaign.name} />
@@ -159,8 +176,14 @@ export function LineChangeDrawer({
               </Section>
             )}
 
-            {row.kind === "addition" && (
-              <Section title="Данные добавленной позиции">
+            {(row.kind === "addition" || !isRepeatView) && (
+              <Section
+                title={
+                  row.kind === "addition"
+                    ? "Данные добавленной позиции"
+                    : "Данные позиции"
+                }
+              >
                 <Row
                   label="Остаток"
                   value={
@@ -187,6 +210,7 @@ export function LineChangeDrawer({
               </Section>
             )}
 
+            {isRepeatView && (
             <Section title="Детали запроса">
               <Row label="Тип изменения" value={rowMarkerLabel(row)} />
               {row.requestType && row.requestType !== rowMarkerLabel(row) && (
@@ -212,6 +236,7 @@ export function LineChangeDrawer({
               />
               <Row label="Комментарий КМ" value={row.comment ?? "—"} />
             </Section>
+            )}
 
             {/* §10 — срок/просрочка обязательно видны при принятии решения */}
             {sla && (
@@ -254,24 +279,53 @@ export function LineChangeDrawer({
               </Section>
             )}
 
-            {/* §15 — решение принимается прямо из панели */}
+            {/* 11-я часть (Блок 4): отклонение первичного потока тоже видно в панели. */}
+            {!line.pending?.rejected && primaryRejection && (
+              <Section title="Отклонение">
+                <Row
+                  label="Комментарий"
+                  value={primaryRejection.comment ?? "Строка отклонена."}
+                />
+              </Section>
+            )}
+
+            {/* §15 — решение принимается прямо из панели; 11-я часть (Блок 4):
+                согласование идёт через подтверждение (его открывает страница),
+                отклонение — через обязательный комментарий. Первичный поток
+                по-строчно только отклоняется — набор согласуется целиком. */}
             {canAct && row.requiresDecision && (
-              <div className="sticky bottom-0 -mx-6 mt-2 flex gap-2 border-t bg-white dark:bg-card px-6 py-3">
-                <Button
-                  className="flex-1"
-                  onClick={() => onApprove?.(line.id)}
-                >
-                  <Check className="size-4" />
-                  Согласовать строку
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15"
-                  onClick={() => onReject?.(line.id)}
-                >
-                  <X className="size-4" />
-                  Отклонить строку
-                </Button>
+              <div className="sticky bottom-0 -mx-6 mt-2 space-y-2 border-t bg-white dark:bg-card px-6 py-3">
+                {isRepeatView ? (
+                  <div className="flex gap-2">
+                    <Button className="flex-1" onClick={() => onApprove?.(line.id)}>
+                      <Check className="size-4" />
+                      Согласовать строку
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15"
+                      onClick={() => onReject?.(line.id)}
+                    >
+                      <X className="size-4" />
+                      Отклонить строку
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="w-full text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15"
+                      onClick={() => onReject?.(line.id)}
+                    >
+                      <X className="size-4" />
+                      Отклонить строку
+                    </Button>
+                    <p className="text-xs leading-snug text-muted-foreground">
+                      Согласование выполняется по всему набору — кнопкой «Принять»,
+                      когда все строки проверены.
+                    </p>
+                  </>
+                )}
               </div>
             )}
           </div>

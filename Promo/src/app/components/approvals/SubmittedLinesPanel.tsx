@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, Ban, Copy, Lock, Pencil, Plus, X } from "lucide-react";
+import { AlertTriangle, Ban, Copy, Eye, Lock, Pencil, Plus } from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -37,8 +37,8 @@ interface SubmittedLinesPanelProps {
   selectedIds?: Set<string>;
   onToggle?: (lineId: string) => void;
   onToggleAll?: (checked: boolean) => void;
-  onRejectLine?: (lineId: string) => void;
-  /** §7/§15 — open the side panel with «Было/Стало» + decisions. */
+  /** §7/§15 — open the side panel with details + decisions (11-я часть, Блок 4:
+      решения живут ТОЛЬКО в панели — инлайн-кнопок в строке нет). */
   onOpenRow?: (lineId: string) => void;
   /** §12 — counters belong to the repeat-approval card; the primary flow stays as-is. */
   showCounters?: boolean;
@@ -102,7 +102,6 @@ export function SubmittedLinesPanel({
   selectedIds,
   onToggle,
   onToggleAll,
-  onRejectLine,
   onOpenRow,
   showCounters = false,
 }: SubmittedLinesPanelProps) {
@@ -197,7 +196,7 @@ export function SubmittedLinesPanel({
                 <TableHead className="text-right">Новая цена</TableHead>
                 <TableHead className="text-right">Скидка</TableHead>
                 <TableHead className="text-right">Прогноз продаж</TableHead>
-                {selectable && <TableHead className="w-[44px]" />}
+                {onOpenRow && <TableHead className="w-[44px]" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -208,7 +207,8 @@ export function SubmittedLinesPanel({
                 const rejected = isRejected(line, fb);
                 const comment = rejectComment(line, fb);
                 const decidable = selectable && row.requiresDecision;
-                const clickable = Boolean(onOpenRow) && row.isRepeat;
+                // 11-я часть (Блок 4): панель деталей открывается для ЛЮБОЙ строки.
+                const clickable = Boolean(onOpenRow);
                 return (
                   <TableRow
                     key={line.id}
@@ -247,13 +247,10 @@ export function SubmittedLinesPanel({
                     )}
                     <TableCell>
                       <div className="flex items-start gap-1.5">
-                        <span className="min-w-0">
-                          <span className="block font-medium text-gray-900 dark:text-gray-100">
-                            {nom?.name ?? line.nomenclatureId}
-                          </span>
-                          <span className="block text-xs tabular-nums text-muted-foreground">
-                            {line.nomenclatureId}
-                          </span>
+                        {/* 11-я часть (06.08, Блок 3): полное наименование без
+                            внутреннего кода 1С рядом с ним. */}
+                        <span className="min-w-0 break-words font-medium text-gray-900 dark:text-gray-100">
+                          {nom?.name ?? line.nomenclatureId}
                         </span>
                         <RowMarker row={row} />
                         {line.duplicate && (
@@ -304,26 +301,29 @@ export function SubmittedLinesPanel({
                         </span>
                       )}
                     </TableCell>
-                    {selectable && (
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        {decidable && !rejected && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={() => onRejectLine?.(line.id)}
-                                className={cn(
-                                  "inline-flex size-7 items-center justify-center rounded-md",
-                                  "text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
-                                )}
-                                aria-label="Отклонить строку"
-                              >
-                                <X className="size-4" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent>Отклонить строку</TooltipContent>
-                          </Tooltip>
-                        )}
+                    {/* 11-я часть (Блок 4): в строке — только иконка просмотра;
+                        решения принимаются из открывшейся панели деталей. */}
+                    {onOpenRow && (
+                      <TableCell>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenRow(line.id);
+                              }}
+                              className={cn(
+                                "inline-flex size-7 items-center justify-center rounded-md",
+                                "text-muted-foreground hover:bg-gray-100 dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
+                              )}
+                              aria-label="Просмотр деталей строки"
+                            >
+                              <Eye className="size-4" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>Просмотр деталей и решение</TooltipContent>
+                        </Tooltip>
                       </TableCell>
                     )}
                   </TableRow>
