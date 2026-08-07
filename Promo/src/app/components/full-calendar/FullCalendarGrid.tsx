@@ -90,17 +90,60 @@ function giftField(id: string): GiftField {
   return "stock";
 }
 
+// 11-я часть (06.08, Блок 3): наименование в колонке «Номенклатура» показывается
+// ПОЛНОСТЬЮ, без обрезки — поэтому высота строки зависит от длины имени. Обе панели
+// Pattern F обязаны получить одинаковую высоту до отрисовки, поэтому число строк
+// текста считается канвой (та же гарнитура, что у ячейки), а не пост-измерением DOM.
+const NAME_LINE_H = 17; // text-sm leading-tight
+// Ширина, доступная имени: колонка − паддинги − трейлинг-иконки (глаз/исключение/
+// правка) − возможные чипы. Берём с запасом ВНИЗ: недооценка ширины даёт лишнюю
+// высоту строки (безопасно), переоценка — клиппинг (нельзя).
+const NAME_MEASURE_W = 170;
+let nameCtx: CanvasRenderingContext2D | null = null;
+function nameLineCount(name: string): number {
+  if (typeof document === "undefined") return 2;
+  if (!nameCtx) {
+    nameCtx = document.createElement("canvas").getContext("2d");
+    if (nameCtx)
+      nameCtx.font = "500 14px Inter, ui-sans-serif, system-ui, sans-serif";
+  }
+  if (!nameCtx) return Math.max(1, Math.ceil(name.length / 22));
+  let lines = 1;
+  let current = "";
+  for (const word of name.split(/\s+/)) {
+    const probe = current ? `${current} ${word}` : word;
+    if (nameCtx.measureText(probe).width <= NAME_MEASURE_W) {
+      current = probe;
+    } else {
+      if (current) lines += 1;
+      // Слово длиннее строки переносится браузером само (break-words) — считаем
+      // его отдельными строками по ширине.
+      current = word;
+      const w = nameCtx.measureText(word).width;
+      if (w > NAME_MEASURE_W) {
+        lines += Math.floor(w / NAME_MEASURE_W);
+        current = "";
+      }
+    }
+  }
+  return lines;
+}
+
 /**
  * Height of one line (choice lines grow to fit their gift sub-rows + add row).
  * R43: подпись-строка «Подарок на выбор» внутри ячейки упразднена — её роль
  * выполняет заголовок блока столбцов «Подарок на выбор (1)».
+ * 11-я часть: высота учитывает и полное (необрезанное) наименование номенклатуры.
  */
 function lineHeightPx(line: PromoLine, isChoice: boolean, editable: boolean): number {
-  if (!isChoice) return ROW_H_PX;
+  const nom = getNomenclatureItem(line.nomenclatureId);
+  const nameH = nom ? nameLineCount(nom.name) * NAME_LINE_H + 16 : 0;
+  const base = Math.max(ROW_H_PX, nameH);
+  if (!isChoice) return base;
   const giftCount = line.gifts?.length ?? 0;
   const contentRows = Math.max(giftCount, 1);
   const addRow = editable ? 1 : 0;
-  return Math.max(ROW_H_PX, (contentRows + addRow) * GIFT_SUBROW_H);
+  return Math.max(base, (contentRows + addRow) * GIFT_SUBROW_H);
 }
 
 // Unified styling with the short calendar (feedback §9): a darker-gray, bold header
@@ -112,7 +155,8 @@ const FROZEN = {
   select: 40,
   promo: 108,
   km: 150,
-  nomenclature: 240,
+  // 11-я часть (Блок 3): полное наименование без обрезки — колонке нужно больше места.
+  nomenclature: 320,
 };
 
 function colStyle(width: number): React.CSSProperties {
@@ -726,23 +770,12 @@ export function FullCalendarGrid({
                         className="flex min-w-0 items-center gap-1.5 px-3"
                         style={colStyle(FROZEN.nomenclature)}
                       >
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span
-                              className={cn(
-                                "min-w-0 text-sm font-medium text-gray-900 dark:text-gray-100",
-                                CLAMP2
-                              )}
-                            >
-                              {nom?.name ?? line.nomenclatureId}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {nom
-                              ? `${nom.name} · ${line.nomenclatureId}`
-                              : line.nomenclatureId}
-                          </TooltipContent>
-                        </Tooltip>
+                        {/* 11-я часть (06.08, Блок 3): полное наименование без
+                            обрезки; внутренний код 1С рядом с именем не выводится
+                            (высота строки подстроена в lineHeightPx). */}
+                        <span className="min-w-0 break-words text-sm font-medium leading-tight text-gray-900 dark:text-gray-100">
+                          {nom?.name ?? line.nomenclatureId}
+                        </span>
                         <LineMarkers line={line} />
                         {/* Компактная пометка «Черновик» (10-я Блок 3.1). */}
                         {status === "Черновик" && (
@@ -1364,6 +1397,9 @@ function LineRowActions({
   }
 
   // Active line — КМ may request exclusion of an already-approved campaign's line.
+  // 11-я часть (06.08, Блок 3, доп.): иконка видна ПОСТОЯННО у доступных для
+  // исключения позиций (была hover-reveal — клиент её не находил); подсказка с
+  // названием действия остаётся при наведении.
   if (onRequestRemoval && isApprovedCampaign(campaign)) {
     return (
       <Tooltip>
@@ -1371,13 +1407,13 @@ function LineRowActions({
           <button
             type="button"
             onClick={() => onRequestRemoval(line.id)}
-            aria-label="Исключить из акции"
-            className="hidden size-7 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 group-hover/row:opacity-100 md:inline-flex"
+            aria-label="Исключить позицию из акции"
+            className="hidden size-7 items-center justify-center rounded text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 md:inline-flex"
           >
             <Ban className="size-4" />
           </button>
         </TooltipTrigger>
-        <TooltipContent>Исключить позицию из акции (§5.3)</TooltipContent>
+        <TooltipContent>Исключить позицию из акции</TooltipContent>
       </Tooltip>
     );
   }

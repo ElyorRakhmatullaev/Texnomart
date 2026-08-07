@@ -112,6 +112,28 @@ export function isDraftLine(campaign: PromoCampaign, line: PromoLine): boolean {
 }
 
 /**
+ * 11-я часть (06.08, Блок 3): акция-черновик до отправки на согласование — КД и
+ * старший КМ её не видят. Ветвление ТОЧНО зеркалит `lineDisplayStatus`: статусы
+ * согласования/отправки решают сами по себе, и только для «прочих» статусов
+ * внеплановая без первой отправки считается черновиком (иначе прятались бы
+ * акции, уже находящиеся на решении у КД или согласованные).
+ */
+export function isCampaignDraft(campaign: PromoCampaign): boolean {
+  if (campaign.cancelled) return false;
+  switch (campaign.status) {
+    case "Черновик":
+      return true;
+    case "Переотправлено на корректировку КМ":
+    case "На согласовании у старшего КМ":
+    case "На согласовании у коммерческого директора":
+    case "Согласовано и отправлено смежным отделам":
+      return false;
+    default:
+      return !campaign.planned && !campaign.firstSendDone;
+  }
+}
+
+/**
  * Fold an edit patch into a `LinePendingChange` for an approved line (Блок 2/4): the
  * table keeps the approved values, the diff accumulates here. `fmt` renders values as
  * plain strings for the panel; `labelOf` supplies the field labels.

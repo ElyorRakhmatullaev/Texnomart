@@ -104,6 +104,7 @@ import {
 } from "../../../lib/promo-mock-data";
 import {
   STATUS_FILTER_OPTIONS,
+  isCampaignDraft,
   lineDisplayStatus,
   lineHasRejection,
   matchesStatusFilter,
@@ -327,6 +328,10 @@ export function FullCalendarPage() {
     currentRole === "Категорийный менеджер (КМ)"
       ? CATEGORY_MANAGERS[0].id
       : null;
+  // 11-я часть (06.08, Блок 3): черновики не показываются КД и старшему КМ до
+  // отправки на согласование — им нечего решать по неотправленному.
+  const hideDraftsFromReviewer =
+    currentRole === "Коммерческий директор" || currentRole === "Старший КМ";
   // Deep link from the short calendar's КМ-status cell (§10) — ?promo= focuses one
   // campaign; a banner offers to clear it back to the full list.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -422,15 +427,25 @@ export function FullCalendarPage() {
         : linesFor(campaignId);
       // §7: a plain КМ only sees their own nomenclature within a shared campaign.
       if (ownKmId) out = out.filter((l) => l.kmId === ownKmId);
-      // 10-я часть R46/Блок 7: single «Все статусы» filter, applied PER LINE.
       const c = campaignsById.get(campaignId);
+      // 11-я часть (Блок 3): черновиковые позиции скрыты от КД / старшего КМ.
+      if (hideDraftsFromReviewer && c)
+        out = out.filter((l) => lineDisplayStatus(c, l) !== "Черновик");
+      // 10-я часть R46/Блок 7: single «Все статусы» filter, applied PER LINE.
       if (c && values.status !== ALL)
         out = out.filter((l) =>
           matchesStatusFilter(lineDisplayStatus(c, l), values.status)
         );
       return out;
     },
-    [linesFor, hideCancelled, ownKmId, campaignsById, values.status]
+    [
+      linesFor,
+      hideCancelled,
+      ownKmId,
+      hideDraftsFromReviewer,
+      campaignsById,
+      values.status,
+    ]
   );
 
   // ── Edit-after-approval diff (§5.1) ──────────────────────────────────────────
@@ -495,6 +510,9 @@ export function FullCalendarPage() {
     const from = periodStart ? new Date(`${periodStart}T00:00:00`) : null;
     const to = periodEnd ? new Date(`${periodEnd}T23:59:59`) : null;
     return kmVisibleCampaigns.filter((c) => {
+      // 11-я часть (Блок 3): акции-черновики скрыты от КД / старшего КМ даже по
+      // deep-link — до отправки на согласование решать по ним нечего.
+      if (hideDraftsFromReviewer && isCampaignDraft(c)) return false;
       // Deep-link focus (§10) — when ?promo= is set, show only that campaign
       // (overrides «Скрыть отменённое» so a cancelled campaign is still reachable).
       if (focusPromo) return c.id === focusPromo;
@@ -527,6 +545,7 @@ export function FullCalendarPage() {
     hideCancelled,
     focusPromo,
     ownKmId,
+    hideDraftsFromReviewer,
     promoIds,
     periodStart,
     periodEnd,

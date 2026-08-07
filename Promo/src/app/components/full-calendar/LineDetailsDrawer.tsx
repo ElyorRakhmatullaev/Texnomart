@@ -74,8 +74,11 @@ export function LineDetailsDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-[420px]">
-        <SheetHeader className="space-y-1">
+      {/* 11-я часть (06.08, Блок 4): у SheetContent нет собственного паддинга —
+          телу панели нужны явные горизонтальные отступы, иначе текст прилипает
+          к краям. */}
+      <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-[440px]">
+        <SheetHeader className="space-y-1 px-6 pt-5">
           <SheetTitle className="flex items-center gap-2">
             <Eye className="size-4 text-muted-foreground" />
             Детали изменений
@@ -95,7 +98,7 @@ export function LineDetailsDrawer({
         </SheetHeader>
 
         {campaign && line && (
-          <div className="mt-4 space-y-3">
+          <div className="mt-2 space-y-3 px-6 pb-6">
             <Section title="Информация об акции">
               <Row label="№ промо" value={formatPromoNo(campaign.id)} />
               <Row label="Номенклатура" value={nom?.name ?? line.nomenclatureId} />
