@@ -1,0 +1,110 @@
+import { Check, Download, FileText } from "lucide-react"
+import { useNavigate } from "react-router"
+import { format } from "date-fns"
+import { ru } from "date-fns/locale"
+import { Badge } from "@texnomart/ui/badge"
+import { Button, buttonVariants } from "@texnomart/ui/button"
+import { cn } from "@texnomart/ui/utils"
+import { useScoringFlow } from "@/app/scoring-flow"
+import { BANKS, ORDER } from "@/lib/broker-mock-data"
+
+const alif = BANKS.find((b) => b.id === "alif")!
+
+export function SuccessPage() {
+  const { state, resetFlow } = useScoringFlow()
+  const navigate = useNavigate()
+
+  const contractNo = state.contractNo ?? ""
+  const oneCOrderNo = state.oneCOrderNo ?? ""
+  const issuedDate = format(new Date(), "dd.MM.yyyy", { locale: ru })
+
+  function handleFinish() {
+    resetFlow()
+    navigate("/scoring/banks")
+  }
+
+  return (
+    <div className="mx-auto max-w-[880px] px-4 py-6">
+      <h2 className="text-xl font-bold text-gray-900">Информация по рассрочке</h2>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        {/* Левая карточка — сводка по оформленному кредиту */}
+        <div className="flex flex-col gap-4 rounded-lg bg-white p-4 shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:p-6">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white"
+              style={{ background: alif.brandColor }}
+            >
+              {alif.initial}
+            </div>
+            <span className="flex-1 font-semibold text-gray-900">{alif.title}</span>
+            <Badge className="border-transparent bg-green-50 text-green-700 hover:bg-green-50">Оформлена</Badge>
+          </div>
+
+          <div className="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1">
+            <span className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-gray-900 shadow-[0px_2px_4px_rgba(204,204,204,0.25)]">
+              {ORDER.tenor} мес.
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-lg border p-4" style={{ borderColor: "#FFD60A" }}>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-500">Доступный лимит</span>
+              <span className="font-semibold tabular-nums text-gray-900">
+                {alif.limit.toLocaleString("ru-RU")} сум
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-500">Срок</span>
+              <span className="font-semibold tabular-nums text-red-600">0-0-{ORDER.tenor}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-500">Предоплата</span>
+              <span className="font-semibold tabular-nums text-gray-900">{alif.prepayment}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <FileText className="size-4 shrink-0 text-gray-400" />
+            <span>
+              Договор № {contractNo} <span className="text-gray-400">от {issuedDate}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Правая панель — статус + действия */}
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white">
+            <Check className="size-5 text-emerald-600" />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <p className="font-semibold text-gray-900">Кредит оформлен! Договор №{contractNo} подписан.</p>
+            <p className="text-sm text-gray-600">
+              Заявка №{oneCOrderNo} в базе 1С Texnomart создана автоматически — продолжайте оформление продажи в ней.
+            </p>
+          </div>
+
+          <div className="mt-2 flex w-full flex-col gap-3">
+            <a
+              href={import.meta.env.BASE_URL + "contract-mock.pdf"}
+              download={`Договор_${contractNo}.pdf`}
+              className={cn(buttonVariants({ variant: "outline" }), "h-11 w-full bg-white font-semibold")}
+            >
+              <Download className="size-4" />
+              Скачать договор (PDF)
+            </a>
+
+            <Button
+              type="button"
+              onClick={handleFinish}
+              className="h-11 w-full bg-emerald-500 font-semibold text-white hover:bg-emerald-600"
+            >
+              Завершить скоринг
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

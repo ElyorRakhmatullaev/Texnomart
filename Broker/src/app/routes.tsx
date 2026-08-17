@@ -5,11 +5,7 @@ import { BanksPage } from "./components/scoring/BanksPage"
 import { CardAttachPage } from "./components/alif/CardAttachPage"
 import { AdditionalDataPage } from "./components/alif/AdditionalDataPage"
 import { CreditConfirmPage } from "./components/alif/CreditConfirmPage"
-
-// TODO(Task 8+): заменить на настоящую страницу, файл см. в плане.
-function SuccessPage() {
-  return <div className="p-8">Кредит оформлен</div>
-}
+import { SuccessPage } from "./components/alif/SuccessPage"
 
 // Под GitHub Pages приложение раздаётся из подпути (BASE_URL =
 // '/Texnomart/broker/'); отбрасываем завершающий слэш для basename роутера.
