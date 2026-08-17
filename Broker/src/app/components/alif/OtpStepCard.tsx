@@ -82,6 +82,7 @@ export function OtpStepCard({
 
   function handleResend() {
     setResendSeconds(OTP_RESEND_SECONDS)
+    setError(null)
     toast.success("Код отправлен повторно")
   }
 
