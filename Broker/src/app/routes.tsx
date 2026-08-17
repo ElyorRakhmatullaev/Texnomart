@@ -4,11 +4,9 @@ import { BrokerShell } from "./components/shell/BrokerShell"
 import { BanksPage } from "./components/scoring/BanksPage"
 import { CardAttachPage } from "./components/alif/CardAttachPage"
 import { AdditionalDataPage } from "./components/alif/AdditionalDataPage"
+import { CreditConfirmPage } from "./components/alif/CreditConfirmPage"
 
-// TODO(Task 7+): заменить на настоящие страницы, файлы см. в плане.
-function CreditConfirmPage() {
-  return <div className="p-8">Подтверждение кредита</div>
-}
+// TODO(Task 8+): заменить на настоящую страницу, файл см. в плане.
 function SuccessPage() {
   return <div className="p-8">Кредит оформлен</div>
 }
