@@ -3,11 +3,9 @@ import { useScoringFlow } from "./scoring-flow"
 import { BrokerShell } from "./components/shell/BrokerShell"
 import { BanksPage } from "./components/scoring/BanksPage"
 import { CardAttachPage } from "./components/alif/CardAttachPage"
+import { AdditionalDataPage } from "./components/alif/AdditionalDataPage"
 
-// TODO(Task 6+): заменить на настоящие страницы, файлы см. в плане.
-function AdditionalDataPage() {
-  return <div className="p-8">Дополнительные данные</div>
-}
+// TODO(Task 7+): заменить на настоящие страницы, файлы см. в плане.
 function CreditConfirmPage() {
   return <div className="p-8">Подтверждение кредита</div>
 }
