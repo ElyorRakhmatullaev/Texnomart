@@ -32,13 +32,15 @@ export function CreditConfirmPage() {
           <div className="text-gray-500">Банк</div>
           <div className="text-right font-medium text-gray-900">{alif.title}</div>
 
-          <div className="text-gray-500">Сумма</div>
+          <div className="text-gray-500">Сумма заказа</div>
           <div className="text-right font-medium tabular-nums text-gray-900">
             {ORDER.amount.toLocaleString("ru-RU")} сум
           </div>
 
           <div className="text-gray-500">Срок</div>
-          <div className="text-right font-medium tabular-nums text-gray-900">{ORDER.tenor} мес.</div>
+          <div className="text-right font-medium tabular-nums text-gray-900">
+            {state.tenor ?? ORDER.tenor} мес.
+          </div>
 
           <div className="text-gray-500">Доступный лимит</div>
           <div className="text-right font-medium tabular-nums text-gray-900">
@@ -46,10 +48,12 @@ export function CreditConfirmPage() {
           </div>
         </div>
 
-        <div className="mt-3 rounded-lg bg-amber-50 text-amber-800 px-4 py-3 text-sm flex gap-2">
-          <Info className="size-4 shrink-0 mt-0.5" />
-          Это другой код — не тот, что вы вводили при привязке карты. Введите код из последнего SMS.
-        </div>
+        {!state.creditConfirmed && (
+          <div className="mt-3 rounded-lg bg-amber-50 text-amber-800 px-4 py-3 text-sm flex gap-2">
+            <Info className="size-4 shrink-0 mt-0.5" />
+            Это другой код — не тот, что вы вводили при привязке карты. Введите код из последнего SMS.
+          </div>
+        )}
       </OtpStepCard>
     </div>
   )

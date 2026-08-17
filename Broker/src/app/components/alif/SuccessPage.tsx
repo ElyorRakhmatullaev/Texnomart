@@ -16,6 +16,7 @@ export function SuccessPage() {
 
   const contractNo = state.contractNo ?? ""
   const oneCOrderNo = state.oneCOrderNo ?? ""
+  const tenor = state.tenor ?? ORDER.tenor
   const issuedDate = format(new Date(), "dd.MM.yyyy", { locale: ru })
 
   function handleFinish() {
@@ -43,7 +44,7 @@ export function SuccessPage() {
 
           <div className="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1">
             <span className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-gray-900 shadow-[0px_2px_4px_rgba(204,204,204,0.25)]">
-              {ORDER.tenor} мес.
+              {tenor} мес.
             </span>
           </div>
 
@@ -56,7 +57,7 @@ export function SuccessPage() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-500">Срок</span>
-              <span className="font-semibold tabular-nums text-red-600">0-0-{ORDER.tenor}</span>
+              <span className="font-semibold tabular-nums text-red-600">0-0-{tenor}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-500">Предоплата</span>

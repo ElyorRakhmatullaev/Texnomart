@@ -81,6 +81,8 @@ Guards (`RequireAlif` in `routes.tsx`) redirect to `/scoring/banks` if the flow 
 - **OTP resend timer**: 60s countdown (`OTP_RESEND_SECONDS`) before «Отправить код повторно» becomes clickable.
 - **Contract/order numbers**: `makeContractNo()` generates `ALF-2026-XXXXXX` on credit confirmation; `ONE_C_ORDER_NO` is a fixed seeded 1С order number (`235662235`, as in the Figma design).
 - **Contract PDF**: the success screen serves the static mock `public/contract-mock.pdf`, downloaded as `Договор_ALF-2026-XXXXXX.pdf`.
+- **`ClientInfoBand`**: renders only on `/scoring/banks` («Выбор рассрочки») — deliberate; the per-screen spec sections for the Alif steps (card attach / details / confirm / success) don't include it.
+- **Bank logos**: colored letter-square fallbacks (`Bank.brandColor` + `Bank.initial`), per spec §2.5 — the Figma SVG export isn't used.
 
 ## Assumption — Additional Data Form Composition
 

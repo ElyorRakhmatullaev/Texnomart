@@ -22,9 +22,9 @@ export function BanksPage() {
   const alif = BANKS.find((b) => b.id === "alif")!
   const iman = BANKS.find((b) => b.id === "iman")!
 
-  function handleCheckout(bankId: "alif" | "iman") {
+  function handleCheckout(bankId: "alif" | "iman", tenor: number) {
     if (bankId === "alif") {
-      selectAlif()
+      selectAlif(tenor)
       navigate("/scoring/alif/card")
     } else {
       toast.info("В прототипе реализован сценарий Alif")
@@ -38,10 +38,14 @@ export function BanksPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <BankCard
           bank={alif}
-          pending={state.alifLimitStatus === "pending"}
-          onCheckout={() => handleCheckout("alif")}
+          pending={!alif.instantLimit && state.alifLimitStatus === "pending"}
+          onCheckout={(tenor) => handleCheckout("alif", tenor)}
         />
-        <BankCard bank={iman} pending={false} onCheckout={() => handleCheckout("iman")} />
+        <BankCard
+          bank={iman}
+          pending={!iman.instantLimit && state.alifLimitStatus === "pending"}
+          onCheckout={(tenor) => handleCheckout("iman", tenor)}
+        />
       </div>
 
       <div className="flex justify-center">

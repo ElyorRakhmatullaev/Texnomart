@@ -8,6 +8,17 @@ export function CardAttachPage() {
   const { state, attachCard } = useScoringFlow()
   const navigate = useNavigate()
 
+  function handleSuccess() {
+    attachCard()
+    toast.success("Карта привязана")
+    navigate("/scoring/alif/details")
+  }
+
+  // Шаг уже пройден: «Продолжить» просто ведёт дальше, без повторного тоста.
+  function handleContinue() {
+    navigate("/scoring/alif/details")
+  }
+
   return (
     <div className="mx-auto max-w-[880px] px-4 py-6">
       <OtpStepCard
@@ -20,11 +31,7 @@ export function CardAttachPage() {
         }
         ctaLabel="Подтвердить"
         completedNote={state.cardAttached ? "Карта привязана" : undefined}
-        onSuccess={() => {
-          attachCard()
-          toast.success("Карта привязана")
-          navigate("/scoring/alif/details")
-        }}
+        onSuccess={state.cardAttached ? handleContinue : handleSuccess}
         onBack={() => navigate("/scoring/banks")}
       />
     </div>

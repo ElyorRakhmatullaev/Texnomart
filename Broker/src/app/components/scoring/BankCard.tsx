@@ -9,7 +9,7 @@ import type { Bank } from "@/lib/broker-mock-data"
 export interface BankCardProps {
   bank: Bank
   pending: boolean
-  onCheckout: () => void
+  onCheckout: (tenor: number) => void
 }
 
 export function BankCard({ bank, pending, onCheckout }: BankCardProps) {
@@ -91,7 +91,7 @@ export function BankCard({ bank, pending, onCheckout }: BankCardProps) {
       <Button
         type="button"
         disabled={pending}
-        onClick={onCheckout}
+        onClick={() => onCheckout(tenor)}
         className="h-11 font-semibold text-black hover:opacity-90 disabled:opacity-50"
         style={pending ? undefined : { background: "#FFD60A", color: "#000" }}
       >

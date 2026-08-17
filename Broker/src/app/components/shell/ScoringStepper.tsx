@@ -42,7 +42,7 @@ export function ScoringStepper() {
   const { state } = useScoringFlow()
 
   const steps = state.alifSelected ? ALIF_STEPS : BASE_STEPS
-  const activeIndex = activeIndexFor(location.pathname)
+  const activeIndex = Math.min(activeIndexFor(location.pathname), steps.length - 1)
 
   return (
     <div className="bg-white">

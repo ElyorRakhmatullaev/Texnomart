@@ -10,6 +10,7 @@ export interface AdditionalData {
 export interface ScoringFlowState {
   alifLimitStatus: "pending" | "ready"
   alifSelected: boolean
+  tenor?: number
   cardAttached: boolean
   additionalData?: AdditionalData
   creditConfirmed: boolean
@@ -40,7 +41,7 @@ function readInitialState(): ScoringFlowState {
 export interface ScoringFlowContextValue {
   state: ScoringFlowState
   markAlifLimitReady: () => void
-  selectAlif: () => void
+  selectAlif: (tenor: number) => void
   attachCard: () => void
   saveAdditionalData: (data: AdditionalData) => void
   confirmCredit: () => void
@@ -65,8 +66,10 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
     setState((prev) => (prev.alifLimitStatus === "ready" ? prev : { ...prev, alifLimitStatus: "ready" }))
   }, [])
 
-  const selectAlif = useCallback(() => {
-    setState((prev) => (prev.alifSelected ? prev : { ...prev, alifSelected: true }))
+  const selectAlif = useCallback((tenor: number) => {
+    setState((prev) =>
+      prev.alifSelected && prev.tenor === tenor ? prev : { ...prev, alifSelected: true, tenor },
+    )
   }, [])
 
   const attachCard = useCallback(() => {
