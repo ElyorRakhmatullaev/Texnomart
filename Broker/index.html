@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Texnomart Broker</title>
+    <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+    <!-- GitHub Pages SPA deep-link restore: the root 404.html stashes the
+         requested path here, then redirects to this app root. Restore it
+         into the URL before React Router boots. No-op for local dev. -->
+    <script>
+      (function () {
+        var deep = sessionStorage.getItem("spaRedirect");
+        if (deep) {
+          sessionStorage.removeItem("spaRedirect");
+          history.replaceState(null, "", location.pathname.replace(/\/?$/, "/") + deep);
+        }
+      })();
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

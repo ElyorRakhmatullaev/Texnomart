@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev:broker": "pnpm --filter broker dev",
+    "build:broker": "pnpm --filter broker build",
     "dev:dashboard": "pnpm --filter dashboard dev",
     "build:dashboard": "pnpm --filter dashboard build",
     "dev:promo": "pnpm --filter promo dev",

@@ -1,4 +1,5 @@
 packages:
+  - 'Broker'
   - 'Dashboard'
   - 'Promo'
   - 'packages/*'
