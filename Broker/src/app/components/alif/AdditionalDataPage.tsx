@@ -9,10 +9,20 @@ import { RELATION_KINDS } from "@/lib/broker-mock-data"
 
 // Маска телефона: храним только «сырые» цифры после кода 998 (макс. 9),
 // формат для отображения/сабмита собираем из них.
+//
+// Разбор всей строки на каждое нажатие (а не диффом с предыдущим значением) —
+// нужно аккуратно отличать «стирание цифр пользователя» от «стирания самого
+// префикса +998» (иначе backspace на пустом поле «+998» → «+99» и наивная
+// проверка startsWith("998") не срабатывает — в поле подставляются фантомные
+// цифры). Правило: если все цифры строки начинаются с "998" — за префиксом
+// остались настоящие цифры пользователя; если сама строка цифр — префикс
+// "998" ещё не «дописан» (стирание), пользовательских цифр нет; иначе (вставка
+// локального номера без кода страны) — цифры пользователя взяты как есть.
 function extractDigits(value: string): string {
-  let digits = value.replace(/\D/g, "")
-  if (digits.startsWith("998")) digits = digits.slice(3)
-  return digits.slice(0, 9)
+  const allDigits = value.replace(/\D/g, "")
+  if (allDigits.startsWith("998")) return allDigits.slice(3, 12)
+  if ("998".startsWith(allDigits)) return ""
+  return allDigits.slice(0, 9)
 }
 
 function digitsFromPhone(phone: string | undefined): string {
@@ -94,7 +104,9 @@ export function AdditionalDataPage() {
   const t2Filled = t2Digits.length === 9 && t2Relation !== ""
   const t2Partial = t2Started && !t2Filled
 
-  const canSubmit = t1Valid && !t2Partial
+  const debitDateValid = /^\d{4}-\d{2}-\d{2}$/.test(debitDate)
+
+  const canSubmit = t1Valid && !t2Partial && debitDateValid
 
   function handleSubmit() {
     if (!canSubmit) return
