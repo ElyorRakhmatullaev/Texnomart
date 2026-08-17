@@ -1,10 +1,6 @@
 import { createBrowserRouter, Navigate, Outlet } from "react-router"
 import { useScoringFlow } from "./scoring-flow"
-
-// TODO(Task 3): заменить на настоящий BrokerShell (топ-бар + степпер + Outlet).
-function BrokerShell() {
-  return <Outlet />
-}
+import { BrokerShell } from "./components/shell/BrokerShell"
 
 // TODO(Task 4+): заменить на настоящие страницы, файлы см. в плане.
 function BanksPage() {
