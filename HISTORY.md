@@ -4,6 +4,12 @@ Reverse chronological. One-line summaries — implementation details are in the 
 
 ---
 
+## 2026-08-17 — Client Broker: new sub-project bootstrap + Alif flow (экраны 2–6) + deploy as third app
+
+New sub-project **`Broker/`** — an operator-facing scoring application used in-store, starting with the **Alif Nasiya** bank branch (tasks 1–8 build the app, `8a2549a..011d28f`; task 9 wires up deploy + docs, this commit). Bootstrapped per the root CLAUDE.md's «When Adding a New Sub-Project» checklist (workspace entry, `dev:broker`/`build:broker` scripts, path aliases, shared `@texnomart/ui`/`@texnomart/shared` deps) with its own top-bar shell (`BrokerShell` — an operator terminal layout, not the shared sidebar `AppShell`) instead of a sidebar. **Flow:** `/scoring/banks` (bank offer cards, Alif limit arrives after a ~6s mock callback) → for Alif specifically, four screens gated by a `RequireAlif` route guard reading a `ScoringFlowProvider` (React context persisted to `sessionStorage` under `broker:scoring-flow`): `/scoring/alif/card` (OTP 1 of 2 — card attach), `/scoring/alif/details` (доверительные лица + дата списания — field composition taken from the Figma screen since the PM scenario marked it «уточнить у бекенда»), `/scoring/alif/confirm` (OTP 2 of 2 — credit confirm, visually distinguished from screen 3 per the PM's «two separate OTP steps» requirement), `/scoring/alif/success` (contract number + PDF download via mock `contract-mock.pdf` + reset). Mock conventions: OTP fail code `000000`, 60s resend timer, Alif limit delay `ALIF_LIMIT_DELAY_MS` (~6s). **Deploy (Task 9):** `.github/workflows/deploy.yml` gained a third build+assemble step (`BASE_PATH=/Texnomart/broker/` → `_site/broker`) and the root `404.html` SPA-fallback condition now covers the `broker` app segment → `https://elyorrakhmatullaev.github.io/Texnomart/broker/`. New `Broker/CLAUDE.md` documents routes, file structure, mock conventions, and the additional-data form assumption. Spec `docs/superpowers/specs/2026-08-17-broker-alif-flow-screens-design.md`. `Dashboard/`, `Promo/`, `@texnomart/shared`, `packages/ui` untouched.
+
+---
+
 ## 2026-08-06/07 — Texnomart Promo: «11-я часть», вторая порция — форма распределения по визуалу PM + комментарий Б/А от 06.08
 
 Два продолжения «11-й части»: переработка формы «Распределение по категориям / КМ» по присланному PM визуалу (**`6708e72`**, 06.08) и разбор файла трекера **«до_06 (2)»** (**`da6bfa1` + `5009a20`**, 07.08). Обе сборки зелёные, всё проверено настоящими кликами (1440/390, светлая/тёмная).

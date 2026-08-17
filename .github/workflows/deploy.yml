@@ -1,8 +1,9 @@
-# Build the Dashboard + Promo SPAs and publish them to GitHub Pages.
+# Build the Dashboard + Promo + Broker SPAs and publish them to GitHub Pages.
 #
-# Both apps share one Pages site under subpaths:
+# All three apps share one Pages site under subpaths:
 #   https://elyorrakhmatullaev.github.io/Texnomart/dashboard/
 #   https://elyorrakhmatullaev.github.io/Texnomart/promo/
+#   https://elyorrakhmatullaev.github.io/Texnomart/broker/
 # The bare root (/Texnomart/) has no landing page by design.
 #
 # ONE-TIME SETUP (cannot be automated): in the repo go to
@@ -56,13 +57,19 @@ jobs:
         env:
           BASE_PATH: /Texnomart/promo/
 
+      - name: Build Broker
+        run: pnpm build:broker
+        env:
+          BASE_PATH: /Texnomart/broker/
+
       - name: Assemble site
         run: |
           set -e
           rm -rf _site
-          mkdir -p _site/dashboard _site/promo
+          mkdir -p _site/dashboard _site/promo _site/broker
           cp -r Dashboard/dist/. _site/dashboard/
           cp -r Promo/dist/. _site/promo/
+          cp -r Broker/dist/. _site/broker/
           # Root 404 fallback: GitHub Pages serves this for any unmatched path.
           # It detects which app the deep link belongs to, stashes the in-app
           # path in sessionStorage, and redirects to that app's root, where the
@@ -79,7 +86,7 @@ jobs:
                   // Project Pages: segs[0] = repo, segs[1] = app slug.
                   var repo = segs[0];
                   var app = segs[1];
-                  if (app === "dashboard" || app === "promo") {
+                  if (app === "dashboard" || app === "promo" || app === "broker") {
                     var base = "/" + repo + "/" + app + "/";
                     var rest = segs.slice(2).join("/");
                     sessionStorage.setItem("spaRedirect", rest + location.search + location.hash);
