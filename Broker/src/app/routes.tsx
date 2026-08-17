@@ -2,11 +2,9 @@ import { createBrowserRouter, Navigate, Outlet } from "react-router"
 import { useScoringFlow } from "./scoring-flow"
 import { BrokerShell } from "./components/shell/BrokerShell"
 import { BanksPage } from "./components/scoring/BanksPage"
+import { CardAttachPage } from "./components/alif/CardAttachPage"
 
-// TODO(Task 5+): заменить на настоящие страницы, файлы см. в плане.
-function CardAttachPage() {
-  return <div className="p-8">Привязка карты</div>
-}
+// TODO(Task 6+): заменить на настоящие страницы, файлы см. в плане.
 function AdditionalDataPage() {
   return <div className="p-8">Дополнительные данные</div>
 }
