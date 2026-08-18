@@ -3,6 +3,7 @@ import { useScoringFlow } from "./scoring-flow"
 import { BrokerShell } from "./components/shell/BrokerShell"
 import { BanksPage } from "./components/scoring/BanksPage"
 import { VerificationPage } from "./components/scoring/VerificationPage"
+import { MyIdPhotoPage } from "./components/scoring/MyIdPhotoPage"
 import { AdditionalDataPage } from "./components/alif/AdditionalDataPage"
 import { InstallmentInfoPage } from "./components/alif/InstallmentInfoPage"
 import { BANKS } from "@/lib/broker-mock-data"
@@ -29,31 +30,6 @@ function RequireStage({ stage }: { stage: Stage }) {
             ? state.alifSelected && (ALIF_PREPAYMENT === 0 || state.holdStatus === "confirmed")
             : !!state.additionalData
   return ok ? <Outlet /> : <Navigate to="/scoring/verification" replace />
-}
-
-// Заглушка — фото + проверка MyID приходят в Task 4. Сид-карта уже
-// подтверждена (см. INITIAL в scoring-flow.tsx), так что гвард stage="myid"
-// проходит без действий пользователя — кнопка нужна только чтобы отметить
-// photoDone/myidDone и открыть /scoring/banks для сквозной проверки маршрутов.
-function MyIdPhotoPage() {
-  const { setPhotoDone, setMyidDone } = useScoringFlow()
-  const navigate = useNavigate()
-  return (
-    <div className="p-8">
-      <p>Шаг 2 — Проверка MyID (Task 4)</p>
-      <button
-        type="button"
-        className="mt-4 underline"
-        onClick={() => {
-          setPhotoDone()
-          setMyidDone()
-          navigate("/scoring/banks")
-        }}
-      >
-        [Заглушка] Пройти MyID
-      </button>
-    </div>
-  )
 }
 
 // Заглушка — холд предоплаты приходит в Task 5 (в т.ч. редирект на /details,
