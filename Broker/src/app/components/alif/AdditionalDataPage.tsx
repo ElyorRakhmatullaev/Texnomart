@@ -118,7 +118,7 @@ export function AdditionalDataPage() {
       data.trustee2 = { phone: formatUzPhone(t2Digits), relation: t2Relation }
     }
     saveAdditionalData(data)
-    navigate("/scoring/alif/confirm")
+    navigate("/scoring/alif/info")
   }
 
   return (
@@ -170,7 +170,7 @@ export function AdditionalDataPage() {
 
         <button
           type="button"
-          onClick={() => navigate("/scoring/alif/card")}
+          onClick={() => navigate("/scoring/alif/hold")}
           className="mt-3 block w-full text-center text-sm text-gray-500 transition-colors hover:text-gray-700"
         >
           Вернуться к предыдущему шагу

@@ -28,7 +28,7 @@ export function ActionRail() {
   const handleFinish = () => {
     setOpen(false)
     resetFlow()
-    navigate("/scoring/banks")
+    navigate("/scoring/verification")
   }
 
   return (

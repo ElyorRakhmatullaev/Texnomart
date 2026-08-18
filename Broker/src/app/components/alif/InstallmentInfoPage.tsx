@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { Check, Download, FileText } from "lucide-react"
 import { useNavigate } from "react-router"
 import { format } from "date-fns"
@@ -10,9 +11,16 @@ import { BANKS, ORDER } from "@/lib/broker-mock-data"
 
 const alif = BANKS.find((b) => b.id === "alif")!
 
-export function SuccessPage() {
-  const { state, resetFlow } = useScoringFlow()
+export function InstallmentInfoPage() {
+  const { state, confirmCredit, resetFlow } = useScoringFlow()
   const navigate = useNavigate()
+
+  // TODO Task 6: подтверждение кредита переезжает в OTP-модал («Код 2 из 2»),
+  // открывающийся на этом же экране. Пока модала нет — авто-подтверждаем при
+  // заходе, чтобы страница сразу рендерила зелёное состояние с номером договора.
+  useEffect(() => {
+    if (!state.creditConfirmed) confirmCredit()
+  }, [state.creditConfirmed, confirmCredit])
 
   const contractNo = state.contractNo ?? ""
   const oneCOrderNo = state.oneCOrderNo ?? ""
@@ -21,7 +29,7 @@ export function SuccessPage() {
 
   function handleFinish() {
     resetFlow()
-    navigate("/scoring/banks")
+    navigate("/scoring/verification")
   }
 
   return (

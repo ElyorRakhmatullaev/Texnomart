@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
-import { ONE_C_ORDER_NO, makeContractNo } from "@/lib/broker-mock-data"
+import { ONE_C_ORDER_NO, makeContractNo, SEED_CARD } from "@/lib/broker-mock-data"
 
 export interface AdditionalData {
   trustee1: { phone: string; relation: string }
@@ -7,11 +7,20 @@ export interface AdditionalData {
   debitDate: string // "YYYY-MM-DD"
 }
 
+export interface AttachedCard {
+  mask: string
+  expiry: string
+  confirmed: boolean
+}
+
 export interface ScoringFlowState {
+  cards: AttachedCard[]
+  photoDone: boolean
+  myidDone: boolean
   alifLimitStatus: "pending" | "ready"
   alifSelected: boolean
   tenor?: number
-  cardAttached: boolean
+  holdStatus: "none" | "held" | "confirmed" | "cancelled"
   additionalData?: AdditionalData
   creditConfirmed: boolean
   contractNo?: string
@@ -21,9 +30,12 @@ export interface ScoringFlowState {
 const STORAGE_KEY = "broker:scoring-flow"
 
 const INITIAL: ScoringFlowState = {
+  cards: [{ ...SEED_CARD, confirmed: true }],
+  photoDone: false,
+  myidDone: false,
   alifLimitStatus: "pending",
   alifSelected: false,
-  cardAttached: false,
+  holdStatus: "none",
   creditConfirmed: false,
 }
 
@@ -42,7 +54,14 @@ export interface ScoringFlowContextValue {
   state: ScoringFlowState
   markAlifLimitReady: () => void
   selectAlif: (tenor: number) => void
-  attachCard: () => void
+  addCard: (mask: string, expiry: string) => void
+  confirmCard: (mask: string) => void
+  removeCard: (mask: string) => void
+  setPhotoDone: () => void
+  setMyidDone: () => void
+  holdHold: () => void
+  holdConfirm: () => void
+  holdCancel: () => void
   saveAdditionalData: (data: AdditionalData) => void
   confirmCredit: () => void
   resetFlow: () => void
@@ -72,8 +91,42 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
     )
   }, [])
 
-  const attachCard = useCallback(() => {
-    setState((prev) => (prev.cardAttached ? prev : { ...prev, cardAttached: true }))
+  const addCard = useCallback((mask: string, expiry: string) => {
+    setState((prev) => ({ ...prev, cards: [...prev.cards, { mask, expiry, confirmed: false }] }))
+  }, [])
+
+  const confirmCard = useCallback((mask: string) => {
+    setState((prev) => ({
+      ...prev,
+      cards: prev.cards.map((c) => (c.mask === mask ? { ...c, confirmed: true } : c)),
+    }))
+  }, [])
+
+  const removeCard = useCallback((mask: string) => {
+    setState((prev) => ({ ...prev, cards: prev.cards.filter((c) => c.mask !== mask) }))
+  }, [])
+
+  const setPhotoDone = useCallback(() => {
+    setState((prev) => (prev.photoDone ? prev : { ...prev, photoDone: true }))
+  }, [])
+
+  const setMyidDone = useCallback(() => {
+    setState((prev) => (prev.myidDone ? prev : { ...prev, myidDone: true }))
+  }, [])
+
+  const holdHold = useCallback(() => {
+    setState((prev) => (prev.holdStatus === "held" ? prev : { ...prev, holdStatus: "held" }))
+  }, [])
+
+  const holdConfirm = useCallback(() => {
+    setState((prev) => (prev.holdStatus === "confirmed" ? prev : { ...prev, holdStatus: "confirmed" }))
+  }, [])
+
+  // Отмена холда: статус → "cancelled". alifSelected НЕ сбрасывается — пользователь
+  // остаётся в ветке Alif и возвращается к выбору банка/срока (навигация — на
+  // стороне вызывающего компонента).
+  const holdCancel = useCallback(() => {
+    setState((prev) => (prev.holdStatus === "cancelled" ? prev : { ...prev, holdStatus: "cancelled" }))
   }, [])
 
   const saveAdditionalData = useCallback((data: AdditionalData) => {
@@ -104,7 +157,22 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
 
   return (
     <ScoringFlowContext.Provider
-      value={{ state, markAlifLimitReady, selectAlif, attachCard, saveAdditionalData, confirmCredit, resetFlow }}
+      value={{
+        state,
+        markAlifLimitReady,
+        selectAlif,
+        addCard,
+        confirmCard,
+        removeCard,
+        setPhotoDone,
+        setMyidDone,
+        holdHold,
+        holdConfirm,
+        holdCancel,
+        saveAdditionalData,
+        confirmCredit,
+        resetFlow,
+      }}
     >
       {children}
     </ScoringFlowContext.Provider>
