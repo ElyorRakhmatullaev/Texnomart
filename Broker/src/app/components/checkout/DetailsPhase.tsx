@@ -1,9 +1,9 @@
 import { useState } from "react"
-import { useNavigate } from "react-router"
 import { addMonths, format } from "date-fns"
 import { Input } from "@texnomart/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@texnomart/ui/select"
 import { Button } from "@texnomart/ui/button"
+import { DialogFooter } from "@texnomart/ui/dialog"
 import { useScoringFlow, type AdditionalData } from "@/app/scoring-flow"
 import { RELATION_KINDS } from "@/lib/broker-mock-data"
 
@@ -87,9 +87,12 @@ function TrusteeFields({ title, phoneDigits, onPhoneChange, relation, onRelation
   )
 }
 
-export function AdditionalDataPage() {
+// Фаза «Дополнительные данные» — контент бывшей AdditionalDataPage без
+// страничного контейнера/кнопки «назад» (у попапа есть крестик закрытия).
+// Переход на otp происходит сам (деривация в AlifCheckoutDialog) по факту
+// saveAdditionalData.
+export function DetailsPhase() {
   const { state, saveAdditionalData } = useScoringFlow()
-  const navigate = useNavigate()
 
   const [t1Digits, setT1Digits] = useState(() => digitsFromPhone(state.additionalData?.trustee1.phone))
   const [t1Relation, setT1Relation] = useState(state.additionalData?.trustee1.relation ?? "")
@@ -118,64 +121,52 @@ export function AdditionalDataPage() {
       data.trustee2 = { phone: formatUzPhone(t2Digits), relation: t2Relation }
     }
     saveAdditionalData(data)
-    navigate("/scoring/alif/info")
   }
 
   return (
-    <div className="px-4 py-6">
-      <div className="mx-auto max-w-[720px] rounded-lg bg-white p-6 shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:p-8">
-        <p className="text-xs text-gray-400">Log Id: 123456</p>
-        <h2 className="mt-1 text-xl font-bold text-gray-900">Дополнительные данные</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Укажите контакты близких — это увеличивает шанс одобрения
-        </p>
+    <div className="px-2 py-4">
+      <h2 className="text-xl font-bold text-gray-900">Дополнительные данные</h2>
+      <p className="mt-1 text-sm text-gray-500">Укажите контакты близких — это увеличивает шанс одобрения</p>
 
-        <div className="mt-6 grid gap-6 md:grid-cols-2">
-          <TrusteeFields
-            title="Доверительное лицо — 1"
-            phoneDigits={t1Digits}
-            onPhoneChange={setT1Digits}
-            relation={t1Relation}
-            onRelationChange={setT1Relation}
-          />
-          <TrusteeFields
-            title="Доверительное лицо — 2"
-            phoneDigits={t2Digits}
-            onPhoneChange={setT2Digits}
-            relation={t2Relation}
-            onRelationChange={setT2Relation}
-            error={t2Partial ? "Заполните оба поля или очистите" : undefined}
-          />
-        </div>
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <TrusteeFields
+          title="Доверительное лицо — 1"
+          phoneDigits={t1Digits}
+          onPhoneChange={setT1Digits}
+          relation={t1Relation}
+          onRelationChange={setT1Relation}
+        />
+        <TrusteeFields
+          title="Доверительное лицо — 2"
+          phoneDigits={t2Digits}
+          onPhoneChange={setT2Digits}
+          relation={t2Relation}
+          onRelationChange={setT2Relation}
+          error={t2Partial ? "Заполните оба поля или очистите" : undefined}
+        />
+      </div>
 
-        <div className="mt-6">
-          <h3 className="font-semibold text-gray-900">Дата списания оплаты</h3>
-          <Input
-            type="date"
-            className="mt-3 max-w-[240px]"
-            value={debitDate}
-            onChange={(e) => setDebitDate(e.target.value)}
-          />
-        </div>
+      <div className="mt-6">
+        <h3 className="font-semibold text-gray-900">Дата списания оплаты</h3>
+        <Input
+          type="date"
+          className="mt-3 max-w-[240px]"
+          value={debitDate}
+          onChange={(e) => setDebitDate(e.target.value)}
+        />
+      </div>
 
+      <DialogFooter className="mt-8 w-full">
         <Button
           type="button"
           disabled={!canSubmit}
           onClick={handleSubmit}
-          className="mt-8 h-11 w-full font-semibold text-black hover:opacity-90 disabled:opacity-50"
+          className="h-11 w-full font-semibold text-black hover:opacity-90 disabled:opacity-50"
           style={{ background: "#FFD60A" }}
         >
           Продолжить
         </Button>
-
-        <button
-          type="button"
-          onClick={() => navigate("/scoring/alif/hold")}
-          className="mt-3 block w-full text-center text-sm text-gray-500 transition-colors hover:text-gray-700"
-        >
-          Вернуться к предыдущему шагу
-        </button>
-      </div>
+      </DialogFooter>
     </div>
   )
 }

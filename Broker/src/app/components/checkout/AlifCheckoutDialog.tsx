@@ -1,7 +1,15 @@
+import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@texnomart/ui/dialog"
-import { checkoutPhaseOf, useScoringFlow } from "@/app/scoring-flow"
+import { checkoutPhaseOf, useScoringFlow, type CheckoutPhase } from "@/app/scoring-flow"
 import { ALIF_PREPAYMENT } from "@/lib/broker-mock-data"
 import { ConfirmPhase } from "./ConfirmPhase"
+import { HoldPhase } from "./HoldPhase"
+import { DetailsPhase } from "./DetailsPhase"
+
+// Задержка перед автосменой hold → details ради читаемости: пользователь
+// должен успеть увидеть зелёный бейдж «Предоплата подтверждена» прежде чем
+// фаза сменится (сама смена фазы — мгновенная деривация из состояния).
+const HOLD_TO_DETAILS_DELAY_MS = 600
 
 // Единый попап оформления Alif Nasiya — хост фазовой машины. Фаза
 // деривируется из состояния потока (checkoutPhaseOf), не хранится отдельно:
@@ -10,7 +18,21 @@ import { ConfirmPhase } from "./ConfirmPhase"
 export function AlifCheckoutDialog() {
   const { state, closeCheckout } = useScoringFlow()
   const held = state.holdStatus === "held"
-  const phase = checkoutPhaseOf(state, ALIF_PREPAYMENT)
+  const derivedPhase = checkoutPhaseOf(state, ALIF_PREPAYMENT)
+
+  // phase лагает за derivedPhase только на переходе hold → details — это
+  // единственный переход, для которого нужна пауза на читаемость бейджа
+  // «Предоплата подтверждена». Все остальные смены фаз применяются сразу.
+  const [phase, setPhase] = useState<CheckoutPhase>(derivedPhase)
+
+  useEffect(() => {
+    if (phase === derivedPhase) return
+    if (phase === "hold" && derivedPhase === "details") {
+      const t = setTimeout(() => setPhase(derivedPhase), HOLD_TO_DETAILS_DELAY_MS)
+      return () => clearTimeout(t)
+    }
+    setPhase(derivedPhase)
+  }, [derivedPhase, phase])
 
   // Пока предоплата «держится» (спиннер ~2с в фазе hold), закрытие попапа
   // запрещено — ни крестиком, ни Escape, ни кликом по оверлею.
@@ -40,11 +62,9 @@ export function AlifCheckoutDialog() {
 
         {phase === "confirm" && <ConfirmPhase />}
 
-        {/* Task 2: контент нынешней HoldPage переезжает сюда фазой HoldPhase */}
-        {phase === "hold" && <div className="p-6">Фаза «Удержание предоплаты» — Task 2</div>}
+        {phase === "hold" && <HoldPhase />}
 
-        {/* Task 2: контент нынешней AdditionalDataPage переезжает сюда фазой DetailsPhase */}
-        {phase === "details" && <div className="p-6">Фаза «Дополнительные данные» — Task 2</div>}
+        {phase === "details" && <DetailsPhase />}
 
         {/* Task 3: контент нынешнего CreditOtpDialog переезжает сюда фазой CreditOtpPhase */}
         {phase === "otp" && <div className="p-6">Фаза «Код подтверждения» — Task 3</div>}
