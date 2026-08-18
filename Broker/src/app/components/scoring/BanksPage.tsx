@@ -26,7 +26,15 @@ export function BanksPage() {
   // сценарий вне прототипа.
   function handleCheckout(bankId: "alif" | "iman", tenor: number) {
     if (bankId === "alif") {
-      selectAlif(tenor)
+      // Срок «замораживается» после подтверждения предложения — чип BankCard
+      // сбрасывается к defaultTenor при каждом ремаунте (напр. reload +
+      // повторное «Оформить»), и без этой проверки перезаписал бы
+      // state.tenor поверх уже подтверждённого. «Назад» на confirm и
+      // holdCancel оба сбрасывают offerConfirmed — повторный выбор срока
+      // снова открыт.
+      if (!state.offerConfirmed) {
+        selectAlif(tenor)
+      }
       openCheckout()
     } else {
       toast.info("В прототипе реализован сценарий Alif")

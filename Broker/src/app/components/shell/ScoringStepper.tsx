@@ -40,9 +40,13 @@ function statusFor(index: number, activeIndex: number): StepStatus {
 export function ScoringStepper() {
   const location = useLocation()
   const { state } = useScoringFlow()
-  const rawIndex = state.checkoutOpen
-    ? PHASE_INDEX[checkoutPhaseOf(state, ALIF_PREPAYMENT)]
-    : activeIndexFor(location.pathname)
+  // checkoutOpen persists across the whole session (sessionStorage), so it
+  // stays true even after a browser-Back to /scoring/myid, where the popup
+  // isn't hosted — trust the phase-based highlight only on the banks route.
+  const rawIndex =
+    state.checkoutOpen && location.pathname.includes("/scoring/banks")
+      ? PHASE_INDEX[checkoutPhaseOf(state, ALIF_PREPAYMENT)]
+      : activeIndexFor(location.pathname)
   const activeIndex = Math.min(rawIndex, STEPS.length - 1)
 
   return (

@@ -114,7 +114,7 @@ The seeded Alif `prepayment` (`ALIF_PREPAYMENT`) is `1_000_000` (non-zero), so `
 
 **Stepper highlight (`ScoringStepper.tsx`).** For the 3 real routes, the active step index comes from the pathname (`activeIndexFor`, steps 0/1/2). While `state.checkoutOpen` is true, the index instead comes from `PHASE_INDEX[checkoutPhaseOf(state, ALIF_PREPAYMENT)]` — `confirm`/`hold` → step 3 (index 2, same as «Выбор рассрочки»), `details` → step 4 (index 3), `otp`/`success` → step 5 (index 4). So opening the popup visually advances the stepper through steps 3→4→5 without the URL ever leaving `/scoring/banks` — steps 4–5 have no route/page of their own, they are reachable only as popup-phase highlights.
 
-The floating `ActionRail` (right edge, ≥lg only) is available on every screen, including with the popup open: «Завершить скоринг» opens an AlertDialog confirmation and, on confirm, does the same `resetFlow()` + navigate-to-verification as the success phase's green button.
+The floating `ActionRail` (right edge, ≥lg only) is available on every screen, but not interactive while the popup is open — the modal overlay (`z-50`) sits above it (`z-10`) and disables pointer events on the rest of the page; reset while the popup is open happens via the popup's own controls, or by closing the popup first. Otherwise: «Завершить скоринг» opens an AlertDialog confirmation and, on confirm, does the same `resetFlow()` + navigate-to-verification as the success phase's green button.
 
 ## State — `ScoringFlowProvider`
 

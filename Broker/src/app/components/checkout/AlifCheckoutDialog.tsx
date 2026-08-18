@@ -46,7 +46,7 @@ export function AlifCheckoutDialog() {
   return (
     <Dialog open={state.checkoutOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="sm:max-w-[640px]"
+        className="sm:max-w-[640px] max-h-[90dvh] overflow-y-auto"
         onPointerDownOutside={(e) => {
           if (held) e.preventDefault()
         }}

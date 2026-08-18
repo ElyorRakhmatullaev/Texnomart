@@ -20,7 +20,7 @@ import { CardOtpDialog } from "@/app/components/scoring/CardOtpDialog"
 
 // Номер карты: держим только «сырые» цифры (макс. 16), формат для отображения
 // собираем из них группами по 4 — тот же приём, что и в маске телефона
-// AdditionalDataPage (разбор всей строки на каждое нажатие, а не диффом).
+// DetailsPhase (checkout popup) (разбор всей строки на каждое нажатие, а не диффом).
 function extractCardDigits(value: string): string {
   return value.replace(/\D/g, "").slice(0, 16)
 }
