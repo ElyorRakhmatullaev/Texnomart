@@ -25,7 +25,7 @@ export function BanksPage() {
   function handleCheckout(bankId: "alif" | "iman", tenor: number) {
     if (bankId === "alif") {
       selectAlif(tenor)
-      navigate("/scoring/alif/hold")
+      navigate(alif.prepayment > 0 ? "/scoring/alif/hold" : "/scoring/alif/details")
     } else {
       toast.info("В прототипе реализован сценарий Alif")
     }

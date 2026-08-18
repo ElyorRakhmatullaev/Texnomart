@@ -83,7 +83,9 @@ export function BankCard({ bank, pending, onCheckout }: BankCardProps) {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-500">Предоплата</span>
-            <span className="font-semibold tabular-nums text-gray-900">{bank.prepayment}</span>
+            <span className="font-semibold tabular-nums text-gray-900">
+              {bank.prepayment.toLocaleString("ru-RU")} сум
+            </span>
           </div>
         </div>
       )}

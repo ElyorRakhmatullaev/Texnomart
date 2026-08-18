@@ -1,9 +1,10 @@
-import { createBrowserRouter, Navigate, Outlet, useNavigate } from "react-router"
+import { createBrowserRouter, Navigate, Outlet } from "react-router"
 import { useScoringFlow } from "./scoring-flow"
 import { BrokerShell } from "./components/shell/BrokerShell"
 import { BanksPage } from "./components/scoring/BanksPage"
 import { VerificationPage } from "./components/scoring/VerificationPage"
 import { MyIdPhotoPage } from "./components/scoring/MyIdPhotoPage"
+import { HoldPage } from "./components/alif/HoldPage"
 import { AdditionalDataPage } from "./components/alif/AdditionalDataPage"
 import { InstallmentInfoPage } from "./components/alif/InstallmentInfoPage"
 import { BANKS } from "@/lib/broker-mock-data"
@@ -30,29 +31,6 @@ function RequireStage({ stage }: { stage: Stage }) {
             ? state.alifSelected && (ALIF_PREPAYMENT === 0 || state.holdStatus === "confirmed")
             : !!state.additionalData
   return ok ? <Outlet /> : <Navigate to="/scoring/verification" replace />
-}
-
-// Заглушка — холд предоплаты приходит в Task 5 (в т.ч. редирект на /details,
-// когда у выбранного банка prepayment === 0 — сейчас у Alif prepayment > 0,
-// так что ветка всегда идёт через холд).
-function HoldPage() {
-  const { holdConfirm } = useScoringFlow()
-  const navigate = useNavigate()
-  return (
-    <div className="p-8">
-      <p>Холд предоплаты (Task 5)</p>
-      <button
-        type="button"
-        className="mt-4 underline"
-        onClick={() => {
-          holdConfirm()
-          navigate("/scoring/alif/details")
-        }}
-      >
-        [Заглушка] Подтвердить холд
-      </button>
-    </div>
-  )
 }
 
 export const router = createBrowserRouter(
