@@ -5,6 +5,8 @@ import { ALIF_PREPAYMENT } from "@/lib/broker-mock-data"
 import { ConfirmPhase } from "./ConfirmPhase"
 import { HoldPhase } from "./HoldPhase"
 import { DetailsPhase } from "./DetailsPhase"
+import { CreditOtpPhase } from "./CreditOtpPhase"
+import { SuccessPhase } from "./SuccessPhase"
 
 // Задержка перед автосменой hold → details ради читаемости: пользователь
 // должен успеть увидеть зелёный бейдж «Предоплата подтверждена» прежде чем
@@ -66,11 +68,9 @@ export function AlifCheckoutDialog() {
 
         {phase === "details" && <DetailsPhase />}
 
-        {/* Task 3: контент нынешнего CreditOtpDialog переезжает сюда фазой CreditOtpPhase */}
-        {phase === "otp" && <div className="p-6">Фаза «Код подтверждения» — Task 3</div>}
+        {phase === "otp" && <CreditOtpPhase />}
 
-        {/* Task 3: зелёное состояние нынешней InstallmentInfoPage переезжает сюда фазой SuccessPhase */}
-        {phase === "success" && <div className="p-6">Фаза «Кредит оформлен» — Task 3</div>}
+        {phase === "success" && <SuccessPhase />}
       </DialogContent>
     </Dialog>
   )
