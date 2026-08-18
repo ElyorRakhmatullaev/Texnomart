@@ -73,12 +73,12 @@ export function InstallmentInfoPage() {
               <span className="text-sm text-gray-500">Срок</span>
               <span className="font-semibold tabular-nums text-red-600">0-0-{tenor}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-500">Предоплата</span>
-              <span className="flex items-center gap-1 font-semibold tabular-nums text-gray-900">
-                {formatPrepayment(alif.prepayment)}
+            <div className="flex items-start justify-between gap-2">
+              <span className="shrink-0 text-sm text-gray-500">Предоплата</span>
+              <span className="flex flex-wrap items-center justify-end gap-x-1 gap-y-0.5 text-right font-semibold tabular-nums text-gray-900">
+                <span className="whitespace-nowrap">{formatPrepayment(alif.prepayment)}</span>
                 {state.holdStatus === "confirmed" && (
-                  <span className="font-normal text-xs text-emerald-600">· Подтверждена</span>
+                  <span className="whitespace-nowrap text-xs font-normal text-emerald-600">· Подтверждена</span>
                 )}
               </span>
             </div>
