@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type SyntheticEvent } from "react"
 import { addMonths, format } from "date-fns"
 import { Input } from "@texnomart/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@texnomart/ui/select"
@@ -27,6 +27,25 @@ function extractDigits(value: string): string {
 
 function digitsFromPhone(phone: string | undefined): string {
   return extractDigits(phone ?? "")
+}
+
+// extractDigits разбирает всю строку заново на каждое нажатие и опознаёт
+// префикс "+998" только по факту, что он идёт первым — если курсор оказался
+// ЛЕВЕЕ префикса (Home/стрелка влево/клик в начало поля) и пользователь
+// печатает там, вставленная цифра встаёт перед "+998", эвристика перестаёт
+// узнавать префикс и весь конкатенированный набор цифр (включая цифры
+// префикса) трактуется как ввод пользователя — номер “едет”. Не даём курсору
+// попасть левее первой редактируемой позиции: пока цифр нет, это конец
+// строки "+998" (позиция 4); как только есть хоть одна цифра, строка — уже
+// "+998 …" и редактируемая зона начинается сразу за пробелом (позиция 5).
+function clampPhoneCursor(e: SyntheticEvent<HTMLInputElement>) {
+  const el = e.currentTarget
+  const minPos = extractDigits(el.value).length === 0 ? 4 : 5
+  const start = el.selectionStart ?? minPos
+  const end = el.selectionEnd ?? minPos
+  if (start < minPos || end < minPos) {
+    el.setSelectionRange(Math.max(start, minPos), Math.max(end, minPos))
+  }
 }
 
 function formatUzPhone(digits: string): string {
@@ -61,6 +80,7 @@ function TrusteeFields({ title, phoneDigits, onPhoneChange, relation, onRelation
           <Input
             value={formatUzPhone(phoneDigits)}
             onChange={(e) => onPhoneChange(extractDigits(e.target.value))}
+            onSelect={clampPhoneCursor}
             placeholder="+998 __ ___ __ __"
             inputMode="numeric"
             autoComplete="off"
