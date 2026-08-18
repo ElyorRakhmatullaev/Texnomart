@@ -3,12 +3,14 @@ export interface BrokerClient {
   phone: string
   pinfl: string
   cardMask: string
+  passport: string
 }
 export const BROKER_CLIENT: BrokerClient = {
   name: "Артем Борисов",
   phone: "+998 94 983 98 48",
   pinfl: "2116358415458",
   cardMask: "4860 **** **** 1251",
+  passport: "AD 1276543",
 }
 
 export interface Bank {

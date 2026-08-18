@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, Outlet, useNavigate } from "react-router
 import { useScoringFlow } from "./scoring-flow"
 import { BrokerShell } from "./components/shell/BrokerShell"
 import { BanksPage } from "./components/scoring/BanksPage"
+import { VerificationPage } from "./components/scoring/VerificationPage"
 import { AdditionalDataPage } from "./components/alif/AdditionalDataPage"
 import { InstallmentInfoPage } from "./components/alif/InstallmentInfoPage"
 import { BANKS } from "@/lib/broker-mock-data"
@@ -28,19 +29,6 @@ function RequireStage({ stage }: { stage: Stage }) {
             ? state.alifSelected && (ALIF_PREPAYMENT === 0 || state.holdStatus === "confirmed")
             : !!state.additionalData
   return ok ? <Outlet /> : <Navigate to="/scoring/verification" replace />
-}
-
-// Заглушка — верификация клиента приходит в Task 2.
-function VerificationPage() {
-  const navigate = useNavigate()
-  return (
-    <div className="p-8">
-      <p>Шаг 1 — Верификация клиента (Task 2)</p>
-      <button type="button" className="mt-4 underline" onClick={() => navigate("/scoring/myid")}>
-        [Заглушка] Продолжить
-      </button>
-    </div>
-  )
 }
 
 // Заглушка — фото + проверка MyID приходят в Task 4. Сид-карта уже
