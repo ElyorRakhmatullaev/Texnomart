@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { useNavigate } from "react-router"
+import { Navigate, useNavigate } from "react-router"
 import { CheckCircle2, CreditCard, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@texnomart/ui/button"
@@ -28,6 +28,13 @@ export function HoldPage() {
     const t = setTimeout(holdConfirm, PREPAYMENT_HOLD_DELAY_MS)
     return () => clearTimeout(t)
   }, [state.holdStatus, holdConfirm])
+
+  // Страница холда имеет смысл только когда предоплата ненулевая — при
+  // prepayment === 0 (сид сейчас всегда > 0, но future-proof) шаг холда
+  // пропускается, и details достижим сразу.
+  if (ALIF_PREPAYMENT === 0) {
+    return <Navigate to="/scoring/alif/details" replace />
+  }
 
   // Повторный вход после отмены холда отображается как исходное состояние —
   // отдельного экшена сброса "cancelled" → "none" в провайдере нет, это чисто
@@ -99,7 +106,7 @@ export function HoldPage() {
           )}
         </div>
 
-        {status !== "held" && (
+        {status !== "held" && !state.creditConfirmed && (
           <button
             type="button"
             onClick={handleCancel}

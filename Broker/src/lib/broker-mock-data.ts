@@ -9,7 +9,7 @@ export const BROKER_CLIENT: BrokerClient = {
   name: "Артем Борисов",
   phone: "+998 94 983 98 48",
   pinfl: "2116358415458",
-  cardMask: "4860 **** **** 1251",
+  cardMask: "9860 **** **** 1296",
   passport: "AD 1276543",
 }
 

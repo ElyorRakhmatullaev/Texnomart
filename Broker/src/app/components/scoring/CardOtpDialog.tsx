@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@texnomart/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@texnomart/ui/dialog"
 import { OtpPanel } from "@/app/components/alif/OtpPanel"
 
 export interface CardOtpDialogProps {
@@ -19,6 +19,7 @@ export function CardOtpDialog({ open, cardMask, onConfirmed, onOpenChange }: Car
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>Подтверждение карты</DialogTitle>
+          <DialogDescription className="sr-only">Введите код из SMS для подтверждения</DialogDescription>
         </DialogHeader>
 
         {open && (

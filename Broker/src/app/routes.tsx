@@ -29,7 +29,8 @@ function RequireStage({ stage }: { stage: Stage }) {
           ? state.alifSelected
           : stage === "details"
             ? state.alifSelected && (ALIF_PREPAYMENT === 0 || state.holdStatus === "confirmed")
-            : !!state.additionalData
+            : !!state.additionalData &&
+              (ALIF_PREPAYMENT === 0 || state.holdStatus === "confirmed" || state.creditConfirmed)
   return ok ? <Outlet /> : <Navigate to="/scoring/verification" replace />
 }
 

@@ -1,5 +1,5 @@
 import { Info } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@texnomart/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@texnomart/ui/dialog"
 import { OtpPanel } from "@/app/components/alif/OtpPanel"
 import { BANKS, ORDER } from "@/lib/broker-mock-data"
 import { useScoringFlow } from "@/app/scoring-flow"
@@ -24,6 +24,7 @@ export function CreditOtpDialog({ open, onConfirmed, onOpenChange }: CreditOtpDi
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>Подтверждение кредита</DialogTitle>
+          <DialogDescription className="sr-only">Введите код из SMS для подтверждения</DialogDescription>
         </DialogHeader>
 
         {open && (

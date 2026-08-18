@@ -260,7 +260,7 @@ export function VerificationPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Карта заблокирована</AlertDialogTitle>
             <AlertDialogDescription>
-              Лимит исчерпан на привязку. Привязка этой карты недоступна.
+              Лимит исчерпан на привязку. Карта заблокирована для привязки.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogAction onClick={() => setBlockedOpen(false)}>Понятно</AlertDialogAction>
