@@ -21,6 +21,8 @@ export interface ScoringFlowState {
   alifSelected: boolean
   tenor?: number
   holdStatus: "none" | "held" | "confirmed" | "cancelled"
+  offerConfirmed: boolean
+  checkoutOpen: boolean
   additionalData?: AdditionalData
   creditConfirmed: boolean
   contractNo?: string
@@ -36,7 +38,22 @@ const INITIAL: ScoringFlowState = {
   alifLimitStatus: "pending",
   alifSelected: false,
   holdStatus: "none",
+  offerConfirmed: false,
+  checkoutOpen: false,
   creditConfirmed: false,
+}
+
+// Попап оформления Alif — фаза деривируется из состояния потока (не хранится
+// отдельным полем), чтобы попап и степпер всегда были синхронны. Порядок
+// проверок важен: более «продвинутое» состояние побеждает.
+export type CheckoutPhase = "confirm" | "hold" | "details" | "otp" | "success"
+
+export function checkoutPhaseOf(state: ScoringFlowState, alifPrepayment: number): CheckoutPhase {
+  if (state.creditConfirmed) return "success"
+  if (state.additionalData) return "otp"
+  if (state.offerConfirmed && (state.holdStatus === "confirmed" || alifPrepayment === 0)) return "details"
+  if (state.offerConfirmed) return "hold"
+  return "confirm"
 }
 
 function readInitialState(): ScoringFlowState {
@@ -62,6 +79,9 @@ export interface ScoringFlowContextValue {
   holdHold: () => void
   holdConfirm: () => void
   holdCancel: () => void
+  confirmOffer: () => void
+  openCheckout: () => void
+  closeCheckout: () => void
   saveAdditionalData: (data: AdditionalData) => void
   confirmCredit: () => void
   resetFlow: () => void
@@ -123,10 +143,26 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Отмена холда: статус → "cancelled". alifSelected НЕ сбрасывается — пользователь
-  // остаётся в ветке Alif и возвращается к выбору банка/срока (навигация — на
-  // стороне вызывающего компонента).
+  // остаётся в ветке Alif. offerConfirmed сбрасывается — при следующем открытии
+  // попап деривируется обратно на фазу confirm.
   const holdCancel = useCallback(() => {
-    setState((prev) => (prev.holdStatus === "cancelled" ? prev : { ...prev, holdStatus: "cancelled" }))
+    setState((prev) =>
+      prev.holdStatus === "cancelled" && !prev.offerConfirmed
+        ? prev
+        : { ...prev, holdStatus: "cancelled", offerConfirmed: false },
+    )
+  }, [])
+
+  const confirmOffer = useCallback(() => {
+    setState((prev) => (prev.offerConfirmed ? prev : { ...prev, offerConfirmed: true }))
+  }, [])
+
+  const openCheckout = useCallback(() => {
+    setState((prev) => (prev.checkoutOpen ? prev : { ...prev, checkoutOpen: true }))
+  }, [])
+
+  const closeCheckout = useCallback(() => {
+    setState((prev) => (prev.checkoutOpen ? { ...prev, checkoutOpen: false } : prev))
   }, [])
 
   const saveAdditionalData = useCallback((data: AdditionalData) => {
@@ -169,6 +205,9 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
         holdHold,
         holdConfirm,
         holdCancel,
+        confirmOffer,
+        openCheckout,
+        closeCheckout,
         saveAdditionalData,
         confirmCredit,
         resetFlow,

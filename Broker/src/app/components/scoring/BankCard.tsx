@@ -9,10 +9,12 @@ import type { Bank } from "@/lib/broker-mock-data"
 export interface BankCardProps {
   bank: Bank
   pending: boolean
+  /** Кредит уже оформлен (Alif, creditConfirmed) — бейдж «Оформлена» вместо «Одобрена». */
+  completed?: boolean
   onCheckout: (tenor: number) => void
 }
 
-export function BankCard({ bank, pending, onCheckout }: BankCardProps) {
+export function BankCard({ bank, pending, completed = false, onCheckout }: BankCardProps) {
   const [tenor, setTenor] = useState(bank.defaultTenor)
 
   return (
@@ -29,6 +31,10 @@ export function BankCard({ bank, pending, onCheckout }: BankCardProps) {
         {pending ? (
           <Badge className="border-transparent bg-amber-50 text-amber-700 hover:bg-amber-50">
             Рассчитывается…
+          </Badge>
+        ) : completed ? (
+          <Badge className="border-transparent bg-green-50 text-green-700 hover:bg-green-50">
+            ✓ Оформлена
           </Badge>
         ) : (
           <Badge className="border-transparent bg-green-50 text-green-700 hover:bg-green-50">

@@ -1,15 +1,14 @@
 import { useEffect } from "react"
-import { useNavigate } from "react-router"
 import { ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { useScoringFlow } from "@/app/scoring-flow"
 import { BANKS, ALIF_LIMIT_DELAY_MS } from "@/lib/broker-mock-data"
+import { AlifCheckoutDialog } from "@/app/components/checkout/AlifCheckoutDialog"
 import { ClientInfoBand } from "./ClientInfoBand"
 import { BankCard } from "./BankCard"
 
 export function BanksPage() {
-  const { state, markAlifLimitReady, selectAlif } = useScoringFlow()
-  const navigate = useNavigate()
+  const { state, markAlifLimitReady, selectAlif, openCheckout } = useScoringFlow()
 
   // Мок callback+polling: лимит Alif «приходит» через ALIF_LIMIT_DELAY_MS.
   // Если лимит уже ready (в т.ч. после перезагрузки страницы) — таймер не запускается.
@@ -22,10 +21,13 @@ export function BanksPage() {
   const alif = BANKS.find((b) => b.id === "alif")!
   const iman = BANKS.find((b) => b.id === "iman")!
 
+  // Alif «Оформить» открывает попап оформления на текущей странице (URL не
+  // меняется); весь дальнейший процесс — фазы AlifCheckoutDialog. Для Iman
+  // сценарий вне прототипа.
   function handleCheckout(bankId: "alif" | "iman", tenor: number) {
     if (bankId === "alif") {
       selectAlif(tenor)
-      navigate(alif.prepayment > 0 ? "/scoring/alif/hold" : "/scoring/alif/details")
+      openCheckout()
     } else {
       toast.info("В прототипе реализован сценарий Alif")
     }
@@ -39,6 +41,7 @@ export function BanksPage() {
         <BankCard
           bank={alif}
           pending={!alif.instantLimit && state.alifLimitStatus === "pending"}
+          completed={state.creditConfirmed}
           onCheckout={(tenor) => handleCheckout("alif", tenor)}
         />
         <BankCard
@@ -57,6 +60,8 @@ export function BanksPage() {
           <ChevronDown className="size-4" />
         </button>
       </div>
+
+      <AlifCheckoutDialog />
     </div>
   )
 }

@@ -1,6 +1,8 @@
 import { useLocation } from "react-router"
 import { cn } from "@texnomart/ui/utils"
 import { Progress } from "@texnomart/ui/progress"
+import { checkoutPhaseOf, useScoringFlow, type CheckoutPhase } from "@/app/scoring-flow"
+import { ALIF_PREPAYMENT } from "@/lib/broker-mock-data"
 
 const STEPS = [
   "Верификация клиента",
@@ -10,12 +12,20 @@ const STEPS = [
   "Информация по рассрочке",
 ]
 
+// Шаги 4–5 больше не отдельные страницы — они достижимы только визуально,
+// подсветкой во время открытого попапа AlifCheckoutDialog (см. checkoutPhaseOf).
+const PHASE_INDEX: Record<CheckoutPhase, number> = {
+  confirm: 2,
+  hold: 2,
+  details: 3,
+  otp: 4,
+  success: 4,
+}
+
 function activeIndexFor(pathname: string): number {
   if (pathname.includes("/verification")) return 0
   if (pathname.includes("/myid")) return 1
-  if (pathname.includes("/banks") || pathname.includes("/alif/hold")) return 2
-  if (pathname.includes("/alif/details")) return 3
-  if (pathname.includes("/alif/info")) return 4
+  if (pathname.includes("/banks")) return 2
   return 0
 }
 
@@ -29,7 +39,11 @@ function statusFor(index: number, activeIndex: number): StepStatus {
 
 export function ScoringStepper() {
   const location = useLocation()
-  const activeIndex = Math.min(activeIndexFor(location.pathname), STEPS.length - 1)
+  const { state } = useScoringFlow()
+  const rawIndex = state.checkoutOpen
+    ? PHASE_INDEX[checkoutPhaseOf(state, ALIF_PREPAYMENT)]
+    : activeIndexFor(location.pathname)
+  const activeIndex = Math.min(rawIndex, STEPS.length - 1)
 
   return (
     <div className="bg-white">

@@ -49,6 +49,8 @@ export const BANKS: Bank[] = [
   },
 ]
 
+export const ALIF_PREPAYMENT = BANKS.find((b) => b.id === "alif")!.prepayment
+
 export const ORDER = { amount: 10_000_000, tenor: 6 }
 export const ALIF_LIMIT_DELAY_MS = 6000 // мок callback+polling из MD
 export const OTP_RESEND_SECONDS = 60
