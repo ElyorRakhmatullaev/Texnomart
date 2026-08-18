@@ -66,8 +66,6 @@ export const CARD_NOT_FOUND_SUFFIX = "0000"
 export const CARD_BLOCKED_SUFFIX = "9999"
 export const PREPAYMENT_HOLD_DELAY_MS = 2000
 export const MYID_CHECK_DELAY_MS = 2500
-export const PHOTO_MIN_BYTES = 300_000
-export const PHOTO_MAX_BYTES = 1_500_000
 
 export function makeContractNo(): string {
   // ALF-2026-XXXXXX — псевдослучайный, стабильный в рамках сессии не требуется

@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import { Button } from "@texnomart/ui/button"
 import { cn } from "@texnomart/ui/utils"
 import { useScoringFlow } from "@/app/scoring-flow"
-import { MYID_CHECK_DELAY_MS, PHOTO_MAX_BYTES, PHOTO_MIN_BYTES } from "@/lib/broker-mock-data"
+import { MYID_CHECK_DELAY_MS } from "@/lib/broker-mock-data"
 import { useCameraCapture } from "@/app/components/scoring/useCameraCapture"
 import demoPhoto from "@/assets/demo-photo.jpg"
 
@@ -17,14 +17,13 @@ const HINTS = [
   { icon: Sun, label: "Хорошее освещение" },
 ]
 
-// Валидация захваченного/демо-фото: формат jpeg/png и размер в диапазоне
-// [PHOTO_MIN_BYTES, PHOTO_MAX_BYTES]. Возвращает текст ошибки или null (успех).
+// Валидация захваченного/демо-фото: только формат jpeg/png. Размер файла
+// НЕ проверяется (снято по просьбе PM 18.08 — реальные требования Alif/MyID
+// к размеру уточняются; вернуть проверку легко здесь же при необходимости).
 function validatePhoto(blob: Blob): string | null {
   const validType = blob.type === "image/jpeg" || blob.type === "image/png"
-  const validSize = blob.size >= PHOTO_MIN_BYTES && blob.size <= PHOTO_MAX_BYTES
-  if (validType && validSize) return null
-  const kb = Math.round(blob.size / 1024)
-  return `Фото не соответствует требованиям (размер ${kb} КБ, нужно 300 КБ – 1,5 МБ)`
+  if (validType) return null
+  return "Фото не соответствует требованиям (нужен формат PNG или JPG)"
 }
 
 export function MyIdPhotoPage() {
@@ -212,7 +211,7 @@ export function MyIdPhotoPage() {
 
         {phase === "camera" && status === "streaming" && (
           <p className="mx-auto mt-3 max-w-[460px] text-center text-xs text-gray-500">
-            Анфас, лицо полностью в овале · PNG/JPG · 300 КБ – 1,5 МБ
+            Анфас, лицо полностью в овале · PNG/JPG
           </p>
         )}
 
