@@ -9,3 +9,6 @@ DumpStack.log.tmp
 
 # Playwright MCP browser-test scratch output
 .playwright-mcp/
+
+# Subagent-driven-development scratch (ledgers, task briefs/reports, review diffs)
+.superpowers/
