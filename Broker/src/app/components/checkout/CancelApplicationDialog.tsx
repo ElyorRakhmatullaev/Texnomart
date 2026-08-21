@@ -77,11 +77,12 @@ export function CancelApplicationDialog({ open, onOpenChange, onConfirm }: Cance
         </div>
 
         <AlertDialogFooter>
-          <AlertDialogCancel>Не отменять</AlertDialogCancel>
+          {/* h-11 — тап-таргет ≥44px (Pattern K), дефолт shadcn-кнопки (h-9=36px) не дотягивает. */}
+          <AlertDialogCancel className="h-11">Не отменять</AlertDialogCancel>
           <AlertDialogAction
             disabled={!reasonKey}
             onClick={handleConfirm}
-            className="bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+            className="h-11 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
           >
             Отменить заявку
           </AlertDialogAction>

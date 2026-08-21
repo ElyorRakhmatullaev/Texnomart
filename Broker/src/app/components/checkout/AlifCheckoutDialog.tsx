@@ -61,7 +61,12 @@ export function AlifCheckoutDialog() {
   return (
     <Dialog open={state.checkoutOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="sm:max-w-[640px] max-h-[90dvh] overflow-y-auto"
+        // overflow-x-hidden обязателен рядом с overflow-y-auto: без него браузер по
+        // спецификации CSS вычисляет overflow-x как auto (раз overflow-y — не
+        // visible), и на любой фазе, где появляется вертикальный скролл, снизу
+        // попапа рисуется лишний горизонтальный скроллбар без реального
+        // горизонтального переполнения контента.
+        className="sm:max-w-[640px] max-h-[90dvh] overflow-y-auto overflow-x-hidden"
         onPointerDownOutside={(e) => {
           if (held) e.preventDefault()
         }}
@@ -88,7 +93,9 @@ export function AlifCheckoutDialog() {
                 <button
                   type="button"
                   onClick={() => setCancelOpen(true)}
-                  className="text-xs font-medium text-red-600 transition-colors hover:text-red-700"
+                  // min-h-11 — тап-таргет ≥44px (Pattern K): текст text-xs сам по себе
+                  // даёт кликабельную область в одну строку высотой ~16px.
+                  className="inline-flex min-h-11 items-center text-xs font-medium text-red-600 transition-colors hover:text-red-700"
                 >
                   Отменить заявку
                 </button>

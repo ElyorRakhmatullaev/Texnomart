@@ -196,8 +196,11 @@ export function HoldPhase() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Не отменять</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancelHold}>Отменить холд</AlertDialogAction>
+            {/* h-11 — тап-таргет ≥44px (Pattern K), дефолт shadcn-кнопки (h-9=36px) не дотягивает. */}
+            <AlertDialogCancel className="h-11">Не отменять</AlertDialogCancel>
+            <AlertDialogAction className="h-11" onClick={handleCancelHold}>
+              Отменить холд
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
