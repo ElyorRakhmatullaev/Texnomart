@@ -6,6 +6,7 @@ import { Button } from "@texnomart/ui/button"
 import { DialogFooter } from "@texnomart/ui/dialog"
 import { useScoringFlow, type AdditionalData } from "@/app/scoring-flow"
 import { RELATION_KINDS } from "@/lib/broker-mock-data"
+import { HoldStatusBar } from "./HoldStatusBar"
 
 // Маска телефона: храним только «сырые» цифры после кода 998 (макс. 9),
 // формат для отображения/сабмита собираем из них.
@@ -147,6 +148,10 @@ export function DetailsPhase() {
     <div className="px-2 py-4">
       <h2 className="text-xl font-bold text-gray-900">Дополнительные данные</h2>
       <p className="mt-1 text-sm text-gray-500">Укажите контакты близких — это увеличивает шанс одобрения</p>
+
+      <div className="mt-4">
+        <HoldStatusBar />
+      </div>
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <TrusteeFields

@@ -45,15 +45,21 @@ const INITIAL: ScoringFlowState = {
 
 // Попап оформления Alif — фаза деривируется из состояния потока (не хранится
 // отдельным полем), чтобы попап и степпер всегда были синхронны. Порядок
-// проверок важен: более «продвинутое» состояние побеждает.
+// проверок важен и читается сверху вниз как «что сейчас блокирует прогресс»:
+// оформленный кредит → неподтверждённая оферта → неудержанная предоплата →
+// уже введённые доп. данные.
 export type CheckoutPhase = "confirm" | "hold" | "details" | "otp" | "success"
 
 export function checkoutPhaseOf(state: ScoringFlowState, alifPrepayment: number): CheckoutPhase {
   if (state.creditConfirmed) return "success"
+  if (!state.offerConfirmed) return "confirm"
+  // Пока обязательная предоплата не удержана, фаза холда перевешивает уже
+  // пройденные шаги: отмена холда на «Доп. данных» или на OTP возвращает
+  // сюда. additionalData при этом НЕ стирается — после повторного удержания
+  // деривация приводит пользователя ровно туда, где он был.
+  if (alifPrepayment > 0 && state.holdStatus !== "confirmed") return "hold"
   if (state.additionalData) return "otp"
-  if (state.offerConfirmed && (state.holdStatus === "confirmed" || alifPrepayment === 0)) return "details"
-  if (state.offerConfirmed) return "hold"
-  return "confirm"
+  return "details"
 }
 
 function readInitialState(): ScoringFlowState {
@@ -80,6 +86,7 @@ export interface ScoringFlowContextValue {
   holdConfirm: () => void
   holdCancel: () => void
   confirmOffer: () => void
+  cancelOffer: () => void
   openCheckout: () => void
   closeCheckout: () => void
   saveAdditionalData: (data: AdditionalData) => void
@@ -142,15 +149,21 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
     setState((prev) => (prev.holdStatus === "confirmed" ? prev : { ...prev, holdStatus: "confirmed" }))
   }, [])
 
-  // Отмена холда: статус → "cancelled". alifSelected НЕ сбрасывается — пользователь
-  // остаётся в ветке Alif. offerConfirmed сбрасывается — при следующем открытии
-  // попап деривируется обратно на фазу confirm.
+  // Отмена холда: статус → "cancelled" и ничего больше. Ни alifSelected, ни
+  // offerConfirmed, ни additionalData не сбрасываются — пользователь остаётся
+  // в ветке Alif на фазе холда (checkoutPhaseOf), видит статус «Холд отменён»
+  // и может удержать заново. Полный выход из ветки — отдельное действие
+  // cancelOffer.
   const holdCancel = useCallback(() => {
-    setState((prev) =>
-      prev.holdStatus === "cancelled" && !prev.offerConfirmed
-        ? prev
-        : { ...prev, holdStatus: "cancelled", offerConfirmed: false },
-    )
+    setState((prev) => (prev.holdStatus === "cancelled" ? prev : { ...prev, holdStatus: "cancelled" }))
+  }, [])
+
+  // Выход из ветки Alif к выбору предложения: сбрасывает подтверждение оферты
+  // и холд, так что срок на карточке банка снова можно выбрать (BanksPage
+  // «замораживает» его, пока offerConfirmed). Введённые доп. данные
+  // сохраняются — повторный вход не заставляет заполнять их заново.
+  const cancelOffer = useCallback(() => {
+    setState((prev) => ({ ...prev, offerConfirmed: false, holdStatus: "none", checkoutOpen: false }))
   }, [])
 
   const confirmOffer = useCallback(() => {
@@ -206,6 +219,7 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
         holdConfirm,
         holdCancel,
         confirmOffer,
+        cancelOffer,
         openCheckout,
         closeCheckout,
         saveAdditionalData,

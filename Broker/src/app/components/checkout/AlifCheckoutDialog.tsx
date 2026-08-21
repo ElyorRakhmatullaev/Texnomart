@@ -22,14 +22,16 @@ export function AlifCheckoutDialog() {
   const held = state.holdStatus === "held"
   const derivedPhase = checkoutPhaseOf(state, ALIF_PREPAYMENT)
 
-  // phase лагает за derivedPhase только на переходе hold → details — это
+  // phase лагает за derivedPhase только на уходе с фазы холда — это
   // единственный переход, для которого нужна пауза на читаемость бейджа
-  // «Предоплата подтверждена». Все остальные смены фаз применяются сразу.
+  // «Предоплата подтверждена». Цель — details при первом проходе и otp, если
+  // холд переудерживают после отмены (доп. данные уже введены). Все остальные
+  // смены фаз применяются сразу.
   const [phase, setPhase] = useState<CheckoutPhase>(derivedPhase)
 
   useEffect(() => {
     if (phase === derivedPhase) return
-    if (phase === "hold" && derivedPhase === "details") {
+    if (phase === "hold" && (derivedPhase === "details" || derivedPhase === "otp")) {
       const t = setTimeout(() => setPhase(derivedPhase), HOLD_TO_DETAILS_DELAY_MS)
       return () => clearTimeout(t)
     }

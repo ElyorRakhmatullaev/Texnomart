@@ -1,15 +1,24 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router"
-import { AlertTriangle, CameraOff, CheckCircle2, Eye, Loader2, ScanFace, Sun } from "lucide-react"
+import { AlertTriangle, CameraOff, CheckCircle2, Eye, Loader2, ScanFace, ShieldX, Sun } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@texnomart/ui/button"
 import { cn } from "@texnomart/ui/utils"
 import { useScoringFlow } from "@/app/scoring-flow"
-import { MYID_CHECK_DELAY_MS } from "@/lib/broker-mock-data"
+import {
+  MYID_CHECK_DELAY_MS,
+  MYID_DEMO_SCENARIOS,
+  MYID_REJECT_REASON,
+  PHOTO_INVALID_REASON,
+  type MyIdDemoScenario,
+} from "@/lib/broker-mock-data"
 import { useCameraCapture } from "@/app/components/scoring/useCameraCapture"
 import demoPhoto from "@/assets/demo-photo.jpg"
 
-type Phase = "camera" | "preview" | "invalid" | "checking" | "done"
+// "invalid" — фото не принято локально, до отправки в MyID.
+// "rejected" — фото ушло, но сервис MyID не подтвердил личность.
+// Оба состояния лечатся пересъёмкой, но источник и формулировка ошибки разные.
+type Phase = "camera" | "preview" | "invalid" | "checking" | "rejected" | "done"
 
 const HINTS = [
   { icon: ScanFace, label: "Держите положение лица" },
@@ -20,6 +29,10 @@ const HINTS = [
 // Валидация захваченного/демо-фото: только формат jpeg/png. Размер файла
 // НЕ проверяется (снято по просьбе PM 18.08 — реальные требования Alif/MyID
 // к размеру уточняются; вернуть проверку легко здесь же при необходимости).
+//
+// В моке эта проверка всегда проходит: камера отдаёт JPEG из canvas, демо-фото
+// приводится к JPEG принудительно. Экран ошибки достижим через демо-сценарий
+// «Некорректное фото» — см. MYID_DEMO_SCENARIOS.
 function validatePhoto(blob: Blob): string | null {
   const validType = blob.type === "image/jpeg" || blob.type === "image/png"
   if (validType) return null
@@ -39,6 +52,9 @@ export function MyIdPhotoPage() {
   // (тип + размер) для валидации при «Использовать фото».
   const [pendingBlob, setPendingBlob] = useState<Blob | null>(null)
   const [invalidMessage, setInvalidMessage] = useState<string | null>(null)
+  // Исход проверки задаётся руками: в моке ни камера, ни мок-сервис MyID сами
+  // отказать не могут, а показать оператору экраны ошибок нужно.
+  const [demo, setDemo] = useState<MyIdDemoScenario>("ok")
 
   // Камера живёт только пока активна фаза "camera" — запускается при входе,
   // останавливается при уходе (превью/чек/готово) и при анмаунте.
@@ -59,14 +75,19 @@ export function MyIdPhotoPage() {
   }, [previewUrl])
 
   // Мок-проверка MyID: фиксированная задержка после успешной валидации фото.
+  // Исход — из выбранного демо-сценария.
   useEffect(() => {
     if (phase !== "checking") return
     const t = setTimeout(() => {
+      if (demo === "reject") {
+        setPhase("rejected")
+        return
+      }
       setMyidDone()
       setPhase("done")
     }, MYID_CHECK_DELAY_MS)
     return () => clearTimeout(t)
-  }, [phase, setMyidDone])
+  }, [phase, demo, setMyidDone])
 
   async function handleCapture() {
     const blob = await capture()
@@ -96,7 +117,7 @@ export function MyIdPhotoPage() {
 
   function handleUsePhoto() {
     if (!pendingBlob) return
-    const error = validatePhoto(pendingBlob)
+    const error = demo === "bad-photo" ? PHOTO_INVALID_REASON : validatePhoto(pendingBlob)
     if (error) {
       setInvalidMessage(error)
       setPhase("invalid")
@@ -117,6 +138,9 @@ export function MyIdPhotoPage() {
     navigate("/scoring/banks")
   }
 
+  const showsPhoto =
+    phase === "preview" || phase === "invalid" || phase === "checking" || phase === "rejected"
+
   return (
     <div className="px-4 py-6">
       <div className="mx-auto max-w-[720px] rounded-lg bg-white p-6 shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:p-8">
@@ -133,6 +157,28 @@ export function MyIdPhotoPage() {
                 <Icon className="size-3.5 shrink-0" />
                 {label}
               </span>
+            ))}
+          </div>
+        )}
+
+        {/* Переключатель исхода проверки — только для демонстрации, в проде его нет */}
+        {phase !== "done" && phase !== "checking" && (
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+            <span className="text-xs text-gray-400">Демо-сценарий:</span>
+            {MYID_DEMO_SCENARIOS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setDemo(id)}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  demo === id
+                    ? "border-gray-900 bg-gray-900 text-white"
+                    : "border-gray-200 text-gray-500 hover:text-gray-700",
+                )}
+              >
+                {label}
+              </button>
             ))}
           </div>
         )}
@@ -182,7 +228,7 @@ export function MyIdPhotoPage() {
             )}
 
             {/* Превью снятого/демо-фото */}
-            {(phase === "preview" || phase === "invalid" || phase === "checking") && previewUrl && (
+            {showsPhoto && previewUrl && (
               <img
                 src={previewUrl}
                 alt="Захваченное фото"
@@ -197,6 +243,14 @@ export function MyIdPhotoPage() {
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 p-6 text-center">
                 <AlertTriangle className="size-8 shrink-0 text-red-400" />
                 <p className="text-sm text-red-200">{invalidMessage}</p>
+              </div>
+            )}
+
+            {phase === "rejected" && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 p-6 text-center">
+                <ShieldX className="size-8 shrink-0 text-red-400" />
+                <p className="text-sm font-medium text-red-100">Личность не подтверждена</p>
+                <p className="text-sm text-red-200">{MYID_REJECT_REASON}</p>
               </div>
             )}
 
@@ -247,15 +301,23 @@ export function MyIdPhotoPage() {
           </div>
         )}
 
-        {phase === "invalid" && (
-          <Button
-            type="button"
-            onClick={handleRetake}
-            className="mx-auto mt-6 block h-11 w-full max-w-[460px] font-semibold text-black hover:opacity-90"
-            style={{ background: "#FFD60A" }}
-          >
-            Переснять
-          </Button>
+        {(phase === "invalid" || phase === "rejected") && (
+          <>
+            {phase === "rejected" && (
+              <p className="mx-auto mt-4 max-w-[460px] text-center text-sm text-gray-500">
+                Проверьте освещение и положение лица, затем снимите фото заново. Если проверка не проходит
+                повторно, продолжите оформление через поддержку.
+              </p>
+            )}
+            <Button
+              type="button"
+              onClick={handleRetake}
+              className="mx-auto mt-6 block h-11 w-full max-w-[460px] font-semibold text-black hover:opacity-90"
+              style={{ background: "#FFD60A" }}
+            >
+              Переснять фото
+            </Button>
+          </>
         )}
 
         {phase === "done" && (

@@ -9,7 +9,11 @@ import type { Bank } from "@/lib/broker-mock-data"
 export interface BankCardProps {
   bank: Bank
   pending: boolean
-  /** Кредит уже оформлен (Alif, creditConfirmed) — бейдж «Оформлена» вместо «Одобрена». */
+  /**
+   * Кредит уже оформлен (Alif, creditConfirmed) — бейдж «Оформлена» вместо
+   * «Одобрена», а кнопка ведёт к договору: попап переоткрывается сразу на
+   * фазе успеха, где договор можно посмотреть и скачать.
+   */
   completed?: boolean
   onCheckout: (tenor: number) => void
 }
@@ -103,7 +107,7 @@ export function BankCard({ bank, pending, completed = false, onCheckout }: BankC
         className="h-11 font-semibold text-black hover:opacity-90 disabled:opacity-50"
         style={pending ? undefined : { background: "#FFD60A", color: "#000" }}
       >
-        {pending ? "Загрузка" : "Оформить"}
+        {pending ? "Загрузка" : completed ? "Открыть договор" : "Оформить"}
       </Button>
     </div>
   )

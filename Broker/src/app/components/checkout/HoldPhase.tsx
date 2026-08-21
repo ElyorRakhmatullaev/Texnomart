@@ -1,22 +1,19 @@
 import { useEffect } from "react"
-import { CheckCircle2, CreditCard, Loader2 } from "lucide-react"
-import { toast } from "sonner"
+import { CheckCircle2, CreditCard, Loader2, XCircle } from "lucide-react"
 import { Button } from "@texnomart/ui/button"
 import { useScoringFlow } from "@/app/scoring-flow"
-import { ALIF_PREPAYMENT, PREPAYMENT_HOLD_DELAY_MS } from "@/lib/broker-mock-data"
-
-// "9860 3569 7266 1296" → "9860 •••• 1296" (первые/последние 4 цифры).
-function maskCardNumber(mask: string): string {
-  const digits = mask.replace(/\D/g, "")
-  if (digits.length < 8) return mask
-  return `${digits.slice(0, 4)} •••• ${digits.slice(-4)}`
-}
+import { ALIF_PREPAYMENT, PREPAYMENT_HOLD_DELAY_MS, maskCardNumber } from "@/lib/broker-mock-data"
 
 // Фаза «Удержание предоплаты» — контент бывшей HoldPage без страничного
-// контейнера/степпера. Переход на details происходит сам (деривация в
-// AlifCheckoutDialog), эта фаза не навигирует.
+// контейнера/степпера. Показывает все четыре статуса холда: не удержан →
+// удерживается → подтверждён → отменён. Переход на следующую фазу происходит
+// сам (деривация в AlifCheckoutDialog), эта фаза не навигирует.
+//
+// Отменённый холд остаётся видимым состоянием (раньше "cancelled" схлопывался
+// в "none" и попап закрывался — от отмены не оставалось следа): пользователь
+// видит, что удержание снято, и может удержать заново, не выходя из ветки.
 export function HoldPhase() {
-  const { state, holdHold, holdConfirm, holdCancel, closeCheckout } = useScoringFlow()
+  const { state, holdHold, holdConfirm, cancelOffer } = useScoringFlow()
 
   // holdStatus персистится в sessionStorage — если попап переоткрыт заново,
   // пока холд ещё "held" (таймер подтверждения не успел сработать до
@@ -28,18 +25,8 @@ export function HoldPhase() {
     return () => clearTimeout(t)
   }, [state.holdStatus, holdConfirm])
 
-  // Повторный вход после отмены холда отображается как исходное состояние —
-  // отдельного экшена сброса "cancelled" → "none" в провайдере нет, это чисто
-  // визуальная трактовка на уровне фазы.
-  const status = state.holdStatus === "cancelled" ? "none" : state.holdStatus
-
+  const status = state.holdStatus
   const card = state.cards.find((c) => c.confirmed)
-
-  function handleCancel() {
-    holdCancel()
-    closeCheckout()
-    toast("Холд отменён")
-  }
 
   return (
     <div className="px-2 py-4">
@@ -85,15 +72,38 @@ export function HoldPhase() {
             <span className="font-medium">Предоплата подтверждена</span>
           </div>
         )}
+
+        {status === "cancelled" && (
+          <>
+            <div className="flex gap-2 rounded-lg bg-amber-50 px-4 py-3 text-amber-800">
+              <XCircle className="size-5 shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium">Холд отменён</p>
+                <p className="mt-0.5">
+                  Средства разблокированы. Чтобы продолжить оформление, удержите предоплату заново.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={holdHold}
+              className="mt-4 h-11 w-full font-semibold text-black hover:opacity-90"
+              style={{ background: "#FFD60A" }}
+            >
+              Удержать заново
+            </Button>
+          </>
+        )}
       </div>
 
-      {status !== "held" && !state.creditConfirmed && (
+      {/* Пока холд «держится», выход запрещён — попап в этот момент заблокирован целиком */}
+      {status !== "held" && status !== "confirmed" && (
         <button
           type="button"
-          onClick={handleCancel}
+          onClick={cancelOffer}
           className="mt-4 block w-full text-center text-sm text-gray-500 transition-colors hover:text-gray-700"
         >
-          Отменить холд
+          Вернуться к выбору предложения
         </button>
       )}
     </div>

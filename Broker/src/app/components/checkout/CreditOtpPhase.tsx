@@ -2,6 +2,7 @@ import { Info } from "lucide-react"
 import { OtpPanel } from "@/app/components/alif/OtpPanel"
 import { useScoringFlow } from "@/app/scoring-flow"
 import { BANKS, ORDER } from "@/lib/broker-mock-data"
+import { HoldStatusBar } from "./HoldStatusBar"
 
 const ALIF = BANKS.find((b) => b.id === "alif")!
 
@@ -17,6 +18,10 @@ export function CreditOtpPhase() {
   return (
     <div className="px-2 py-4">
       <h2 className="text-xl font-bold text-gray-900">Подтверждение кредита</h2>
+
+      <div className="mt-4">
+        <HoldStatusBar />
+      </div>
 
       <div className="mt-4">
         <OtpPanel
