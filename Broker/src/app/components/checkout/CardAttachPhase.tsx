@@ -89,7 +89,7 @@ export function CardAttachPhase({ phoneMatch }: CardAttachPhaseProps) {
       <button
         type="button"
         onClick={cancelOffer}
-        className="mt-4 block w-full text-center text-sm text-gray-500 transition-colors hover:text-gray-700"
+        className="mt-4 flex min-h-11 w-full items-center justify-center text-center text-sm text-gray-500 transition-colors hover:text-gray-700"
       >
         Вернуться к выбору предложения
       </button>
