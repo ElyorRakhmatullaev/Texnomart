@@ -358,9 +358,15 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
     )
   }, [])
 
+  // Отмена продажи возвращает заявку в "ACTIVE", а не "CANCELLED" — кредит
+  // остаётся оформленным, отменяется только пометка «продано Alif». Раньше
+  // здесь стоял CANCELLED: это не только показывало общий бейдж «Отменено»
+  // неотличимо от настоящей отмены заявки, но и было тупиком — canSell
+  // требует ACTIVE, поэтому кнопка «Продать Alif» пропадала навсегда и
+  // повторно продать оформленный кредит было невозможно.
   const unsellApplication = useCallback(() => {
     setState((prev) =>
-      prev.application ? { ...prev, application: { ...prev.application, status: "CANCELLED" } } : prev,
+      prev.application ? { ...prev, application: { ...prev.application, status: "ACTIVE" } } : prev,
     )
   }, [])
 
