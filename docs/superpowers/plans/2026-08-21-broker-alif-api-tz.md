@@ -1426,27 +1426,29 @@ export function writeDemoPhoneMatch(value: boolean) {
 }
 ```
 
-В теле `DemoScenarioBar` завести `const [phoneMatch, setPhoneMatch] = useState(readDemoPhoneMatch)` и добавить ветку:
+**Владелец значения — `AlifCheckoutDialog`, а не панель.** Панель и фаза `card` — соседи под диалогом, и если каждая заведёт свою копию, переключение пилюли перерисует панель, но не фазу: `CardAttachPhase` продолжит показывать прежний телефон и отправит устаревшее значение в `attachAlifCard`. Записи в `sessionStorage` в той же вкладке события `storage` не порождают, поэтому подписки тут нет. Значение живёт в диалоге:
+
+```tsx
+// в AlifCheckoutDialog
+const [demoPhoneMatch, setDemoPhoneMatch] = useState(readDemoPhoneMatch)
+
+function handleDemoPhoneMatchChange(value: boolean) {
+  writeDemoPhoneMatch(value)
+  setDemoPhoneMatch(value)
+}
+// <CardAttachPhase phoneMatch={demoPhoneMatch} />
+// <DemoScenarioBar phase={phase} phoneMatch={demoPhoneMatch} onPhoneMatchChange={handleDemoPhoneMatchChange} />
+```
+
+`DemoScenarioBarProps` получает `phoneMatch: boolean` и `onPhoneMatchChange: (value: boolean) => void`; `CardAttachPhaseProps` — `phoneMatch: boolean`. `sessionStorage` остаётся слоем персистентности, но живое значение у обоих одно. В `ScoringFlowState` его не переносить — это конфигурация демо-стенда, а не данные оператора.
+
+В теле `DemoScenarioBar` добавить ветку:
 
 ```tsx
 if (phase === "card") {
   options.push(
-    {
-      label: "Телефон совпадает",
-      active: phoneMatch,
-      onSelect: () => {
-        writeDemoPhoneMatch(true)
-        setPhoneMatch(true)
-      },
-    },
-    {
-      label: "Телефон не совпадает",
-      active: !phoneMatch,
-      onSelect: () => {
-        writeDemoPhoneMatch(false)
-        setPhoneMatch(false)
-      },
-    },
+    { label: "Телефон совпадает", active: phoneMatch, onSelect: () => onPhoneMatchChange(true) },
+    { label: "Телефон не совпадает", active: !phoneMatch, onSelect: () => onPhoneMatchChange(false) },
   )
 }
 ```
@@ -1472,16 +1474,19 @@ import {
   maskPanAlif,
   maskPhoneTail,
 } from "@/lib/broker-mock-data"
-import { readDemoPhoneMatch } from "./DemoScenarioBar"
 
 // Экран 2 ТЗ. Привязка карты к Alif (request-attach) — отдельно от общей
 // привязки на шаге «Верификация»: там карта заводится до выбора банка, здесь
 // она привязывается к конкретному банку и подтверждается своим кодом.
-export function CardAttachPhase() {
+export interface CardAttachPhaseProps {
+  /** Демо-сценарий совпадения телефона карты — владелец значения AlifCheckoutDialog. */
+  phoneMatch: boolean
+}
+
+export function CardAttachPhase({ phoneMatch }: CardAttachPhaseProps) {
   const { state, attachAlifCard, cancelOffer } = useScoringFlow()
 
   const card = state.cards.find((c) => c.confirmed) ?? { mask: SEED_CARD.mask }
-  const phoneMatch = readDemoPhoneMatch()
   const phone = phoneMatch ? maskPhoneTail(BROKER_CLIENT.phone) : ALIF_UNMATCHED_PHONE_MASK
 
   function handleSuccess() {
