@@ -67,9 +67,22 @@ export const DEMO_APPLICATION_OUTCOMES: { id: DemoApplicationOutcome; label: str
   { id: "amount_too_large", label: "Ошибка: сумма свыше 100 млн" },
 ]
 
+// Множество допустимых значений выводится из DEMO_APPLICATION_OUTCOMES, а не
+// дублируется вручную, чтобы список и валидация не могли разойтись.
+const VALID_APPLICATION_OUTCOMES = new Set<DemoApplicationOutcome>(
+  DEMO_APPLICATION_OUTCOMES.map((item) => item.id),
+)
+
 export function readDemoApplicationOutcome(): DemoApplicationOutcome {
   try {
-    return (sessionStorage.getItem(DEMO_APPLICATION_OUTCOME_KEY) as DemoApplicationOutcome) ?? "reviewing"
+    const stored = sessionStorage.getItem(DEMO_APPLICATION_OUTCOME_KEY)
+    // В хранилище может лежать значение из прошлой версии набора сценариев
+    // (например, удалённый "approved") — такое значение отбрасываем и
+    // возвращаемся к нормальному пути, а не роняем рендер.
+    if (stored && VALID_APPLICATION_OUTCOMES.has(stored as DemoApplicationOutcome)) {
+      return stored as DemoApplicationOutcome
+    }
+    return "reviewing"
   } catch {
     return "reviewing"
   }
