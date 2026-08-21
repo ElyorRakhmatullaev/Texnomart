@@ -79,7 +79,7 @@ if (prepayment > 0 && (holdStatus !== "confirmed"
 | Статусы | `ApplicationStatus` (7 значений), `APPLICATION_STATUS_META` (подпись + цвет по таблице §5 ТЗ) |
 | Правила | `canCancelApplication` (`NEW`/`APPROVED`), `canCancelHold` (`NEW`), `canSell` (`ACTIVE`), `canUnsell` (`SOLD`) |
 | Деньги | `monthlyPayment(principal, months)`, `commissionFor(principal, months)`, `tiyinToSum`, `sumToTiyin`. `principal` — сумма заказа за вычетом предоплаты; комиссия — процент по сроку из сид-таблицы `COMMISSION_RATES`, платёж = (principal + комиссия) / срок, округление до тысяч сум |
-| Планы | `AlifPlan { id, duration, amount, monthlyPayment, commission, promo? }`, `buildPlans(limit, durations)` |
+| Планы | `AlifPlan { id, duration, amount, monthlyPayment, commission, promo? }`, `buildPlans(limits, principal)` |
 | Ошибки | `ApplicationErrorKey` + `APPLICATION_ERRORS` — шесть текстов §«Бизнес-ошибки» ТЗ дословно |
 | Отмена | `CANCEL_REASONS` — девять пунктов §4 ТЗ дословно, с ключами |
 
@@ -131,10 +131,12 @@ if (prepayment > 0 && (holdStatus !== "confirmed"
 |---|---|
 | Бейдж статуса | `checkout/ApplicationStatusBadge.tsx` по `APPLICATION_STATUS_META`; место — шапка попапа рядом с прогрессом, плюс карточка Alif на `/scoring/banks` |
 | Отмена заявки | `checkout/CancelApplicationDialog.tsx` — `AlertDialog` с выбором одной из девяти причин, обязателен выбор; доступна в `NEW`/`APPROVED` из шапки попапа. Снимает холд, переводит заявку в `CANCELLED` |
-| Продажа Alif | Кнопки «Продать Alif» (`ACTIVE` → `SOLD`) и «Отменить продажу» (`SOLD` → `CANCELLED`) на фазе `success` |
+| Продажа Alif | Кнопки «Продать Alif» (`ACTIVE` → `SOLD`) и «Отменить продажу» (`SOLD` → `ACTIVE`\*) на фазе `success` |
 | Ошибки API | `checkout/PhaseError.tsx` — единая плашка «иконка + `message`» плюс проп подсветки поля. Оба формата ошибок ТЗ сводятся в моке к одному `{ key, message }` |
 | Сессия истекла | Флаг `sessionExpired` в состоянии; при нём попап показывает вместо контента фазы плашку «Сессия Alif истекла» + «Обновить сессию» (сбрасывает флаг, возвращает на ту же фазу). Триггер — демо-панель |
 | Загрузка | Фазы `card`, `application`, `otp` получают состояние ожидания ответа (кнопка в спиннере, контент заблокирован) — §2 ТЗ требует три состояния на каждом экране |
+
+\* **Обновлено по факту реализации (находка финального QA-ревью, 21.08, коммит `a179d0b`).** ТЗ называет обратный переход `SOLD` → `CANCELLED`; реализация ставит `SOLD` → `ACTIVE`. Причина: статусная таблица §5 самого ТЗ читает `CANCELLED` как «Отменено» — тот же бейдж, что у настоящей отмены заявки, — а `canSell(status)` требует `ACTIVE`, так что `CANCELLED` сделало бы повторную продажу того же оформленного кредита невозможной. Расхождение сознательное, но не закрытое — ждёт подтверждения от бэкенда Alif; см. `Broker/CLAUDE.md` § «Note — отмена продажи: расхождение с ТЗ».
 
 ## 6. Состояние потока
 
