@@ -1,7 +1,10 @@
 import { useEffect } from "react"
+import { format } from "date-fns"
+import { ru } from "date-fns/locale"
 import { CheckCircle2, CreditCard, Loader2, XCircle } from "lucide-react"
 import { Button } from "@texnomart/ui/button"
 import { useScoringFlow } from "@/app/scoring-flow"
+import { tiyinToSum } from "@/lib/alif-application"
 import { ALIF_PREPAYMENT, PREPAYMENT_HOLD_DELAY_MS, maskCardNumber } from "@/lib/broker-mock-data"
 
 // Фаза «Удержание предоплаты» — контент бывшей HoldPage без страничного
@@ -13,7 +16,7 @@ import { ALIF_PREPAYMENT, PREPAYMENT_HOLD_DELAY_MS, maskCardNumber } from "@/lib
 // в "none" и попап закрывался — от отмены не оставалось следа): пользователь
 // видит, что удержание снято, и может удержать заново, не выходя из ветки.
 export function HoldPhase() {
-  const { state, holdHold, holdConfirm, cancelOffer } = useScoringFlow()
+  const { state, holdHold, holdConfirm, cancelOffer, submitForReview } = useScoringFlow()
 
   // holdStatus персистится в sessionStorage — если попап переоткрыт заново,
   // пока холд ещё "held" (таймер подтверждения не успел сработать до
@@ -67,9 +70,43 @@ export function HoldPhase() {
         )}
 
         {status === "confirmed" && (
-          <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-emerald-700">
-            <CheckCircle2 className="size-5 shrink-0" />
-            <span className="font-medium">Предоплата подтверждена</span>
+          <div>
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-emerald-700">
+              <CheckCircle2 className="size-5 shrink-0" />
+              <span className="font-medium">Предоплата подтверждена</span>
+            </div>
+
+            {state.hold && (
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-gray-50 px-4 py-3 text-sm">
+                <span className="text-gray-500">Удержано</span>
+                <span className="text-right font-medium tabular-nums text-gray-900">
+                  {format(new Date(state.hold.at), "dd.MM.yyyy HH:mm", { locale: ru })}
+                </span>
+                <span className="text-gray-500">Действует до</span>
+                <span className="text-right font-medium tabular-nums text-gray-900">
+                  {format(new Date(state.hold.till), "dd.MM.yyyy HH:mm", { locale: ru })}
+                </span>
+                <span className="text-gray-500">Карта</span>
+                <span className="text-right font-medium tabular-nums text-gray-900">
+                  {maskCardNumber(state.hold.cardPan)}
+                </span>
+                <span className="text-gray-500">Сумма</span>
+                <span className="text-right font-medium tabular-nums text-gray-900">
+                  {/* В записи холда сумма лежит в тийинах, как её принимает API; на экран
+                      она выводится в сумах — §2 ТЗ. */}
+                  {tiyinToSum(state.hold.amountTiyin).toLocaleString("ru-RU")} сум
+                </span>
+              </div>
+            )}
+
+            <Button
+              type="button"
+              onClick={submitForReview}
+              className="mt-4 h-11 w-full font-semibold text-black hover:opacity-90"
+              style={{ background: "#FFD60A" }}
+            >
+              Продолжить
+            </Button>
           </div>
         )}
 

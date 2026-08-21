@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from "@texnomart/ui/alert-dialog"
 import { useScoringFlow } from "@/app/scoring-flow"
+import { canCancelHold } from "@/lib/alif-application"
 import { ALIF_PREPAYMENT, maskCardNumber } from "@/lib/broker-mock-data"
 
 // Плашка «предоплата удержана» для фаз после холда (доп. данные, OTP кредита).
@@ -32,6 +33,12 @@ export function HoldStatusBar() {
 
   const card = state.cards.find((c) => c.confirmed)
 
+  // Отменить холд можно, только пока заявка «Новая» — после submitForReview
+  // (кнопка «Продолжить» на фазе холда) статус уходит в REVIEWING, и выход
+  // даёт уже «Отменить заявку» в шапке попапа, а не эта плашка.
+  const status = state.application?.status
+  const cancellable = status !== undefined && canCancelHold(status)
+
   function handleCancel() {
     setConfirmOpen(false)
     holdCancel()
@@ -45,33 +52,41 @@ export function HoldStatusBar() {
         <span className="font-medium">Предоплата удержана</span>
         <span className="tabular-nums">{ALIF_PREPAYMENT.toLocaleString("ru-RU")} сум</span>
         {card && <span className="text-emerald-700">· {maskCardNumber(card.mask)}</span>}
-        {/* На узком экране строка переносится — ссылка занимает свою строку целиком
-            и выравнивается по левому краю, а не «висит» справа */}
-        <button
-          type="button"
-          onClick={() => setConfirmOpen(true)}
-          className="w-full text-left font-medium text-emerald-900 underline-offset-2 transition-colors hover:underline sm:ml-auto sm:w-auto sm:text-right"
-        >
-          Отменить холд
-        </button>
+        {cancellable ? (
+          // На узком экране строка переносится — ссылка занимает свою строку целиком
+          // и выравнивается по левому краю, а не «висит» справа
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            className="w-full text-left font-medium text-emerald-900 underline-offset-2 transition-colors hover:underline sm:ml-auto sm:w-auto sm:text-right"
+          >
+            Отменить холд
+          </button>
+        ) : (
+          <span className="text-xs text-gray-500">
+            Холд можно отменить, только пока заявка новая. Позже — через отмену заявки.
+          </span>
+        )}
       </div>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Отменить удержание предоплаты?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {ALIF_PREPAYMENT.toLocaleString("ru-RU")} сум будут разблокированы на карте клиента. Оформление
-              вернётся к шагу предоплаты — чтобы продолжить, удержание придётся подтвердить заново. Введённые
-              данные сохранятся.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Не отменять</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancel}>Отменить холд</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {cancellable && (
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Отменить удержание предоплаты?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {ALIF_PREPAYMENT.toLocaleString("ru-RU")} сум будут разблокированы на карте клиента. Оформление
+                вернётся к шагу предоплаты — чтобы продолжить, удержание придётся подтвердить заново. Введённые
+                данные сохранятся.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Не отменять</AlertDialogCancel>
+              <AlertDialogAction onClick={handleCancel}>Отменить холд</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </>
   )
 }
