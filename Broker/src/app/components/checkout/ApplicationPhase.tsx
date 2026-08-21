@@ -3,7 +3,8 @@ import { addDays, format } from "date-fns"
 import { Button } from "@texnomart/ui/button"
 import { DialogFooter } from "@texnomart/ui/dialog"
 import { Input } from "@texnomart/ui/input"
-import { buildPlans, makeApplicationId } from "@/lib/alif-application"
+import { cn } from "@texnomart/ui/utils"
+import { APPLICATION_ERRORS, buildPlans, makeApplicationId, type ApplicationErrorKey } from "@/lib/alif-application"
 import {
   ALIF_LIMITS,
   ALIF_PREPAYMENT,
@@ -13,6 +14,8 @@ import {
   ORDER_ITEM,
 } from "@/lib/broker-mock-data"
 import { useScoringFlow } from "@/app/scoring-flow"
+import { readDemoApplicationOutcome } from "./DemoScenarioBar"
+import { PhaseError } from "./PhaseError"
 
 const PLANS = buildPlans(ALIF_LIMITS, ORDER.amount - ALIF_PREPAYMENT)
 
@@ -37,13 +40,29 @@ export function ApplicationPhase() {
   const imeiValid = !ORDER_ITEM.needsMarking || imei.trim().length > 0
   const canSubmit = dateValid && imeiValid
 
+  const [submitting, setSubmitting] = useState(false)
+  const [errorKey, setErrorKey] = useState<ApplicationErrorKey | null>(null)
+
   function handleSubmit() {
-    if (!canSubmit) return
+    if (!canSubmit || submitting) return
+    const outcome = readDemoApplicationOutcome()
+
+    // Бизнес-ошибка приходит вместо заявки: экран остаётся на форме, ошибка
+    // показывается плашкой, а поле, к которому она относится, подсвечивается.
+    if (outcome !== "approved" && outcome !== "reviewing" && outcome !== "rejected") {
+      setErrorKey(outcome)
+      return
+    }
+
+    setErrorKey(null)
+    setSubmitting(true)
+
+    const status =
+      outcome === "rejected" ? "REJECTED" : ALIF_PREPAYMENT > 0 ? "NEW" : "REVIEWING"
+
     createApplication({
       id: makeApplicationId(),
-      // Предоплата есть — заявка создаётся «Новой» (store-new), и следующая
-      // фаза холд. Без предоплаты она сразу ушла бы на рассмотрение.
-      status: ALIF_PREPAYMENT > 0 ? "NEW" : "REVIEWING",
+      status,
       createdAt: new Date().toISOString(),
       firstPaymentDate,
       imei: imei.trim() || undefined,
@@ -52,6 +71,8 @@ export function ApplicationPhase() {
       duration: plan.duration,
     })
   }
+
+  const errorField = errorKey ? APPLICATION_ERRORS[errorKey].field : undefined
 
   return (
     <div className="px-2 py-4">
@@ -81,6 +102,7 @@ export function ApplicationPhase() {
             onChange={(e) => setImei(e.target.value)}
             inputMode="numeric"
             placeholder="Отсканируйте или введите вручную"
+            aria-invalid={errorField === "marking"}
           />
         </div>
       )}
@@ -100,7 +122,12 @@ export function ApplicationPhase() {
         </p>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-gray-50 px-4 py-3 text-sm">
+      <div
+        className={cn(
+          "mt-4 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg px-4 py-3 text-sm",
+          errorField === "amount" ? "bg-red-50 ring-1 ring-red-200" : "bg-gray-50",
+        )}
+      >
         <span className="text-gray-500">Сумма</span>
         <span className="text-right font-medium tabular-nums text-gray-900">
           {ORDER.amount.toLocaleString("ru-RU")} сум
@@ -116,6 +143,8 @@ export function ApplicationPhase() {
           {plan.monthlyPayment.toLocaleString("ru-RU")} сум
         </span>
       </div>
+
+      {errorKey && <PhaseError message={APPLICATION_ERRORS[errorKey].message} className="mt-4" />}
 
       <DialogFooter className="mt-6 w-full">
         <Button

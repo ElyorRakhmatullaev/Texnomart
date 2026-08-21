@@ -1,10 +1,10 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { RefreshCw } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@texnomart/ui/dialog"
 import { Progress } from "@texnomart/ui/progress"
 import { Button } from "@texnomart/ui/button"
 import { CHECKOUT_STEP_COUNT, PHASE_STEP, checkoutPhaseOf, useScoringFlow } from "@/app/scoring-flow"
-import { ALIF_PREPAYMENT } from "@/lib/broker-mock-data"
+import { ALIF_PREPAYMENT, APPLICATION_REVIEW_DELAY_MS } from "@/lib/broker-mock-data"
 import { ApplicationStatusBadge } from "./ApplicationStatusBadge"
 import { OfferPhase } from "./OfferPhase"
 import { CardAttachPhase } from "./CardAttachPhase"
@@ -17,8 +17,17 @@ import { DemoScenarioBar, readDemoPhoneMatch, writeDemoPhoneMatch } from "./Demo
 import { PhaseError } from "./PhaseError"
 
 export function AlifCheckoutDialog() {
-  const { state, closeCheckout, refreshSession, cancelOffer } = useScoringFlow()
+  const { state, closeCheckout, refreshSession, cancelOffer, setApplicationStatus } = useScoringFlow()
   const held = state.holdStatus === "held"
+
+  // Мок «заявка на рассмотрении» — через APPLICATION_REVIEW_DELAY_MS она
+  // возвращается одобренной. Эффект живёт в хосте, а не в фазе: рассмотрение
+  // продолжается и после того, как деривация увела оператора дальше.
+  useEffect(() => {
+    if (state.application?.status !== "REVIEWING") return
+    const t = setTimeout(() => setApplicationStatus("APPROVED"), APPLICATION_REVIEW_DELAY_MS)
+    return () => clearTimeout(t)
+  }, [state.application?.status, setApplicationStatus])
 
   // Единый владелец демо-переключателя «совпадение телефона»: и бар, и
   // CardAttachPhase — соседи в этом же компоненте, sessionStorage сам по себе

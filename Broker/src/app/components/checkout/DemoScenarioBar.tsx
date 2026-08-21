@@ -1,5 +1,8 @@
+import { useState } from "react"
 import { useScoringFlow, type CheckoutPhase } from "@/app/scoring-flow"
 import { cn } from "@texnomart/ui/utils"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@texnomart/ui/select"
+import type { ApplicationErrorKey } from "@/lib/alif-application"
 
 // ДЕМО-АФФОРДАНС. Реальных отказов, несовпадений телефона и бизнес-ошибок в
 // моке взяться неоткуда: сеть не спрашивается, все операции успешны. Без
@@ -39,8 +42,45 @@ export function writeDemoPhoneMatch(value: boolean) {
   }
 }
 
+// Исход заявки на фазе «application»: одно из трёх результирующих состояний
+// или одна из шести именованных бизнес-ошибок ТЗ. Читается в обработчике
+// клика (ApplicationPhase.handleSubmit), а не во время рендера — см. брифы
+// задачи 11.
+export type DemoApplicationOutcome = "approved" | "reviewing" | "rejected" | ApplicationErrorKey
+
+export const DEMO_APPLICATION_OUTCOME_KEY = "broker:demo-application-outcome"
+
+export const DEMO_APPLICATION_OUTCOMES: { id: DemoApplicationOutcome; label: string }[] = [
+  { id: "approved", label: "Одобрено сразу" },
+  { id: "reviewing", label: "На рассмотрении" },
+  { id: "rejected", label: "Отказано" },
+  { id: "duplicate_marking", label: "Ошибка: маркировка занята" },
+  { id: "has_reviewing", label: "Ошибка: заявка на рассмотрении" },
+  { id: "has_new", label: "Ошибка: новая заявка" },
+  { id: "amount_too_small", label: "Ошибка: сумма меньше 1000" },
+  { id: "scoring_reject", label: "Ошибка: заявка не принята" },
+  { id: "amount_too_large", label: "Ошибка: сумма свыше 100 млн" },
+]
+
+export function readDemoApplicationOutcome(): DemoApplicationOutcome {
+  try {
+    return (sessionStorage.getItem(DEMO_APPLICATION_OUTCOME_KEY) as DemoApplicationOutcome) ?? "approved"
+  } catch {
+    return "approved"
+  }
+}
+
+export function writeDemoApplicationOutcome(value: DemoApplicationOutcome) {
+  try {
+    sessionStorage.setItem(DEMO_APPLICATION_OUTCOME_KEY, value)
+  } catch {
+    // sessionStorage недоступен — остаёмся на значении по умолчанию
+  }
+}
+
 export function DemoScenarioBar({ phase, phoneMatch, onPhoneMatchChange }: DemoScenarioBarProps) {
   const { state, setAlifLimitStatus, expireSession } = useScoringFlow()
+  const [outcome, setOutcome] = useState(readDemoApplicationOutcome)
 
   // Переключатели, относящиеся к текущей фазе. Фазы, у которых своих
   // сценариев нет, показывают только общий «Сессия истекла».
@@ -92,6 +132,27 @@ export function DemoScenarioBar({ phase, phoneMatch, onPhoneMatchChange }: DemoS
           {option.label}
         </button>
       ))}
+      {phase === "application" && (
+        <Select
+          value={outcome}
+          onValueChange={(value) => {
+            const next = value as DemoApplicationOutcome
+            writeDemoApplicationOutcome(next)
+            setOutcome(next)
+          }}
+        >
+          <SelectTrigger size="sm" className="h-11 w-auto min-w-[200px] rounded-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {DEMO_APPLICATION_OUTCOMES.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
       <button
         type="button"
         onClick={expireSession}
