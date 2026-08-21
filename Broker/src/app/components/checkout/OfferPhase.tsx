@@ -84,6 +84,7 @@ export function OfferPhase() {
             <button
               key={plan.id}
               type="button"
+              aria-pressed={selected}
               onClick={() => setPlanId(plan.id)}
               className={cn(
                 "flex w-full flex-col gap-2 rounded-lg border p-4 text-left transition-colors",

@@ -124,6 +124,11 @@ export function ApplicationPhase() {
             inputMode="numeric"
             placeholder="Отсканируйте или введите вручную"
             aria-invalid={errorField === "marking"}
+            // На кассе IMEI приходит сканером штрихкода — очередь нажатий,
+            // а не одно решённое действие. Сканирование, попавшее в окно
+            // APPLICATION_SUBMIT_DELAY_MS, молча терялось бы: поле нигде
+            // больше не показывается, так что потеря была бы незаметна.
+            disabled={submitting}
           />
         </div>
       )}
@@ -141,6 +146,7 @@ export function ApplicationPhase() {
             // Оператор уже правит поле — не держим ошибку и подсветку поверх правки.
             setErrorKey(null)
           }}
+          disabled={submitting}
         />
         <p className="mt-1 text-xs text-gray-400">
           Не позднее {FIRST_PAYMENT_MAX_DAYS} дней от сегодняшнего дня
