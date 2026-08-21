@@ -1,5 +1,7 @@
+import { RefreshCw } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@texnomart/ui/dialog"
 import { Progress } from "@texnomart/ui/progress"
+import { Button } from "@texnomart/ui/button"
 import { CHECKOUT_STEP_COUNT, PHASE_STEP, checkoutPhaseOf, useScoringFlow } from "@/app/scoring-flow"
 import { ALIF_PREPAYMENT } from "@/lib/broker-mock-data"
 import { ApplicationStatusBadge } from "./ApplicationStatusBadge"
@@ -10,9 +12,11 @@ import { ApplicationPhase } from "./ApplicationPhase"
 import { HoldPhase } from "./HoldPhase"
 import { CreditOtpPhase } from "./CreditOtpPhase"
 import { SuccessPhase } from "./SuccessPhase"
+import { DemoScenarioBar } from "./DemoScenarioBar"
+import { PhaseError } from "./PhaseError"
 
 export function AlifCheckoutDialog() {
-  const { state, closeCheckout } = useScoringFlow()
+  const { state, closeCheckout, refreshSession, cancelOffer } = useScoringFlow()
   const held = state.holdStatus === "held"
 
   // Фаза применяется сразу, без локального зеркала и без задержки. Раньше уход
@@ -57,13 +61,72 @@ export function AlifCheckoutDialog() {
           <Progress value={(step / CHECKOUT_STEP_COUNT) * 100} className="mt-2 h-1" />
         </div>
 
-        {phase === "offer" && <OfferPhase />}
-        {phase === "card" && <CardAttachPhase />}
-        {phase === "details" && <DetailsPhase />}
-        {phase === "application" && <ApplicationPhase />}
-        {phase === "hold" && <HoldPhase />}
-        {phase === "otp" && <CreditOtpPhase />}
-        {phase === "success" && <SuccessPhase />}
+        {/* Терминальные состояния перехватываются ДО переключателя фаз. Деривация
+            фазы не смотрит на статус заявки: отказанная заявка отправила бы оператора
+            на фазу холда, поэтому ветка внутри фазы никогда бы не отрисовалась.
+            Оговорка про creditConfirmed нужна из-за отмены продажи: она тоже ставит
+            CANCELLED, но оформленный кредит при этом никуда не девается и экран
+            успеха должен остаться. */}
+        {state.sessionExpired ? (
+          <div className="px-2 py-4">
+            <PhaseError message="Сессия Alif истекла. Обновите сессию, чтобы продолжить оформление." />
+            <p className="mt-3 text-sm text-gray-500">
+              Введённые данные сохранены — после обновления вы вернётесь на этот же шаг.
+            </p>
+            <Button
+              type="button"
+              onClick={refreshSession}
+              className="mt-6 h-11 w-full font-semibold text-black hover:opacity-90"
+              style={{ background: "#FFD60A" }}
+            >
+              <RefreshCw className="size-4" />
+              Обновить сессию
+            </Button>
+          </div>
+        ) : !state.creditConfirmed && state.application?.status === "REJECTED" ? (
+          <div className="px-2 py-4">
+            <h2 className="text-xl font-bold text-gray-900">Заявка отклонена</h2>
+            <PhaseError
+              className="mt-4"
+              message="Alif отказал в рассрочке по этой заявке. Предложите клиенту другой банк или другое условие."
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={cancelOffer}
+              className="mt-6 h-11 w-full font-semibold"
+            >
+              Назад к банкам
+            </Button>
+          </div>
+        ) : !state.creditConfirmed && state.application?.status === "CANCELLED" ? (
+          <div className="px-2 py-4">
+            <h2 className="text-xl font-bold text-gray-900">Заявка отменена</h2>
+            <p className="mt-2 text-sm text-gray-500">
+              Предоплата разблокирована. Чтобы оформить рассрочку заново, вернитесь к выбору банка.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={cancelOffer}
+              className="mt-6 h-11 w-full font-semibold"
+            >
+              Назад к банкам
+            </Button>
+          </div>
+        ) : (
+          <>
+            {phase === "offer" && <OfferPhase />}
+            {phase === "card" && <CardAttachPhase />}
+            {phase === "details" && <DetailsPhase />}
+            {phase === "application" && <ApplicationPhase />}
+            {phase === "hold" && <HoldPhase />}
+            {phase === "otp" && <CreditOtpPhase />}
+            {phase === "success" && <SuccessPhase />}
+          </>
+        )}
+
+        <DemoScenarioBar phase={phase} />
       </DialogContent>
     </Dialog>
   )
