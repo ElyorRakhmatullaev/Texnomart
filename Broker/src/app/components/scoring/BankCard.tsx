@@ -1,10 +1,10 @@
-import { useState } from "react"
 import { Loader2 } from "lucide-react"
-import { cn } from "@texnomart/ui/utils"
 import { Button } from "@texnomart/ui/button"
 import { Badge } from "@texnomart/ui/badge"
 import { Skeleton } from "@texnomart/ui/skeleton"
 import type { Bank } from "@/lib/broker-mock-data"
+import { ApplicationStatusBadge } from "@/app/components/checkout/ApplicationStatusBadge"
+import type { ApplicationStatus } from "@/lib/alif-application"
 
 export interface BankCardProps {
   bank: Bank
@@ -15,12 +15,12 @@ export interface BankCardProps {
    * фазе успеха, где договор можно посмотреть и скачать.
    */
   completed?: boolean
+  /** Статус заявки — показывается рядом со статусом предложения, когда заявка создана. */
+  status?: ApplicationStatus
   onCheckout: () => void
 }
 
-export function BankCard({ bank, pending, completed = false, onCheckout }: BankCardProps) {
-  const [tenor, setTenor] = useState(bank.defaultTenor)
-
+export function BankCard({ bank, pending, completed = false, status, onCheckout }: BankCardProps) {
   return (
     <div className="flex flex-col gap-4 rounded-lg bg-white p-4 shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:p-6">
       {/* Хедер: логотип + название + статус-бейдж */}
@@ -45,25 +45,7 @@ export function BankCard({ bank, pending, completed = false, onCheckout }: BankC
             ✓ Одобрена
           </Badge>
         )}
-      </div>
-
-      {/* Чипы сроков */}
-      <div className="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1">
-        {bank.tenors.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTenor(t)}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              t === tenor
-                ? "bg-white text-gray-900 shadow-[0px_2px_4px_rgba(204,204,204,0.25)]"
-                : "text-gray-500 hover:text-gray-700",
-            )}
-          >
-            {t} мес.
-          </button>
-        ))}
+        {status && <ApplicationStatusBadge status={status} />}
       </div>
 
       {pending ? (
@@ -86,10 +68,6 @@ export function BankCard({ bank, pending, completed = false, onCheckout }: BankC
             <span className="font-semibold tabular-nums text-gray-900">
               {bank.limit.toLocaleString("ru-RU")} сум
             </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-500">Срок</span>
-            <span className="font-semibold tabular-nums text-red-600">0-0-{tenor}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-500">Предоплата</span>
