@@ -49,7 +49,7 @@ export function ApplicationPhase() {
 
     // Бизнес-ошибка приходит вместо заявки: экран остаётся на форме, ошибка
     // показывается плашкой, а поле, к которому она относится, подсвечивается.
-    if (outcome !== "approved" && outcome !== "reviewing" && outcome !== "rejected") {
+    if (outcome !== "reviewing" && outcome !== "rejected") {
       setErrorKey(outcome)
       return
     }
@@ -99,7 +99,11 @@ export function ApplicationPhase() {
           <label className="mb-1 block text-sm text-gray-700">IMEI / маркировка</label>
           <Input
             value={imei}
-            onChange={(e) => setImei(e.target.value)}
+            onChange={(e) => {
+              setImei(e.target.value)
+              // Оператор уже правит поле — не держим ошибку и подсветку поверх правки.
+              setErrorKey(null)
+            }}
             inputMode="numeric"
             placeholder="Отсканируйте или введите вручную"
             aria-invalid={errorField === "marking"}
@@ -115,7 +119,11 @@ export function ApplicationPhase() {
           value={firstPaymentDate}
           min={minDate}
           max={maxDate}
-          onChange={(e) => setFirstPaymentDate(e.target.value)}
+          onChange={(e) => {
+            setFirstPaymentDate(e.target.value)
+            // Оператор уже правит поле — не держим ошибку и подсветку поверх правки.
+            setErrorKey(null)
+          }}
         />
         <p className="mt-1 text-xs text-gray-400">
           Не позднее {FIRST_PAYMENT_MAX_DAYS} дней от сегодняшнего дня

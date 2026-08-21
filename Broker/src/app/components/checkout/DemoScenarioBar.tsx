@@ -42,17 +42,22 @@ export function writeDemoPhoneMatch(value: boolean) {
   }
 }
 
-// Исход заявки на фазе «application»: одно из трёх результирующих состояний
-// или одна из шести именованных бизнес-ошибок ТЗ. Читается в обработчике
-// клика (ApplicationPhase.handleSubmit), а не во время рендера — см. брифы
-// задачи 11.
-export type DemoApplicationOutcome = "approved" | "reviewing" | "rejected" | ApplicationErrorKey
+// Исход заявки на фазе «application»: нормальный путь или одна из шести
+// именованных бизнес-ошибок ТЗ. Читается в обработчике клика
+// (ApplicationPhase.handleSubmit), а не во время рендера — см. брифы задачи 11.
+export type DemoApplicationOutcome = "reviewing" | "rejected" | ApplicationErrorKey
 
 export const DEMO_APPLICATION_OUTCOME_KEY = "broker:demo-application-outcome"
 
+// Пункта «Одобрено сразу» намеренно нет: в единственном месте, где статус
+// становится APPROVED (таймер рассмотрения в AlifCheckoutDialog), это всегда
+// переход из REVIEWING. Пока в сиде Alif есть предоплата, заявка обязана
+// создаваться «Новой» (NEW) — так `checkoutPhaseOf`, `canCancelHold` и
+// `submitForReview` держат оператора на фазе холда с кнопкой «Отменить холд».
+// Мгновенный APPROVED при создании обошёл бы эти инварианты, поэтому демо
+// не предлагает несуществующий путь.
 export const DEMO_APPLICATION_OUTCOMES: { id: DemoApplicationOutcome; label: string }[] = [
-  { id: "approved", label: "Одобрено сразу" },
-  { id: "reviewing", label: "На рассмотрении" },
+  { id: "reviewing", label: "Заявка принята" },
   { id: "rejected", label: "Отказано" },
   { id: "duplicate_marking", label: "Ошибка: маркировка занята" },
   { id: "has_reviewing", label: "Ошибка: заявка на рассмотрении" },
@@ -64,9 +69,9 @@ export const DEMO_APPLICATION_OUTCOMES: { id: DemoApplicationOutcome; label: str
 
 export function readDemoApplicationOutcome(): DemoApplicationOutcome {
   try {
-    return (sessionStorage.getItem(DEMO_APPLICATION_OUTCOME_KEY) as DemoApplicationOutcome) ?? "approved"
+    return (sessionStorage.getItem(DEMO_APPLICATION_OUTCOME_KEY) as DemoApplicationOutcome) ?? "reviewing"
   } catch {
-    return "approved"
+    return "reviewing"
   }
 }
 
@@ -141,7 +146,7 @@ export function DemoScenarioBar({ phase, phoneMatch, onPhoneMatchChange }: DemoS
             setOutcome(next)
           }}
         >
-          <SelectTrigger size="sm" className="h-11 w-auto min-w-[200px] rounded-full text-xs">
+          <SelectTrigger size="sm" className="min-h-11 w-auto min-w-[200px] rounded-full text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
