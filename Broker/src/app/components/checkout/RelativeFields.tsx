@@ -54,7 +54,18 @@ export function formatUzPhone(digits: string): string {
   return out
 }
 
+// Идентификатор строки живёт вместе с ней, а не выводится из позиции в
+// массиве: удаление строки посередине не должно переносить DOM-узел под
+// данные соседа и ронять фокус на планшете.
+let nextRelativeId = 0
+
+export function makeRelativeId(): string {
+  nextRelativeId += 1
+  return `rel-${nextRelativeId}`
+}
+
 export interface RelativeDraft {
+  id: string
   type: string
   phoneDigits: string
   name: string
@@ -121,6 +132,8 @@ export function RelativeFields({ index, value, onChange, onRemove, removable, er
             onSelect={clampPhoneCursor}
             onClick={clampPhoneCursor}
             onKeyUp={clampPhoneCursor}
+            placeholder="+998 __ ___ __ __"
+            autoComplete="off"
           />
         </div>
       </div>

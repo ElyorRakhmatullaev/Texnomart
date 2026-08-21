@@ -12,6 +12,7 @@ import {
   digitsFromPhone,
   extractDigits,
   formatUzPhone,
+  makeRelativeId,
   type RelativeDraft,
 } from "./RelativeFields"
 
@@ -24,9 +25,14 @@ export function DetailsPhase() {
 
   const [relatives, setRelatives] = useState<RelativeDraft[]>(() => {
     if (state.relations && state.relations.length > 0) {
-      return state.relations.map((r) => ({ type: r.type, phoneDigits: digitsFromPhone(r.phone), name: r.name }))
+      return state.relations.map((r) => ({
+        id: makeRelativeId(),
+        type: r.type,
+        phoneDigits: digitsFromPhone(r.phone),
+        name: r.name,
+      }))
     }
-    return [{ type: "", phoneDigits: "", name: "" }]
+    return [{ id: makeRelativeId(), type: "", phoneDigits: "", name: "" }]
   })
 
   const [activityAreaId, setActivityAreaId] = useState(state.survey?.activityAreaId ?? "")
@@ -81,7 +87,7 @@ export function DetailsPhase() {
       <div className="mt-6 space-y-3">
         {relatives.map((relative, i) => (
           <RelativeFields
-            key={i}
+            key={relative.id}
             index={i}
             value={relative}
             onChange={(next) => setRelatives((prev) => prev.map((r, j) => (j === i ? next : r)))}
@@ -94,7 +100,7 @@ export function DetailsPhase() {
 
       <button
         type="button"
-        onClick={() => setRelatives((prev) => [...prev, { type: "", phoneDigits: "", name: "" }])}
+        onClick={() => setRelatives((prev) => [...prev, { id: makeRelativeId(), type: "", phoneDigits: "", name: "" }])}
         className="mt-3 flex h-11 items-center gap-2 text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
       >
         <Plus className="size-4" />
