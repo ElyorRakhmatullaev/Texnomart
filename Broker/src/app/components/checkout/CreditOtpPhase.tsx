@@ -30,7 +30,7 @@ export function CreditOtpPhase() {
         <OtpPanel
           variant="credit"
           subtitle="Мы отправили код для подтверждения оформления кредита"
-          ctaLabel="Завершить"
+          ctaLabel="Оформить кредит"
           onSuccess={confirmCredit}
         >
           <div className="grid grid-cols-2 gap-2 rounded-lg border bg-gray-50 px-4 py-3 text-sm">
@@ -44,6 +44,11 @@ export function CreditOtpPhase() {
 
             <span className="text-gray-500">Срок</span>
             <span className="text-right font-medium tabular-nums text-gray-900">{tenor} мес.</span>
+
+            <span className="text-gray-500">Ежемесячный платёж</span>
+            <span className="text-right font-medium tabular-nums text-gray-900">
+              {plan.monthlyPayment.toLocaleString("ru-RU")} сум
+            </span>
 
             <span className="text-gray-500">Предоплата</span>
             <span className="text-right font-medium tabular-nums text-gray-900">

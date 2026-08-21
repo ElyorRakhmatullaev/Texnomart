@@ -25,7 +25,12 @@ export function SuccessPhase() {
   const tenor = plan.duration
   const contractNo = state.contractNo ?? ""
   const oneCOrderNo = state.oneCOrderNo ?? ""
-  const issuedDate = format(new Date(), "dd.MM.yyyy", { locale: ru })
+  // Дата подписания фиксируется при оформлении (confirmCredit) — считать её
+  // здесь как new Date() значило бы показывать сегодняшнее число при каждом
+  // повторном открытии договора.
+  const issuedDate = state.contractDate
+    ? format(new Date(state.contractDate), "dd.MM.yyyy", { locale: ru })
+    : ""
 
   function handleFinish() {
     resetFlow()
@@ -46,7 +51,12 @@ export function SuccessPhase() {
           <span className="font-semibold text-gray-900">{ALIF.title}</span>
           <span className="text-sm text-gray-500">
             {tenor} мес. · Лимит{" "}
-            <span className="font-medium tabular-nums text-gray-700">{ALIF.limit.toLocaleString("ru-RU")} сум</span>
+            <span className="font-medium tabular-nums text-gray-700">{ALIF.limit.toLocaleString("ru-RU")} сум</span>{" "}
+            · Платёж{" "}
+            <span className="font-medium tabular-nums text-gray-700">
+              {plan.monthlyPayment.toLocaleString("ru-RU")} сум
+            </span>
+            /мес.
           </span>
         </div>
       </div>
