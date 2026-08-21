@@ -913,15 +913,21 @@ saveDetails(relations, survey)
 
 Инициализацию локального состояния из `state.additionalData?...` заменить на чтение из `state.relations?.[0]` / `state.relations?.[1]`, а `debitDate` оставить как локальное поле — оно уходит с этого экрана в задаче 9.
 
+- [ ] **Step 8b: Убрать мёртвый импорт из `scoring-flow.tsx`**
+
+Задача 3 оставила в `Broker/src/app/scoring-flow.tsx` импорт `makeApplicationId`, который в этом файле не используется ни разу: заявку собирает вызывающая сторона и передаёт в `createApplication` уже готовой. Удалить `makeApplicationId` из импорта — `sumToTiyin` и `ApplicationStatus` в этой же строке остаются. Настоящий вызов `makeApplicationId` появится в задаче 10, в `ApplicationPhase`.
+
 - [ ] **Step 9: Проверить грепом, а потом сборкой**
 
 Сборка в этом проекте не ловит ссылки на удалённые символы — она транспилирует без проверки типов. Поэтому сначала греп, и только он является гейтом:
 
 ```bash
-grep -rn "selectAlif\|saveAdditionalData\|AdditionalData\|alifSelected\|state\.tenor\|ConfirmPhase" Broker/src
+grep -rn "selectAlif\|saveAdditionalData\|AdditionalData\|alifSelected\|state\.tenor\|ConfirmPhase\|\"confirm\"\|HOLD_TO_DETAILS_DELAY_MS\|HOLD_EXIT_DELAY_MS" Broker/src
 ```
 
 Ожидается: **пустой вывод**. Любое совпадение — незакрытая ссылка на то, что удалила задача 3; починить её в этом же шаге.
+
+Отдельно проверить глазами, что в `AlifCheckoutDialog.tsx` есть ветка рендера для **каждой** из семи фаз (`offer`, `card`, `details`, `application`, `hold`, `otp`, `success`). До этой задачи файл ссылался на удалённую фазу `"confirm"` и не имел веток для `card` и `application` — оператор увидел бы пустой попап, и ни сборка, ни греп по удалённым символам этого не поймали бы.
 
 Затем запустить: `corepack pnpm build:broker`
 Ожидается: сборка проходит. Зелёная сборка сама по себе ничего не доказывает — доказательство даёт греп выше.
