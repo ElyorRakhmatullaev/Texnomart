@@ -1,3 +1,5 @@
+import type { AlifLimitSeed } from "./alif-application"
+
 export interface BrokerClient {
   name: string
   phone: string
@@ -30,7 +32,7 @@ export const BANKS: Bank[] = [
     title: "Alif Nasiya",
     brandColor: "#16A34A",
     initial: "A",
-    tenors: [2, 3, 6, 9, 12, 18, 24, 36],
+    tenors: [3, 6, 12, 18, 24],
     defaultTenor: 6,
     limit: 8_546_000,
     prepayment: 1_000_000,
@@ -62,7 +64,18 @@ export const OTP_TTL_SECONDS = 120
 export const OTP_MAX_ATTEMPTS = 3
 export const ONE_C_ORDER_NO = "235662235" // как в Figma
 
-export const RELATION_KINDS = ["Брат", "Сестра", "Отец", "Мать", "Супруг(а)", "Коллега", "Другое"]
+export const RELATION_KINDS = [
+  "Супруг(а)",
+  "Отец",
+  "Мать",
+  "Брат",
+  "Сестра",
+  "Сын",
+  "Дочь",
+  "Коллега",
+  "Друг",
+  "Другое",
+]
 
 export interface SeedCard {
   mask: string
@@ -89,6 +102,88 @@ export const MYID_DEMO_SCENARIOS: { id: MyIdDemoScenario; label: string }[] = [
 export const PHOTO_INVALID_REASON = "Лицо распознано не полностью. Снимите анфас, лицо целиком в овале"
 // Причина отказа самого сервиса MyID — приходит уже после отправки фото.
 export const MYID_REJECT_REASON = "Фото не совпало с эталоном в базе MyID"
+
+// Лимиты по срокам — в API это массив limits ({amount, duration}) из ответа
+// скоринга. Промо-метка на одном плане, чтобы состояние «промо» было видно.
+export const ALIF_LIMITS: AlifLimitSeed[] = [
+  { duration: 3, amount: 8_546_000 },
+  { duration: 6, amount: 8_546_000, promo: "Без переплаты первые 2 мес." },
+  { duration: 12, amount: 7_200_000 },
+  { duration: 18, amount: 6_400_000 },
+  { duration: 24, amount: 5_800_000 },
+]
+
+// Причины отказа скоринга (reject_reasons) — понятным текстом.
+export const ALIF_REJECT_REASONS = [
+  "Есть просроченная задолженность в другом банке",
+  "Недостаточная кредитная история для запрошенной суммы",
+]
+
+export interface OrderItem {
+  goodName: string
+  goodTypeName: string
+  price: number
+  ikpu: string
+  sku: string
+  /** Требуется ли IMEI/маркировка для этого товара. */
+  needsMarking: boolean
+}
+
+// Товар «подтягивается из каталога/1С» — в моке это один зашитый товар заказа.
+export const ORDER_ITEM: OrderItem = {
+  goodName: "Смартфон Samsung Galaxy S24 Ultra 512GB Titanium Gray",
+  goodTypeName: "Смартфоны",
+  price: 10_000_000,
+  ikpu: "08517120001000000",
+  sku: "TM-1042993",
+  needsMarking: true,
+}
+
+export interface ActivityArea {
+  id: string
+  label: string
+}
+
+export const ACTIVITY_AREAS: ActivityArea[] = [
+  { id: "trade", label: "Торговля" },
+  { id: "services", label: "Услуги" },
+  { id: "manufacturing", label: "Производство" },
+  { id: "education", label: "Образование" },
+  { id: "medicine", label: "Медицина" },
+  { id: "it", label: "IT и связь" },
+  { id: "construction", label: "Строительство" },
+  { id: "transport", label: "Транспорт" },
+  { id: "government", label: "Госслужба" },
+  { id: "other", label: "Другое" },
+]
+
+// Мок «заявка ушла на рассмотрение и вернулась одобренной» — тот же приём,
+// что MYID_CHECK_DELAY_MS на шаге проверки личности.
+export const APPLICATION_REVIEW_DELAY_MS = 2500
+// Мок ожидания ответа request-attach при отправке кода.
+export const CARD_ATTACH_DELAY_MS = 1200
+export const HOLD_TILL_DAYS = 7
+export const FIRST_PAYMENT_MAX_DAYS = 45
+export const FIRST_PAYMENT_DEFAULT_DAYS = 30
+
+// Маска телефона для демо-случая phone_match: false — телефон карты не
+// совпадает с телефоном клиента, поэтому берётся не из BROKER_CLIENT.
+export const ALIF_UNMATCHED_PHONE_MASK = "********2440"
+
+// "9860 3569 7266 1296" → "986035******1296" — формат Alif (6 первых цифр,
+// шесть звёзд, 4 последних). Отличается от maskCardNumber, который остаётся
+// форматом карты списания на экране холда.
+export function maskPanAlif(mask: string): string {
+  const digits = mask.replace(/\D/g, "")
+  if (digits.length < 10) return mask
+  return `${digits.slice(0, 6)}******${digits.slice(-4)}`
+}
+
+// "+998 94 983 98 48" → "********9848"
+export function maskPhoneTail(phone: string): string {
+  const digits = phone.replace(/\D/g, "")
+  return `********${digits.slice(-4)}`
+}
 
 // "9860 3569 7266 1296" → "9860 •••• 1296" (первые/последние 4 цифры).
 // Общий формат для всех мест, где показывается карта списания.
