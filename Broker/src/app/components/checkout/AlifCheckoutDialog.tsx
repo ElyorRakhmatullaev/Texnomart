@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { RefreshCw } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@texnomart/ui/dialog"
 import { Progress } from "@texnomart/ui/progress"
@@ -12,12 +13,23 @@ import { ApplicationPhase } from "./ApplicationPhase"
 import { HoldPhase } from "./HoldPhase"
 import { CreditOtpPhase } from "./CreditOtpPhase"
 import { SuccessPhase } from "./SuccessPhase"
-import { DemoScenarioBar } from "./DemoScenarioBar"
+import { DemoScenarioBar, readDemoPhoneMatch, writeDemoPhoneMatch } from "./DemoScenarioBar"
 import { PhaseError } from "./PhaseError"
 
 export function AlifCheckoutDialog() {
   const { state, closeCheckout, refreshSession, cancelOffer } = useScoringFlow()
   const held = state.holdStatus === "held"
+
+  // Единый владелец демо-переключателя «совпадение телефона»: и бар, и
+  // CardAttachPhase — соседи в этом же компоненте, sessionStorage сам по себе
+  // не даёт живой синхронизации между ними (same-tab записи не шлют событие
+  // storage), поэтому значение живёт здесь и прокидывается пропом в обе стороны.
+  const [demoPhoneMatch, setDemoPhoneMatch] = useState(readDemoPhoneMatch)
+
+  function handleDemoPhoneMatchChange(value: boolean) {
+    writeDemoPhoneMatch(value)
+    setDemoPhoneMatch(value)
+  }
 
   // Фаза применяется сразу, без локального зеркала и без задержки. Раньше уход
   // с холда лагал на 600 мс, чтобы оператор успел увидеть бейдж «Предоплата
@@ -117,7 +129,7 @@ export function AlifCheckoutDialog() {
         ) : (
           <>
             {phase === "offer" && <OfferPhase />}
-            {phase === "card" && <CardAttachPhase />}
+            {phase === "card" && <CardAttachPhase phoneMatch={demoPhoneMatch} />}
             {phase === "details" && <DetailsPhase />}
             {phase === "application" && <ApplicationPhase />}
             {phase === "hold" && <HoldPhase />}
@@ -126,7 +138,11 @@ export function AlifCheckoutDialog() {
           </>
         )}
 
-        <DemoScenarioBar phase={phase} />
+        <DemoScenarioBar
+          phase={phase}
+          phoneMatch={demoPhoneMatch}
+          onPhoneMatchChange={handleDemoPhoneMatchChange}
+        />
       </DialogContent>
     </Dialog>
   )

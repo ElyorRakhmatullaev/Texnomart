@@ -8,16 +8,21 @@ import {
   maskPanAlif,
   maskPhoneTail,
 } from "@/lib/broker-mock-data"
-import { readDemoPhoneMatch } from "./DemoScenarioBar"
+
+export interface CardAttachPhaseProps {
+  // Приходит от AlifCheckoutDialog, который хостит и эту фазу, и
+  // DemoScenarioBar — единый источник значения, без рассинхрона между
+  // подсветкой пилюли в баре и данными, которые видит и отправляет эта фаза.
+  phoneMatch: boolean
+}
 
 // Экран 2 ТЗ. Привязка карты к Alif (request-attach) — отдельно от общей
 // привязки на шаге «Верификация»: там карта заводится до выбора банка, здесь
 // она привязывается к конкретному банку и подтверждается своим кодом.
-export function CardAttachPhase() {
+export function CardAttachPhase({ phoneMatch }: CardAttachPhaseProps) {
   const { state, attachAlifCard, cancelOffer } = useScoringFlow()
 
   const card = state.cards.find((c) => c.confirmed) ?? { mask: SEED_CARD.mask }
-  const phoneMatch = readDemoPhoneMatch()
   const phone = phoneMatch ? maskPhoneTail(BROKER_CLIENT.phone) : ALIF_UNMATCHED_PHONE_MASK
 
   function handleSuccess() {

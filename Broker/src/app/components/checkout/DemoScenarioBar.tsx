@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { useScoringFlow, type CheckoutPhase } from "@/app/scoring-flow"
 import { cn } from "@texnomart/ui/utils"
 
@@ -13,6 +12,11 @@ import { cn } from "@texnomart/ui/utils"
 
 export interface DemoScenarioBarProps {
   phase: CheckoutPhase
+  // Значение поднято в AlifCheckoutDialog — он же хостит CardAttachPhase,
+  // которому нужно то же значение синхронно, а не с задержкой sessionStorage
+  // (одинарные same-tab записи не шлют событие storage).
+  phoneMatch: boolean
+  onPhoneMatchChange: (value: boolean) => void
 }
 
 // Отдельный ключ, а не поле потока: это настройка демо-стенда, а не данные
@@ -35,9 +39,8 @@ export function writeDemoPhoneMatch(value: boolean) {
   }
 }
 
-export function DemoScenarioBar({ phase }: DemoScenarioBarProps) {
+export function DemoScenarioBar({ phase, phoneMatch, onPhoneMatchChange }: DemoScenarioBarProps) {
   const { state, setAlifLimitStatus, expireSession } = useScoringFlow()
-  const [phoneMatch, setPhoneMatch] = useState(readDemoPhoneMatch)
 
   // Переключатели, относящиеся к текущей фазе. Фазы, у которых своих
   // сценариев нет, показывают только общий «Сессия истекла».
@@ -63,18 +66,12 @@ export function DemoScenarioBar({ phase }: DemoScenarioBarProps) {
       {
         label: "Телефон совпадает",
         active: phoneMatch,
-        onSelect: () => {
-          writeDemoPhoneMatch(true)
-          setPhoneMatch(true)
-        },
+        onSelect: () => onPhoneMatchChange(true),
       },
       {
         label: "Телефон не совпадает",
         active: !phoneMatch,
-        onSelect: () => {
-          writeDemoPhoneMatch(false)
-          setPhoneMatch(false)
-        },
+        onSelect: () => onPhoneMatchChange(false),
       },
     )
   }
