@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { addDays, format } from "date-fns"
 import { Loader2 } from "lucide-react"
 import { Button } from "@texnomart/ui/button"
@@ -9,6 +9,7 @@ import { APPLICATION_ERRORS, buildPlans, makeApplicationId, type ApplicationErro
 import {
   ALIF_LIMITS,
   ALIF_PREPAYMENT,
+  APPLICATION_SUBMIT_DELAY_MS,
   FIRST_PAYMENT_DEFAULT_DAYS,
   FIRST_PAYMENT_MAX_DAYS,
   ORDER,
@@ -44,6 +45,18 @@ export function ApplicationPhase() {
   const [submitting, setSubmitting] = useState(false)
   const [errorKey, setErrorKey] = useState<ApplicationErrorKey | null>(null)
 
+  // Таймер живёт в ref, а не в замыкании setTimeout, чтобы его можно было
+  // отменить при уходе с фазы во время ожидания (закрытие попапа и т.п.):
+  // без очистки колбэк всё равно сработал бы и молча создал заявку в уже
+  // покинутом оператором флоу — тот же приём, что и в CardAttachPhase.
+  const submitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (submitTimer.current) clearTimeout(submitTimer.current)
+    }
+  }, [])
+
   function handleSubmit() {
     if (!canSubmit || submitting) return
     const outcome = readDemoApplicationOutcome()
@@ -61,16 +74,19 @@ export function ApplicationPhase() {
     const status =
       outcome === "rejected" ? "REJECTED" : ALIF_PREPAYMENT > 0 ? "NEW" : "REVIEWING"
 
-    createApplication({
-      id: makeApplicationId(),
-      status,
-      createdAt: new Date().toISOString(),
-      firstPaymentDate,
-      imei: imei.trim() || undefined,
-      amount: ORDER.amount,
-      commission: plan.commission,
-      duration: plan.duration,
-    })
+    // Мок ожидания ответа applications/store.
+    submitTimer.current = setTimeout(() => {
+      createApplication({
+        id: makeApplicationId(),
+        status,
+        createdAt: new Date().toISOString(),
+        firstPaymentDate,
+        imei: imei.trim() || undefined,
+        amount: ORDER.amount,
+        commission: plan.commission,
+        duration: plan.duration,
+      })
+    }, APPLICATION_SUBMIT_DELAY_MS)
   }
 
   const errorField = errorKey ? APPLICATION_ERRORS[errorKey].field : undefined

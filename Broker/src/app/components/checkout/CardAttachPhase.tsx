@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { AlertTriangle, Loader2 } from "lucide-react"
 import { OtpPanel } from "@/app/components/alif/OtpPanel"
 import { useScoringFlow } from "@/app/scoring-flow"
@@ -29,10 +29,22 @@ export function CardAttachPhase({ phoneMatch }: CardAttachPhaseProps) {
 
   const [attaching, setAttaching] = useState(false)
 
+  // Таймер живёт в ref, а не в замыкании setTimeout, чтобы его можно было
+  // отменить при уходе с фазы (например, «Вернуться к выбору предложения»
+  // во время ожидания): без очистки колбэк всё равно сработал бы и молча
+  // привязал карту к уже покинутому оператором флоу.
+  const attachTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (attachTimer.current) clearTimeout(attachTimer.current)
+    }
+  }, [])
+
   function handleSuccess() {
     setAttaching(true)
     // Мок ожидания ответа request-attach.
-    setTimeout(() => {
+    attachTimer.current = setTimeout(() => {
       attachAlifCard({ pan: maskPanAlif(card.mask), phone, phoneMatch })
     }, CARD_ATTACH_DELAY_MS)
   }

@@ -162,6 +162,8 @@ export const ACTIVITY_AREAS: ActivityArea[] = [
 export const APPLICATION_REVIEW_DELAY_MS = 2500
 // Мок ожидания ответа request-attach при отправке кода.
 export const CARD_ATTACH_DELAY_MS = 1200
+// Мок ожидания ответа applications/store при создании заявки.
+export const APPLICATION_SUBMIT_DELAY_MS = 900
 export const HOLD_TILL_DAYS = 7
 export const FIRST_PAYMENT_MAX_DAYS = 45
 export const FIRST_PAYMENT_DEFAULT_DAYS = 30
