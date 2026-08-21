@@ -385,7 +385,7 @@ git commit -m "feat(broker): сид-данные ветки Alif — лимит�
 
 **Interfaces:**
 - Consumes: `ApplicationStatus`, `makeApplicationId`, `sumToTiyin` из `@/lib/alif-application`; `ONE_C_ORDER_NO`, `makeContractNo`, `SEED_CARD`, `HOLD_TILL_DAYS`, `ALIF_PREPAYMENT` из `@/lib/broker-mock-data`.
-- Produces: тип `CheckoutPhase` (семь значений), `checkoutPhaseOf(state, alifPrepayment)`, `PHASE_STEP`, интерфейсы `Relation`/`Survey`/`AlifApplication`, а также действия контекста `selectPlan`, `setAlifLimitStatus`, `attachAlifCard`, `saveDetails`, `createApplication`, `setApplicationStatus`, `cancelApplication`, `sellApplication`, `unsellApplication`, `expireSession`, `refreshSession` — плюс существующие, кроме удаляемых `selectAlif` и `saveAdditionalData`.
+- Produces: тип `CheckoutPhase` (семь значений), `checkoutPhaseOf(state, alifPrepayment)`, `PHASE_STEP`, интерфейсы `Relation`/`Survey`/`AlifApplication`, а также действия контекста `selectPlan`, `setAlifLimitStatus`, `attachAlifCard`, `saveDetails`, `createApplication`, `setApplicationStatus`, `submitForReview`, `cancelApplication`, `sellApplication`, `unsellApplication`, `expireSession`, `refreshSession` — плюс существующие, кроме удаляемых `selectAlif` и `saveAdditionalData`.
 
 - [ ] **Step 1: Заменить типы состояния**
 
@@ -490,13 +490,26 @@ export const CHECKOUT_STEP_COUNT = 7
 //
 // relations и survey сохраняются одним действием экрана 3, поэтому проверки
 // на survey здесь нет: заполненные relations означают пройденный экран.
+//
+// Условие фазы холда двойное. Заявка остаётся «Новой» после удержания — на
+// рассмотрение её отправляет отдельное действие submitForReview с кнопки
+// «Продолжить». Без второй половины условия деривация уводила бы оператора с
+// холда сразу после удержания, а тогда предикат «отменить холд можно только
+// пока заявка новая» стал бы невыполнимым: и кнопка отмены холда, и состояние
+// «Холд отменён» превратились бы в мёртвый код, а статус REVIEWING не был бы
+// виден нигде.
 export function checkoutPhaseOf(state: ScoringFlowState, alifPrepayment: number): CheckoutPhase {
   if (state.creditConfirmed) return "success"
   if (!state.offerConfirmed) return "offer"
   if (!state.alifCard) return "card"
   if (!state.relations) return "details"
   if (!state.application) return "application"
-  if (alifPrepayment > 0 && state.holdStatus !== "confirmed") return "hold"
+  if (
+    alifPrepayment > 0 &&
+    (state.holdStatus !== "confirmed" || state.application.status === "NEW")
+  ) {
+    return "hold"
+  }
   return "otp"
 }
 ```
@@ -529,6 +542,17 @@ const createApplication = useCallback((application: AlifApplication) => {
 const setApplicationStatus = useCallback((status: ApplicationStatus) => {
   setState((prev) =>
     prev.application ? { ...prev, application: { ...prev.application, status } } : prev,
+  )
+}, [])
+
+// Отправка заявки на рассмотрение — отдельное действие, а не побочный эффект
+// удержания предоплаты. Пока оператор его не выполнил, заявка остаётся «Новой»,
+// и холд можно отменить.
+const submitForReview = useCallback(() => {
+  setState((prev) =>
+    prev.application && prev.application.status === "NEW"
+      ? { ...prev, application: { ...prev.application, status: "REVIEWING" } }
+      : prev,
   )
 }, [])
 
@@ -586,12 +610,12 @@ const holdConfirm = useCallback(() => {
         cardPan: card?.mask ?? SEED_CARD.mask,
         amountTiyin: sumToTiyin(ALIF_PREPAYMENT),
       },
-      // Удержание предоплаты уводит заявку на рассмотрение (§ экран 5 ТЗ).
-      application: prev.application ? { ...prev.application, status: "REVIEWING" } : prev.application,
     }
   })
 }, [])
 ```
+
+Статус заявки здесь **не** меняется: удержание и отправка на рассмотрение разведены (см. `submitForReview`).
 
 - [ ] **Step 6: Фиксировать дату договора при оформлении**
 
@@ -622,17 +646,23 @@ const confirmCredit = useCallback(() => {
 Выход из ветки должен сбрасывать и выбор условия, и привязку карты Alif, иначе повторный вход пропустит экраны 1–2:
 
 ```ts
+// Выход из ветки Alif к выбору предложения. Заявка и холд стираются: уход с
+// оферты и есть отказ от заявки, а без очистки отменённая заявка сделала бы
+// повторный вход тупиком — оператор снова попадал бы на терминальный экран
+// «Заявка отменена». planId и alifCard, наоборот, переживают выход: экран 1
+// переоткроется с уже выбранным планом, а повторно вводить код карты
+// оператор не должен.
 const cancelOffer = useCallback(() => {
   setState((prev) => ({
     ...prev,
     offerConfirmed: false,
     holdStatus: "none",
+    application: undefined,
+    hold: undefined,
     checkoutOpen: false,
   }))
 }, [])
 ```
-
-Оставить как есть — `planId` и `alifCard` сохраняются намеренно: экран 1 переоткроется с уже выбранным планом, а привязанная карта не требует повторного OTP. Добавить в комментарий над функцией строку: «`planId` и `alifCard` переживают выход — повторно вводить код карты оператор не должен».
 
 - [ ] **Step 8: Обновить интерфейс контекста и объект value**
 
@@ -732,16 +762,9 @@ export function ApplicationPhase() {
 Сохранить всё, что уже работает: деривацию фазы, блокировку закрытия во время `holdStatus === "held"`, скрытые заголовки для скринридеров. Изменения: семь фаз вместо пяти, шапка с прогрессом и статусом, переименованная константа задержки.
 
 ```tsx
-import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@texnomart/ui/dialog"
 import { Progress } from "@texnomart/ui/progress"
-import {
-  CHECKOUT_STEP_COUNT,
-  PHASE_STEP,
-  checkoutPhaseOf,
-  useScoringFlow,
-  type CheckoutPhase,
-} from "@/app/scoring-flow"
+import { CHECKOUT_STEP_COUNT, PHASE_STEP, checkoutPhaseOf, useScoringFlow } from "@/app/scoring-flow"
 import { ALIF_PREPAYMENT } from "@/lib/broker-mock-data"
 import { ApplicationStatusBadge } from "./ApplicationStatusBadge"
 import { OfferPhase } from "./OfferPhase"
@@ -752,27 +775,15 @@ import { HoldPhase } from "./HoldPhase"
 import { CreditOtpPhase } from "./CreditOtpPhase"
 import { SuccessPhase } from "./SuccessPhase"
 
-// Единственный переход, которому нужна пауза на читаемость: уход с фазы
-// холда. Оператор должен успеть увидеть зелёный бейдж «Предоплата
-// подтверждена» прежде, чем фаза сменится. В новом порядке фаз выход с холда
-// один — на otp.
-const HOLD_EXIT_DELAY_MS = 600
-
 export function AlifCheckoutDialog() {
   const { state, closeCheckout } = useScoringFlow()
   const held = state.holdStatus === "held"
-  const derivedPhase = checkoutPhaseOf(state, ALIF_PREPAYMENT)
 
-  const [phase, setPhase] = useState<CheckoutPhase>(derivedPhase)
-
-  useEffect(() => {
-    if (phase === derivedPhase) return
-    if (phase === "hold" && derivedPhase === "otp") {
-      const t = setTimeout(() => setPhase(derivedPhase), HOLD_EXIT_DELAY_MS)
-      return () => clearTimeout(t)
-    }
-    setPhase(derivedPhase)
-  }, [derivedPhase, phase])
+  // Фаза применяется сразу, без локального зеркала и без задержки. Раньше уход
+  // с холда лагал на 600 мс, чтобы оператор успел увидеть бейдж «Предоплата
+  // подтверждена»; теперь с этой фазы уводит явная кнопка «Продолжить», так
+  // что бейдж виден столько, сколько нужно, и задержка стала лишней.
+  const phase = checkoutPhaseOf(state, ALIF_PREPAYMENT)
 
   function handleOpenChange(open: boolean) {
     if (open || held) return
@@ -1028,11 +1039,17 @@ export function DemoScenarioBar({ phase }: DemoScenarioBarProps) {
 }
 ```
 
-- [ ] **Step 3: Подключить панель и экран истёкшей сессии в попап**
+- [ ] **Step 3: Подключить панель, истёкшую сессию и терминальные статусы в попап**
 
-В `AlifCheckoutDialog` добавить импорты `DemoScenarioBar`, `PhaseError`, `Button` и `RefreshCw` из `lucide-react`, взять `refreshSession` из контекста, а блок рендера фаз обернуть проверкой:
+В `AlifCheckoutDialog` добавить импорты `DemoScenarioBar`, `PhaseError`, `Button` из `@texnomart/ui/button` и `RefreshCw` из `lucide-react`, взять `refreshSession` и `cancelOffer` из контекста, а блок рендера фаз заменить на цепочку:
 
 ```tsx
+{/* Терминальные состояния перехватываются ДО переключателя фаз. Деривация
+    фазы не смотрит на статус заявки: отказанная заявка отправила бы оператора
+    на фазу холда, поэтому ветка внутри фазы никогда бы не отрисовалась.
+    Оговорка про creditConfirmed нужна из-за отмены продажи: она тоже ставит
+    CANCELLED, но оформленный кредит при этом никуда не девается и экран
+    успеха должен остаться. */}
 {state.sessionExpired ? (
   <div className="px-2 py-4">
     <PhaseError message="Сессия Alif истекла. Обновите сессию, чтобы продолжить оформление." />
@@ -1049,6 +1066,37 @@ export function DemoScenarioBar({ phase }: DemoScenarioBarProps) {
       Обновить сессию
     </Button>
   </div>
+) : !state.creditConfirmed && state.application?.status === "REJECTED" ? (
+  <div className="px-2 py-4">
+    <h2 className="text-xl font-bold text-gray-900">Заявка отклонена</h2>
+    <PhaseError
+      className="mt-4"
+      message="Alif отказал в рассрочке по этой заявке. Предложите клиенту другой банк или другое условие."
+    />
+    <Button
+      type="button"
+      variant="outline"
+      onClick={cancelOffer}
+      className="mt-6 h-11 w-full font-semibold"
+    >
+      Назад к банкам
+    </Button>
+  </div>
+) : !state.creditConfirmed && state.application?.status === "CANCELLED" ? (
+  <div className="px-2 py-4">
+    <h2 className="text-xl font-bold text-gray-900">Заявка отменена</h2>
+    <p className="mt-2 text-sm text-gray-500">
+      Предоплата разблокирована. Чтобы оформить рассрочку заново, вернитесь к выбору банка.
+    </p>
+    <Button
+      type="button"
+      variant="outline"
+      onClick={cancelOffer}
+      className="mt-6 h-11 w-full font-semibold"
+    >
+      Назад к банкам
+    </Button>
+  </div>
 ) : (
   <>
     {phase === "offer" && <OfferPhase />}
@@ -1063,6 +1111,8 @@ export function DemoScenarioBar({ phase }: DemoScenarioBarProps) {
 
 <DemoScenarioBar phase={phase} />
 ```
+
+Обе терминальные ветки достижимы только после задач 11 и 14 (которые создают отказ и отмену). Здесь они появляются заранее и намеренно: место у них одно, и дописывать его дважды не нужно.
 
 - [ ] **Step 4: Проверить сборку**
 
@@ -1977,31 +2027,13 @@ className={cn(
 )}
 ```
 
-- [ ] **Step 4: Обработать состояния `REVIEWING` и `REJECTED` после создания**
+- [ ] **Step 4: Убедиться, что терминальные состояния не дублируются здесь**
 
-Заявка уже создана, значит деривация увела фазу с `application` — кроме случая `REJECTED`, при котором двигаться некуда. Добавить в начало компонента, до формы:
+Экран отказа `REJECTED` в этом файле писать **не нужно**: он уже живёт в `AlifCheckoutDialog` (задача 5), до переключателя фаз. Причина — `checkoutPhaseOf` не смотрит на статус заявки, поэтому созданная и отказанная заявка уводит оператора на фазу холда, и ветка внутри `ApplicationPhase` не отрисовалась бы никогда.
 
-```tsx
-// Заявка создана и отказана — дальше по ветке идти некуда.
-if (state.application?.status === "REJECTED") {
-  return (
-    <div className="px-2 py-4">
-      <h2 className="text-xl font-bold text-gray-900">Заявка отклонена</h2>
-      <PhaseError
-        className="mt-4"
-        message="Alif отказал в рассрочке по этой заявке. Предложите клиенту другой банк или другое условие."
-      />
-      <DialogFooter className="mt-6 w-full">
-        <Button type="button" variant="outline" onClick={cancelOffer} className="h-11 w-full font-semibold">
-          Назад к банкам
-        </Button>
-      </DialogFooter>
-    </div>
-  )
-}
-```
+Состояние `REVIEWING` собственного экрана не требует: оно видно бейджем в шапке попапа и на фазе холда.
 
-Взять `cancelOffer` из контекста. Состояние `REVIEWING` показывается на фазе холда и далее бейджем в шапке — отдельного экрана ему не нужно.
+Проверить чтением, что `ApplicationPhase` не содержит веток по `status === "REJECTED"` или `status === "CANCELLED"`.
 
 - [ ] **Step 5: Провести заявку через рассмотрение**
 
@@ -2043,7 +2075,7 @@ git commit -m "feat(broker): результаты заявки и шесть б�
 - Modify: `Broker/src/app/components/checkout/HoldStatusBar.tsx`
 
 **Interfaces:**
-- Consumes: `canCancelHold` из `@/lib/alif-application`; `state.hold`, `state.application` из контекста.
+- Consumes: `canCancelHold`, `tiyinToSum` из `@/lib/alif-application`; `state.hold`, `state.application`, `submitForReview` из контекста.
 - Produces: изменений в публичных интерфейсах нет.
 
 - [ ] **Step 1: Показать даты удержания в `HoldPhase`**
@@ -2077,7 +2109,24 @@ git commit -m "feat(broker): результаты заявки и шесть б�
 
 Добавить импорты `format` из `date-fns`, `ru` из `date-fns/locale` и `tiyinToSum` из `@/lib/alif-application`.
 
-- [ ] **Step 2: Применить правило отмены в `HoldStatusBar`**
+- [ ] **Step 2: Добавить явную кнопку «Продолжить» на фазе холда**
+
+Пока заявка в статусе `NEW`, деривация держит оператора на этой фазе даже после подтверждения удержания — именно поэтому «Отменить холд» здесь достижима. Уводит дальше явное действие. В ветке `status === "confirmed"`, под блоком дат, добавить:
+
+```tsx
+<Button
+  type="button"
+  onClick={submitForReview}
+  className="mt-4 h-11 w-full font-semibold text-black hover:opacity-90"
+  style={{ background: "#FFD60A" }}
+>
+  Продолжить
+</Button>
+```
+
+Взять `submitForReview` из контекста. Кнопка переводит заявку в `REVIEWING`, после чего деривация уводит на фазу подтверждения кредита, а через `APPLICATION_REVIEW_DELAY_MS` статус становится `APPROVED` (эффект живёт в `AlifCheckoutDialog`, задача 11).
+
+- [ ] **Step 3: Применить правило отмены в `HoldStatusBar`**
 
 Заменить действие на условное:
 
@@ -2096,12 +2145,12 @@ const cancellable = status !== undefined && canCancelHold(status)
 
 Двух кнопок отмены на одном экране быть не должно: выход из поздних статусов даёт «Отменить заявку» в шапке попапа.
 
-- [ ] **Step 3: Проверить сборку**
+- [ ] **Step 4: Проверить сборку**
 
 Запустить: `corepack pnpm build:broker`
 Ожидается: сборка проходит.
 
-- [ ] **Step 4: Коммит**
+- [ ] **Step 5: Коммит**
 
 ```bash
 git add Broker/src/app/components/checkout
@@ -2292,27 +2341,11 @@ export function CancelApplicationDialog({ open, onOpenChange, onConfirm }: Cance
 />
 ```
 
-Импортировать `toast` из `sonner` и `canCancelApplication` из `@/lib/alif-application`.
+Импортировать `toast` из `sonner` и `canCancelApplication` из `@/lib/alif-application`. `cancelApplication` и `cancelOffer` должны быть в деструктуризации `useScoringFlow()` — `cancelOffer` нужен терминальным экранам, добавленным задачей 5.
 
-- [ ] **Step 3: Показать отменённую заявку**
+- [ ] **Step 3: Проверить экран отменённой заявки**
 
-Отменённая заявка не должна оставлять оператора на фазе холда, где предлагается «удержать заново». Добавить в `AlifCheckoutDialog`, рядом с проверкой `sessionExpired`, ветку:
-
-```tsx
-{state.application?.status === "CANCELLED" ? (
-  <div className="px-2 py-4">
-    <h2 className="text-xl font-bold text-gray-900">Заявка отменена</h2>
-    <p className="mt-2 text-sm text-gray-500">
-      Предоплата разблокирована. Чтобы оформить рассрочку заново, вернитесь к выбору банка.
-    </p>
-    <Button type="button" variant="outline" onClick={cancelOffer} className="mt-6 h-11 w-full font-semibold">
-      Назад к банкам
-    </Button>
-  </div>
-) : ...}
-```
-
-Порядок проверок в шапке рендера: `sessionExpired` → `CANCELLED` → фазы.
+Отдельный экран здесь писать не нужно — терминальное состояние `CANCELLED` уже рендерится в `AlifCheckoutDialog` (задача 5) до переключателя фаз. Убедиться чтением, что после `cancelApplication` попап показывает именно его, а не фазу холда с предложением «Удержать заново».
 
 - [ ] **Step 4: Проверить сборку**
 
