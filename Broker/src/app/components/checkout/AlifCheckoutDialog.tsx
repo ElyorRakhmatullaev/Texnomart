@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react"
 import { RefreshCw } from "lucide-react"
+import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@texnomart/ui/dialog"
 import { Progress } from "@texnomart/ui/progress"
 import { Button } from "@texnomart/ui/button"
 import { CHECKOUT_STEP_COUNT, PHASE_STEP, checkoutPhaseOf, useScoringFlow } from "@/app/scoring-flow"
+import { canCancelApplication } from "@/lib/alif-application"
 import { ALIF_PREPAYMENT, APPLICATION_REVIEW_DELAY_MS } from "@/lib/broker-mock-data"
 import { ApplicationStatusBadge } from "./ApplicationStatusBadge"
 import { OfferPhase } from "./OfferPhase"
@@ -15,10 +17,13 @@ import { CreditOtpPhase } from "./CreditOtpPhase"
 import { SuccessPhase } from "./SuccessPhase"
 import { DemoScenarioBar, readDemoPhoneMatch, writeDemoPhoneMatch } from "./DemoScenarioBar"
 import { PhaseError } from "./PhaseError"
+import { CancelApplicationDialog } from "./CancelApplicationDialog"
 
 export function AlifCheckoutDialog() {
-  const { state, closeCheckout, refreshSession, cancelOffer, setApplicationStatus } = useScoringFlow()
+  const { state, closeCheckout, refreshSession, cancelOffer, setApplicationStatus, cancelApplication } =
+    useScoringFlow()
   const held = state.holdStatus === "held"
+  const [cancelOpen, setCancelOpen] = useState(false)
 
   // Мок «заявка на рассмотрении» — через APPLICATION_REVIEW_DELAY_MS она
   // возвращается одобренной. Эффект живёт в хосте, а не в фазе: рассмотрение
@@ -77,7 +82,18 @@ export function AlifCheckoutDialog() {
             <p className="text-xs font-medium text-gray-700">
               Шаг {step} из {CHECKOUT_STEP_COUNT} · {title}
             </p>
-            {state.application && <ApplicationStatusBadge status={state.application.status} />}
+            <div className="flex items-center gap-3">
+              {state.application && <ApplicationStatusBadge status={state.application.status} />}
+              {state.application && canCancelApplication(state.application.status) && (
+                <button
+                  type="button"
+                  onClick={() => setCancelOpen(true)}
+                  className="text-xs font-medium text-red-600 transition-colors hover:text-red-700"
+                >
+                  Отменить заявку
+                </button>
+              )}
+            </div>
           </div>
           <Progress value={(step / CHECKOUT_STEP_COUNT) * 100} className="mt-2 h-1" />
         </div>
@@ -151,6 +167,15 @@ export function AlifCheckoutDialog() {
           phase={phase}
           phoneMatch={demoPhoneMatch}
           onPhoneMatchChange={handleDemoPhoneMatchChange}
+        />
+
+        <CancelApplicationDialog
+          open={cancelOpen}
+          onOpenChange={setCancelOpen}
+          onConfirm={(reasonKey) => {
+            cancelApplication(reasonKey)
+            toast("Заявка отменена")
+          }}
         />
       </DialogContent>
     </Dialog>
