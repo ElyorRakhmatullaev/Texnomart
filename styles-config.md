@@ -32,7 +32,7 @@ Source of truth for colors, typography, spacing, and component styling.
 
 ## Dark Theme
 
-Activated by the `.dark` class on `<html>`. **Promo** ships a full, QA'd dark theme (sub-project B): a `ThemeProvider` (`Promo/src/app/theme-context.tsx`) + an inline boot script in `index.html` persist `promo:pref-theme` and apply `.dark` before first paint (no FOUC); the header + Settings toggles share the provider via the shared `AppShell`'s optional controlled `theme` prop. **Dashboard** has `.dark` variables defined but the theme is not yet built/verified (its light mode is the source of truth).
+Activated by the `.dark` class on `<html>`. **Promo** ships a full, QA'd dark theme (sub-project B): a `ThemeProvider` (`Promo/src/app/theme-context.tsx`) + an inline boot script in `index.html` persist `promo:pref-theme` and apply `.dark` before first paint (no FOUC); the header + Settings toggles share the provider via the shared `AppShell`'s optional controlled `theme` prop. **Dashboard** and **Broker** each carry a stock shadcn `.dark` block — note its `--primary` is the stock near-white (`oklch(0.985 0 0)`), NOT the brand yellow — and neither theme is built or verified; their light modes are the source of truth. Brandify `--primary`/`--primary-foreground` first if either is ever taken on.
 
 The `.dark` palette (per project's `theme.css`) is a **layered neutral scale** — `--background` is darkest (the `<main>` area, via `dark:bg-background`), and `--card`/`--popover`/`--sidebar` sit a step lighter so cards read against the page (the inverse of light's white-cards-on-`gray-50`). **The brand yellow is preserved in dark** — never shadcn's stock near-white primary.
 
@@ -143,9 +143,14 @@ The `.dark` palette (per project's `theme.css`) is a **layered neutral scale** �
 | **UI Kit** | shadcn/ui (Radix primitives) in `packages/ui/` |
 | **Icons** | Lucide React |
 | **Charts** | Recharts 2.x |
-| **Animations** | tw-animate-css |
+| **Animations** | tw-animate-css; Motion (Promo) |
 | **Build** | Vite 6 + pnpm workspace monorepo |
 | **Framework** | React 18 + TypeScript |
+| **Routing** | React Router v7 (`createBrowserRouter`) |
+| **Dates** | date-fns with the `ru` locale |
+| **Toasts** | sonner (Promo adds `closeButton` + 5 s auto-close) |
+| **Excel export** | SheetJS (`xlsx`) — Promo only; CSV exports are hand-written |
+| **Font** | Inter 400/500/600/700 |
 
 ## CSS Architecture
 
