@@ -51,8 +51,11 @@ export function SuccessPhase() {
         <div className="flex flex-1 flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <span className="font-semibold text-gray-900">{ALIF.title}</span>
           <span className="text-sm text-gray-500">
+            {/* plan.amount — лимит ВЫБРАННОГО плана, а не ALIF.limit (заголовочный лимит
+                банка на карточке): при сроке, отличном от того, что дал наибольший лимит,
+                эти два числа расходятся — оператор выбрал конкретный план на экране 1. */}
             {tenor} мес. · Лимит{" "}
-            <span className="font-medium tabular-nums text-gray-700">{ALIF.limit.toLocaleString("ru-RU")} сум</span>{" "}
+            <span className="font-medium tabular-nums text-gray-700">{plan.amount.toLocaleString("ru-RU")} сум</span>{" "}
             · Платёж{" "}
             <span className="font-medium tabular-nums text-gray-700">
               {plan.monthlyPayment.toLocaleString("ru-RU")} сум
