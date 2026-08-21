@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { addDays, format } from "date-fns"
+import { Loader2 } from "lucide-react"
 import { Button } from "@texnomart/ui/button"
 import { DialogFooter } from "@texnomart/ui/dialog"
 import { Input } from "@texnomart/ui/input"
@@ -157,12 +158,13 @@ export function ApplicationPhase() {
       <DialogFooter className="mt-6 w-full">
         <Button
           type="button"
-          disabled={!canSubmit}
+          disabled={!canSubmit || submitting}
           onClick={handleSubmit}
           className="h-11 w-full font-semibold text-black hover:opacity-90 disabled:opacity-50"
           style={{ background: "#FFD60A" }}
         >
-          Создать заявку
+          {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
+          {submitting ? "Создаём заявку…" : "Создать заявку"}
         </Button>
       </DialogFooter>
     </div>

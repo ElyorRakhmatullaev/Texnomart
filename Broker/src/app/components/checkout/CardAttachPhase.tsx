@@ -1,9 +1,11 @@
-import { AlertTriangle } from "lucide-react"
+import { useState } from "react"
+import { AlertTriangle, Loader2 } from "lucide-react"
 import { OtpPanel } from "@/app/components/alif/OtpPanel"
 import { useScoringFlow } from "@/app/scoring-flow"
 import {
   ALIF_UNMATCHED_PHONE_MASK,
   BROKER_CLIENT,
+  CARD_ATTACH_DELAY_MS,
   SEED_CARD,
   maskPanAlif,
   maskPhoneTail,
@@ -25,8 +27,14 @@ export function CardAttachPhase({ phoneMatch }: CardAttachPhaseProps) {
   const card = state.cards.find((c) => c.confirmed) ?? { mask: SEED_CARD.mask }
   const phone = phoneMatch ? maskPhoneTail(BROKER_CLIENT.phone) : ALIF_UNMATCHED_PHONE_MASK
 
+  const [attaching, setAttaching] = useState(false)
+
   function handleSuccess() {
-    attachAlifCard({ pan: maskPanAlif(card.mask), phone, phoneMatch })
+    setAttaching(true)
+    // Мок ожидания ответа request-attach.
+    setTimeout(() => {
+      attachAlifCard({ pan: maskPanAlif(card.mask), phone, phoneMatch })
+    }, CARD_ATTACH_DELAY_MS)
   }
 
   return (
@@ -34,29 +42,36 @@ export function CardAttachPhase({ phoneMatch }: CardAttachPhaseProps) {
       <h2 className="text-xl font-bold text-gray-900">Привязка карты к Alif</h2>
 
       <div className="mt-4">
-        <OtpPanel
-          variant="card"
-          subtitle={`Код отправлен на номер, привязанный к карте: ${phone}`}
-          ctaLabel="Подтвердить привязку"
-          onSuccess={handleSuccess}
-        >
-          <div className="grid grid-cols-2 gap-2 rounded-lg border bg-gray-50 px-4 py-3 text-sm">
-            <span className="text-gray-500">Карта</span>
-            <span className="text-right font-medium tabular-nums text-gray-900">
-              {maskPanAlif(card.mask)}
-            </span>
+        {attaching ? (
+          <div className="mt-4 flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700">
+            <Loader2 className="size-4 shrink-0 animate-spin" />
+            Привязываем карту…
           </div>
-
-          {!phoneMatch && (
-            <div className="mt-3 flex gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              <AlertTriangle className="size-4 shrink-0" />
-              <span>
-                Телефон, привязанный к карте, не совпадает с телефоном клиента. Убедитесь, что код
-                получает владелец карты.
+        ) : (
+          <OtpPanel
+            variant="card"
+            subtitle={`Код отправлен на номер, привязанный к карте: ${phone}`}
+            ctaLabel="Подтвердить привязку"
+            onSuccess={handleSuccess}
+          >
+            <div className="grid grid-cols-2 gap-2 rounded-lg border bg-gray-50 px-4 py-3 text-sm">
+              <span className="text-gray-500">Карта</span>
+              <span className="text-right font-medium tabular-nums text-gray-900">
+                {maskPanAlif(card.mask)}
               </span>
             </div>
-          )}
-        </OtpPanel>
+
+            {!phoneMatch && (
+              <div className="mt-3 flex gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <AlertTriangle className="size-4 shrink-0" />
+                <span>
+                  Телефон, привязанный к карте, не совпадает с телефоном клиента. Убедитесь, что код
+                  получает владелец карты.
+                </span>
+              </div>
+            )}
+          </OtpPanel>
+        )}
       </div>
 
       <button
