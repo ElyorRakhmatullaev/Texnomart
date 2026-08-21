@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@texnomar
 import { Progress } from "@texnomart/ui/progress"
 import { Button } from "@texnomart/ui/button"
 import { CHECKOUT_STEP_COUNT, PHASE_STEP, checkoutPhaseOf, useScoringFlow } from "@/app/scoring-flow"
-import { canCancelApplication } from "@/lib/alif-application"
+import { CANCEL_REASONS, canCancelApplication } from "@/lib/alif-application"
 import { ALIF_PREPAYMENT, APPLICATION_REVIEW_DELAY_MS } from "@/lib/broker-mock-data"
 import { ApplicationStatusBadge } from "./ApplicationStatusBadge"
 import { OfferPhase } from "./OfferPhase"
@@ -57,6 +57,8 @@ export function AlifCheckoutDialog() {
   }
 
   const { step, title } = PHASE_STEP[phase]
+
+  const cancelReasonLabel = CANCEL_REASONS.find((r) => r.key === state.application?.cancelReasonKey)?.label
 
   return (
     <Dialog open={state.checkoutOpen} onOpenChange={handleOpenChange}>
@@ -153,6 +155,15 @@ export function AlifCheckoutDialog() {
             <p className="mt-2 text-sm text-gray-500">
               Предоплата разблокирована. Чтобы оформить рассрочку заново, вернитесь к выбору банка.
             </p>
+            {/* cancelReasonKey — обязательное поле CancelApplicationDialog, но до сих
+                пор нигде не показывалось после отмены: оператор выбирал причину и
+                никогда больше её не видел. */}
+            {cancelReasonLabel && (
+              <p className="mt-3 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                <span className="text-gray-500">Причина отмены: </span>
+                {cancelReasonLabel}
+              </p>
+            )}
             <Button
               type="button"
               variant="outline"

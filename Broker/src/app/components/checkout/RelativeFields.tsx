@@ -22,10 +22,6 @@ export function extractDigits(value: string): string {
   return allDigits.slice(0, 9)
 }
 
-export function digitsFromPhone(phone: string | undefined): string {
-  return extractDigits(phone ?? "")
-}
-
 // extractDigits разбирает всю строку заново на каждое нажатие и опознаёт
 // префикс "+998" только по факту, что он идёт первым — если курсор оказался
 // ЛЕВЕЕ префикса (Home/стрелка влево/клик в начало поля) и пользователь

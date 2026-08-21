@@ -8,7 +8,6 @@ import { useScoringFlow, type Relation } from "@/app/scoring-flow"
 import { ACTIVITY_AREAS, BROKER_CLIENT } from "@/lib/broker-mock-data"
 import {
   RelativeFields,
-  digitsFromPhone,
   extractDigits,
   formatUzPhone,
   makeRelativeId,
@@ -20,23 +19,18 @@ import {
 // Переход дальше по цепочке происходит сам (деривация в AlifCheckoutDialog)
 // по факту saveDetails.
 export function DetailsPhase() {
-  const { state, saveDetails } = useScoringFlow()
+  const { saveDetails } = useScoringFlow()
 
-  const [relatives, setRelatives] = useState<RelativeDraft[]>(() => {
-    if (state.relations && state.relations.length > 0) {
-      return state.relations.map((r) => ({
-        id: makeRelativeId(),
-        type: r.type,
-        phoneDigits: digitsFromPhone(r.phone),
-        name: r.name,
-      }))
-    }
-    return [{ id: makeRelativeId(), type: "", phoneDigits: "", name: "" }]
-  })
+  // Эта фаза достижима только при !state.relations (checkoutPhaseOf), а
+  // relations нигде не сбрасываются, пока ветка не покинута целиком — форма
+  // всегда стартует пустой, восстанавливать в ней нечего.
+  const [relatives, setRelatives] = useState<RelativeDraft[]>(() => [
+    { id: makeRelativeId(), type: "", phoneDigits: "", name: "" },
+  ])
 
-  const [activityAreaId, setActivityAreaId] = useState(state.survey?.activityAreaId ?? "")
-  const [language, setLanguage] = useState<"ru" | "uz">(state.survey?.language ?? "ru")
-  const [car, setCar] = useState(state.survey?.car ?? false)
+  const [activityAreaId, setActivityAreaId] = useState("")
+  const [language, setLanguage] = useState<"ru" | "uz">("ru")
+  const [car, setCar] = useState(false)
 
   const clientDigits = extractDigits(BROKER_CLIENT.phone)
 

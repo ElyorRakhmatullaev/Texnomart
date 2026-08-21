@@ -1,4 +1,6 @@
 import { Info } from "lucide-react"
+import { format, parseISO } from "date-fns"
+import { ru } from "date-fns/locale"
 import { OtpPanel } from "@/app/components/alif/OtpPanel"
 import { useScoringFlow } from "@/app/scoring-flow"
 import { buildPlans } from "@/lib/alif-application"
@@ -37,6 +39,26 @@ export function CreditOtpPhase() {
             <span className="text-gray-500">Банк</span>
             <span className="text-right font-medium text-gray-900">{ALIF.title}</span>
 
+            {/* Из девяти полей AlifApplication до этого места читался только status —
+                оператор вводит IMEI и дату на экране 4 и больше их нигде не видит.
+                state.application гарантированно заполнена: деривация checkoutPhaseOf
+                пускает на otp только после экрана "application". */}
+            {state.application && (
+              <>
+                <span className="text-gray-500">№ заявки</span>
+                <span className="text-right font-medium tabular-nums text-gray-900">{state.application.id}</span>
+
+                {state.application.imei && (
+                  <>
+                    <span className="text-gray-500">IMEI</span>
+                    <span className="text-right font-medium tabular-nums text-gray-900">
+                      {state.application.imei}
+                    </span>
+                  </>
+                )}
+              </>
+            )}
+
             <span className="text-gray-500">Сумма заказа</span>
             <span className="text-right font-medium tabular-nums text-gray-900">
               {ORDER.amount.toLocaleString("ru-RU")} сум
@@ -54,6 +76,15 @@ export function CreditOtpPhase() {
             <span className="text-right font-medium tabular-nums text-gray-900">
               {ALIF.prepayment.toLocaleString("ru-RU")} сум
             </span>
+
+            {state.application && (
+              <>
+                <span className="text-gray-500">Дата первого платежа</span>
+                <span className="text-right font-medium tabular-nums text-gray-900">
+                  {format(parseISO(state.application.firstPaymentDate), "dd.MM.yyyy", { locale: ru })}
+                </span>
+              </>
+            )}
           </div>
 
           <div className="mt-3 flex gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
