@@ -6,7 +6,6 @@ import { Button } from "@texnomart/ui/button"
 import { DialogFooter } from "@texnomart/ui/dialog"
 import { useScoringFlow, type Relation } from "@/app/scoring-flow"
 import { ACTIVITY_AREAS, BROKER_CLIENT } from "@/lib/broker-mock-data"
-import { HoldStatusBar } from "./HoldStatusBar"
 import {
   RelativeFields,
   digitsFromPhone,
@@ -79,10 +78,6 @@ export function DetailsPhase() {
       <p className="mt-1 text-sm text-gray-500">
         Укажите хотя бы одного близкого родственника — это увеличивает шанс одобрения
       </p>
-
-      <div className="mt-4">
-        <HoldStatusBar />
-      </div>
 
       <div className="mt-6 space-y-3">
         {relatives.map((relative, i) => (
