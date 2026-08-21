@@ -24,15 +24,27 @@ export interface CancelApplicationDialogProps {
 export function CancelApplicationDialog({ open, onOpenChange, onConfirm }: CancelApplicationDialogProps) {
   const [reasonKey, setReasonKey] = useState("")
 
+  // Компонент не размонтируется между открытиями (меняется только `open`),
+  // поэтому без явного сброса причина от отменённой/закрытой крестом попытки
+  // осталась бы в стейте — при повторном открытии строка была бы уже выбрана,
+  // а кнопка «Отменить заявку» — уже разблокирована. Действие необратимое,
+  // так что каждое открытие должно начинаться с чистого выбора. Сброс сделан
+  // именно в обработчике закрытия (а не эффектом на открытие), чтобы он
+  // произошёл синхронно с самим закрытием — крестом, Escape, кликом по фону
+  // или «Не отменять» — и ничего не успело мигнуть на повторном открытии.
+  function handleOpenChange(next: boolean) {
+    if (!next) setReasonKey("")
+    onOpenChange(next)
+  }
+
   function handleConfirm() {
     if (!reasonKey) return
     onConfirm(reasonKey)
-    setReasonKey("")
-    onOpenChange(false)
+    handleOpenChange(false)
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent className="max-h-[85dvh] overflow-y-auto">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">

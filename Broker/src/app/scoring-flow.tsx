@@ -330,13 +330,22 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
     )
   }, [])
 
-  // Отмена заявки снимает и холд: удержанные деньги не могут пережить заявку.
+  // Отмена заявки снимает и холд — и "held" (удержание ещё идёт, ~2 с до
+  // автоматического holdConfirm), и "confirmed" (уже подтверждён): кнопка
+  // «Отменить заявку» в шапке попапа кликабельна в обоих состояниях, а
+  // удержанные деньги не могут пережить заявку ни в одном из них. Если
+  // оставить "held" как есть, отмена в этом окне не размораживает деньги и
+  // держит попап заблокированным навсегда — таймер holdConfirm из HoldPhase
+  // не сработает, потому что фаза размонтируется под терминальный экран.
   const cancelApplication = useCallback((cancelReasonKey: string) => {
     setState((prev) =>
       prev.application
         ? {
             ...prev,
-            holdStatus: prev.holdStatus === "confirmed" ? "cancelled" : prev.holdStatus,
+            holdStatus:
+              prev.holdStatus === "confirmed" || prev.holdStatus === "held"
+                ? "cancelled"
+                : prev.holdStatus,
             application: { ...prev.application, status: "CANCELLED", cancelReasonKey },
           }
         : prev,
