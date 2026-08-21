@@ -1,112 +1,19 @@
-import { useState, type SyntheticEvent } from "react"
-import { addMonths, format } from "date-fns"
-import { Input } from "@texnomart/ui/input"
+import { useState } from "react"
+import { Plus } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@texnomart/ui/select"
+import { Checkbox } from "@texnomart/ui/checkbox"
 import { Button } from "@texnomart/ui/button"
 import { DialogFooter } from "@texnomart/ui/dialog"
-import { useScoringFlow, type Relation, type Survey } from "@/app/scoring-flow"
-import { RELATION_KINDS } from "@/lib/broker-mock-data"
+import { useScoringFlow, type Relation } from "@/app/scoring-flow"
+import { ACTIVITY_AREAS, BROKER_CLIENT } from "@/lib/broker-mock-data"
 import { HoldStatusBar } from "./HoldStatusBar"
-
-// Маска телефона: храним только «сырые» цифры после кода 998 (макс. 9),
-// формат для отображения/сабмита собираем из них.
-//
-// Разбор всей строки на каждое нажатие (а не диффом с предыдущим значением) —
-// нужно аккуратно отличать «стирание цифр пользователя» от «стирания самого
-// префикса +998» (иначе backspace на пустом поле «+998» → «+99» и наивная
-// проверка startsWith("998") не срабатывает — в поле подставляются фантомные
-// цифры). Правило: если все цифры строки начинаются с "998" — за префиксом
-// остались настоящие цифры пользователя; если сама строка цифр — префикс
-// "998" ещё не «дописан» (стирание), пользовательских цифр нет; иначе (вставка
-// локального номера без кода страны) — цифры пользователя взяты как есть.
-function extractDigits(value: string): string {
-  const allDigits = value.replace(/\D/g, "")
-  if (allDigits.startsWith("998")) return allDigits.slice(3, 12)
-  if ("998".startsWith(allDigits)) return ""
-  return allDigits.slice(0, 9)
-}
-
-function digitsFromPhone(phone: string | undefined): string {
-  return extractDigits(phone ?? "")
-}
-
-// extractDigits разбирает всю строку заново на каждое нажатие и опознаёт
-// префикс "+998" только по факту, что он идёт первым — если курсор оказался
-// ЛЕВЕЕ префикса (Home/стрелка влево/клик в начало поля) и пользователь
-// печатает там, вставленная цифра встаёт перед "+998", эвристика перестаёт
-// узнавать префикс и весь конкатенированный набор цифр (включая цифры
-// префикса) трактуется как ввод пользователя — номер “едет”. Не даём курсору
-// попасть левее первой редактируемой позиции: пока цифр нет, это конец
-// строки "+998" (позиция 4); как только есть хоть одна цифра, строка — уже
-// "+998 …" и редактируемая зона начинается сразу за пробелом (позиция 5).
-function clampPhoneCursor(e: SyntheticEvent<HTMLInputElement>) {
-  const el = e.currentTarget
-  const minPos = extractDigits(el.value).length === 0 ? 4 : 5
-  const start = el.selectionStart ?? minPos
-  const end = el.selectionEnd ?? minPos
-  if (start < minPos || end < minPos) {
-    el.setSelectionRange(Math.max(start, minPos), Math.max(end, minPos))
-  }
-}
-
-function formatUzPhone(digits: string): string {
-  let out = "+998"
-  if (digits.length > 0) out += " " + digits.slice(0, 2)
-  if (digits.length > 2) out += " " + digits.slice(2, 5)
-  if (digits.length > 5) out += " " + digits.slice(5, 7)
-  if (digits.length > 7) out += " " + digits.slice(7, 9)
-  return out
-}
-
-function defaultDebitDate(): string {
-  return format(addMonths(new Date(), 1), "yyyy-MM-dd")
-}
-
-interface TrusteeFieldsProps {
-  title: string
-  phoneDigits: string
-  onPhoneChange: (digits: string) => void
-  relation: string
-  onRelationChange: (relation: string) => void
-  error?: string
-}
-
-function TrusteeFields({ title, phoneDigits, onPhoneChange, relation, onRelationChange, error }: TrusteeFieldsProps) {
-  return (
-    <div>
-      <h3 className="font-semibold text-gray-900">{title}</h3>
-      <div className="mt-3 space-y-3">
-        <div>
-          <label className="mb-1 block text-sm text-gray-700">Номер телефона</label>
-          <Input
-            value={formatUzPhone(phoneDigits)}
-            onChange={(e) => onPhoneChange(extractDigits(e.target.value))}
-            onSelect={clampPhoneCursor}
-            placeholder="+998 __ ___ __ __"
-            inputMode="numeric"
-            autoComplete="off"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm text-gray-700">Вид родства</label>
-          <Select value={relation || undefined} onValueChange={onRelationChange}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Выберите вид родства" />
-            </SelectTrigger>
-            <SelectContent>
-              {RELATION_KINDS.map((kind) => (
-                <SelectItem key={kind} value={kind}>
-                  {kind}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-    </div>
-  )
-}
+import {
+  RelativeFields,
+  digitsFromPhone,
+  extractDigits,
+  formatUzPhone,
+  type RelativeDraft,
+} from "./RelativeFields"
 
 // Фаза «Дополнительные данные» — контент бывшей AdditionalDataPage без
 // страничного контейнера/кнопки «назад» (у попапа есть крестик закрытия).
@@ -115,66 +22,122 @@ function TrusteeFields({ title, phoneDigits, onPhoneChange, relation, onRelation
 export function DetailsPhase() {
   const { state, saveDetails } = useScoringFlow()
 
-  const [t1Digits, setT1Digits] = useState(() => digitsFromPhone(state.relations?.[0]?.phone))
-  const [t1Relation, setT1Relation] = useState(state.relations?.[0]?.type ?? "")
-  const [t2Digits, setT2Digits] = useState(() => digitsFromPhone(state.relations?.[1]?.phone))
-  const [t2Relation, setT2Relation] = useState(state.relations?.[1]?.type ?? "")
-  const [debitDate, setDebitDate] = useState(() => defaultDebitDate())
+  const [relatives, setRelatives] = useState<RelativeDraft[]>(() => {
+    if (state.relations && state.relations.length > 0) {
+      return state.relations.map((r) => ({ type: r.type, phoneDigits: digitsFromPhone(r.phone), name: r.name }))
+    }
+    return [{ type: "", phoneDigits: "", name: "" }]
+  })
 
-  const t1Complete = t1Digits.length === 9
-  const t1Valid = t1Complete && t1Relation !== ""
+  const [activityAreaId, setActivityAreaId] = useState(state.survey?.activityAreaId ?? "")
+  const [language, setLanguage] = useState<"ru" | "uz">(state.survey?.language ?? "ru")
+  const [car, setCar] = useState(state.survey?.car ?? false)
 
-  const t2Started = t2Digits.length > 0 || t2Relation !== ""
-  const t2Filled = t2Digits.length === 9 && t2Relation !== ""
-  const t2Partial = t2Started && !t2Filled
+  const clientDigits = extractDigits(BROKER_CLIENT.phone)
 
-  const debitDateValid = /^\d{4}-\d{2}-\d{2}$/.test(debitDate)
+  // Индекс → текст ошибки. Три правила ТЗ: телефон заполнен, не совпадает с
+  // телефоном клиента, не совпадает с другим родственником.
+  const relativeErrors = relatives.map((relative, i) => {
+    if (relative.phoneDigits.length > 0 && relative.phoneDigits.length < 9) {
+      return "Введите номер полностью"
+    }
+    if (relative.phoneDigits.length === 9 && relative.phoneDigits === clientDigits) {
+      return "Номер совпадает с номером клиента"
+    }
+    const duplicate = relatives.some(
+      (other, j) => j !== i && other.phoneDigits.length === 9 && other.phoneDigits === relative.phoneDigits,
+    )
+    if (duplicate) return "Такой номер уже указан у другого родственника"
+    return undefined
+  })
 
-  const canSubmit = t1Valid && !t2Partial && debitDateValid
+  const allFilled = relatives.every(
+    (r) => r.type !== "" && r.name.trim() !== "" && r.phoneDigits.length === 9,
+  )
+  const canSubmit =
+    relatives.length >= 1 && allFilled && relativeErrors.every((e) => e === undefined) && activityAreaId !== ""
 
   function handleSubmit() {
     if (!canSubmit) return
-    const relations: Relation[] = [{ type: t1Relation, phone: formatUzPhone(t1Digits), name: "" }]
-    if (t2Filled) relations.push({ type: t2Relation, phone: formatUzPhone(t2Digits), name: "" })
-    const survey: Survey = { activityAreaId: "other", language: "ru" }
-    saveDetails(relations, survey)
+    const relations: Relation[] = relatives.map((r) => ({
+      type: r.type,
+      phone: formatUzPhone(r.phoneDigits),
+      name: r.name.trim(),
+    }))
+    saveDetails(relations, { activityAreaId, language, car })
   }
 
   return (
     <div className="px-2 py-4">
       <h2 className="text-xl font-bold text-gray-900">Дополнительные данные</h2>
-      <p className="mt-1 text-sm text-gray-500">Укажите контакты близких — это увеличивает шанс одобрения</p>
+      <p className="mt-1 text-sm text-gray-500">
+        Укажите хотя бы одного близкого родственника — это увеличивает шанс одобрения
+      </p>
 
       <div className="mt-4">
         <HoldStatusBar />
       </div>
 
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
-        <TrusteeFields
-          title="Доверительное лицо — 1"
-          phoneDigits={t1Digits}
-          onPhoneChange={setT1Digits}
-          relation={t1Relation}
-          onRelationChange={setT1Relation}
-        />
-        <TrusteeFields
-          title="Доверительное лицо — 2"
-          phoneDigits={t2Digits}
-          onPhoneChange={setT2Digits}
-          relation={t2Relation}
-          onRelationChange={setT2Relation}
-          error={t2Partial ? "Заполните оба поля или очистите" : undefined}
-        />
+      <div className="mt-6 space-y-3">
+        {relatives.map((relative, i) => (
+          <RelativeFields
+            key={i}
+            index={i}
+            value={relative}
+            onChange={(next) => setRelatives((prev) => prev.map((r, j) => (j === i ? next : r)))}
+            onRemove={() => setRelatives((prev) => prev.filter((_, j) => j !== i))}
+            removable={relatives.length > 1}
+            error={relativeErrors[i]}
+          />
+        ))}
       </div>
 
+      <button
+        type="button"
+        onClick={() => setRelatives((prev) => [...prev, { type: "", phoneDigits: "", name: "" }])}
+        className="mt-3 flex h-11 items-center gap-2 text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
+      >
+        <Plus className="size-4" />
+        Добавить родственника
+      </button>
+
       <div className="mt-6">
-        <h3 className="font-semibold text-gray-900">Дата списания оплаты</h3>
-        <Input
-          type="date"
-          className="mt-3 max-w-[240px]"
-          value={debitDate}
-          onChange={(e) => setDebitDate(e.target.value)}
-        />
+        <h3 className="font-semibold text-gray-900">Анкета</h3>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm text-gray-700">Сфера деятельности</label>
+            <Select value={activityAreaId} onValueChange={setActivityAreaId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Выберите" />
+              </SelectTrigger>
+              <SelectContent>
+                {ACTIVITY_AREAS.map((area) => (
+                  <SelectItem key={area.id} value={area.id}>
+                    {area.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-gray-700">Предпочитаемый язык</label>
+            <Select value={language} onValueChange={(value) => setLanguage(value as "ru" | "uz")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ru">Русский</SelectItem>
+                <SelectItem value="uz">Oʻzbekcha</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <label className="mt-3 flex min-h-11 items-center gap-2 text-sm text-gray-700">
+          <Checkbox checked={car} onCheckedChange={(value) => setCar(value === true)} />
+          Есть автомобиль
+        </label>
       </div>
 
       <DialogFooter className="mt-8 w-full">
