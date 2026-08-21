@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useScoringFlow, type CheckoutPhase } from "@/app/scoring-flow"
 import { cn } from "@texnomart/ui/utils"
 
@@ -10,17 +11,33 @@ import { cn } from "@texnomart/ui/utils"
 // интеграции с API её можно было удалить одним движением: убрать этот файл и
 // его вызов в AlifCheckoutDialog.
 
-export interface DemoOption {
-  id: string
-  label: string
-}
-
 export interface DemoScenarioBarProps {
   phase: CheckoutPhase
 }
 
+// Отдельный ключ, а не поле потока: это настройка демо-стенда, а не данные
+// оформления, и она не должна попадать в состояние заявки.
+export const DEMO_PHONE_MATCH_KEY = "broker:demo-phone-match"
+
+export function readDemoPhoneMatch(): boolean {
+  try {
+    return sessionStorage.getItem(DEMO_PHONE_MATCH_KEY) !== "false"
+  } catch {
+    return true
+  }
+}
+
+export function writeDemoPhoneMatch(value: boolean) {
+  try {
+    sessionStorage.setItem(DEMO_PHONE_MATCH_KEY, String(value))
+  } catch {
+    // sessionStorage недоступен — остаёмся на значении по умолчанию
+  }
+}
+
 export function DemoScenarioBar({ phase }: DemoScenarioBarProps) {
   const { state, setAlifLimitStatus, expireSession } = useScoringFlow()
+  const [phoneMatch, setPhoneMatch] = useState(readDemoPhoneMatch)
 
   // Переключатели, относящиеся к текущей фазе. Фазы, у которых своих
   // сценариев нет, показывают только общий «Сессия истекла».
@@ -30,13 +47,34 @@ export function DemoScenarioBar({ phase }: DemoScenarioBarProps) {
     options.push(
       {
         label: "Одобрено",
-        active: state.alifLimitStatus !== "rejected",
+        active: state.alifLimitStatus === "ready",
         onSelect: () => setAlifLimitStatus("ready"),
       },
       {
         label: "Отказ скоринга",
         active: state.alifLimitStatus === "rejected",
         onSelect: () => setAlifLimitStatus("rejected"),
+      },
+    )
+  }
+
+  if (phase === "card") {
+    options.push(
+      {
+        label: "Телефон совпадает",
+        active: phoneMatch,
+        onSelect: () => {
+          writeDemoPhoneMatch(true)
+          setPhoneMatch(true)
+        },
+      },
+      {
+        label: "Телефон не совпадает",
+        active: !phoneMatch,
+        onSelect: () => {
+          writeDemoPhoneMatch(false)
+          setPhoneMatch(false)
+        },
       },
     )
   }
@@ -50,7 +88,7 @@ export function DemoScenarioBar({ phase }: DemoScenarioBarProps) {
           type="button"
           onClick={option.onSelect}
           className={cn(
-            "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+            "flex min-h-11 items-center rounded-full px-3 py-1 text-xs font-medium transition-colors",
             option.active ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200",
           )}
         >
@@ -60,7 +98,7 @@ export function DemoScenarioBar({ phase }: DemoScenarioBarProps) {
       <button
         type="button"
         onClick={expireSession}
-        className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200"
+        className="flex min-h-11 items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200"
       >
         Сессия истекла
       </button>

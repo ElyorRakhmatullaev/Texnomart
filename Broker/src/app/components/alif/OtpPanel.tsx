@@ -92,7 +92,7 @@ export function OtpPanel({ variant, subtitle, ctaLabel, onSuccess, children }: O
       setError(
         left > 0
           ? `Неверный код. Осталось попыток: ${left}`
-          : "Превышено число попыток. Запросите новый код",
+          : "Исчерпано количество попыток ввода ОТП. Запросите новый код",
       )
       return
     }
