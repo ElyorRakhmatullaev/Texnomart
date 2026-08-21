@@ -5,9 +5,11 @@ import { ru } from "date-fns/locale"
 import { Button, buttonVariants } from "@texnomart/ui/button"
 import { cn } from "@texnomart/ui/utils"
 import { useScoringFlow } from "@/app/scoring-flow"
-import { BANKS, ORDER } from "@/lib/broker-mock-data"
+import { buildPlans } from "@/lib/alif-application"
+import { ALIF_LIMITS, ALIF_PREPAYMENT, BANKS, ORDER } from "@/lib/broker-mock-data"
 
 const ALIF = BANKS.find((b) => b.id === "alif")!
+const PLANS = buildPlans(ALIF_LIMITS, ORDER.amount - ALIF_PREPAYMENT)
 
 // Фаза «Кредит оформлен» — зелёное состояние бывшей InstallmentInfoPage без
 // левой карточки-сводки страницы и без страничного контейнера: в попапе для
@@ -19,7 +21,8 @@ export function SuccessPhase() {
   const { state, resetFlow } = useScoringFlow()
   const navigate = useNavigate()
 
-  const tenor = state.tenor ?? ORDER.tenor
+  const plan = PLANS.find((p) => p.id === state.planId) ?? PLANS[0]
+  const tenor = plan.duration
   const contractNo = state.contractNo ?? ""
   const oneCOrderNo = state.oneCOrderNo ?? ""
   const issuedDate = format(new Date(), "dd.MM.yyyy", { locale: ru })

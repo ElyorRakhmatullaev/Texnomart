@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
-import { makeApplicationId, sumToTiyin, type ApplicationStatus } from "@/lib/alif-application"
+import { sumToTiyin, type ApplicationStatus } from "@/lib/alif-application"
 import { ONE_C_ORDER_NO, makeContractNo, SEED_CARD, HOLD_TILL_DAYS, ALIF_PREPAYMENT } from "@/lib/broker-mock-data"
 
 export interface Relation {

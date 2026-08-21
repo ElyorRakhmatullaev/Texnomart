@@ -15,7 +15,7 @@ export interface BankCardProps {
    * фазе успеха, где договор можно посмотреть и скачать.
    */
   completed?: boolean
-  onCheckout: (tenor: number) => void
+  onCheckout: () => void
 }
 
 export function BankCard({ bank, pending, completed = false, onCheckout }: BankCardProps) {
@@ -103,7 +103,7 @@ export function BankCard({ bank, pending, completed = false, onCheckout }: BankC
       <Button
         type="button"
         disabled={pending}
-        onClick={() => onCheckout(tenor)}
+        onClick={() => onCheckout()}
         className="h-11 font-semibold text-black hover:opacity-90 disabled:opacity-50"
         style={pending ? undefined : { background: "#FFD60A", color: "#000" }}
       >

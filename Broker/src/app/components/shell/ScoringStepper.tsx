@@ -14,10 +14,16 @@ const STEPS = [
 
 // Шаги 4–5 больше не отдельные страницы — они достижимы только визуально,
 // подсветкой во время открытого попапа AlifCheckoutDialog (см. checkoutPhaseOf).
+//
+// Внешний степпер описывает весь скоринг (5 шагов). Семь фаз ветки Alif
+// раскладываются по трём его последним шагам; точный прогресс внутри ветки
+// показывает шапка попапа.
 const PHASE_INDEX: Record<CheckoutPhase, number> = {
-  confirm: 2,
-  hold: 2,
+  offer: 2,
+  card: 2,
   details: 3,
+  application: 3,
+  hold: 3,
   otp: 4,
   success: 4,
 }

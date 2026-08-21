@@ -8,7 +8,7 @@ import { ClientInfoBand } from "./ClientInfoBand"
 import { BankCard } from "./BankCard"
 
 export function BanksPage() {
-  const { state, markAlifLimitReady, selectAlif, openCheckout } = useScoringFlow()
+  const { state, markAlifLimitReady, openCheckout } = useScoringFlow()
 
   // Мок callback+polling: лимит Alif «приходит» через ALIF_LIMIT_DELAY_MS.
   // Если лимит уже ready (в т.ч. после перезагрузки страницы) — таймер не запускается.
@@ -21,21 +21,11 @@ export function BanksPage() {
   const alif = BANKS.find((b) => b.id === "alif")!
   const iman = BANKS.find((b) => b.id === "iman")!
 
-  // Alif «Оформить» открывает попап оформления на текущей странице (URL не
-  // меняется); весь дальнейший процесс — фазы AlifCheckoutDialog. Для Iman
-  // сценарий вне прототипа.
-  function handleCheckout(bankId: "alif" | "iman", tenor: number) {
+  // Alif «Оформить» открывает попап на текущей странице (URL не меняется).
+  // Условие выбирается внутри попапа, на экране предложения, поэтому здесь
+  // ничего не выбирается и нечего замораживать.
+  function handleCheckout(bankId: "alif" | "iman") {
     if (bankId === "alif") {
-      // Срок «замораживается» после подтверждения предложения — чип BankCard
-      // сбрасывается к defaultTenor при каждом ремаунте (напр. reload +
-      // повторное «Оформить»), и без этой проверки перезаписал бы
-      // state.tenor поверх уже подтверждённого. Сбрасывает offerConfirmed —
-      // а значит снова открывает выбор срока — только выход из ветки
-      // (cancelOffer, «Вернуться к выбору предложения» на фазе холда);
-      // отмена самого холда срок не размораживает.
-      if (!state.offerConfirmed) {
-        selectAlif(tenor)
-      }
       openCheckout()
     } else {
       toast.info("В прототипе реализован сценарий Alif")
@@ -51,12 +41,12 @@ export function BanksPage() {
           bank={alif}
           pending={!alif.instantLimit && state.alifLimitStatus === "pending"}
           completed={state.creditConfirmed}
-          onCheckout={(tenor) => handleCheckout("alif", tenor)}
+          onCheckout={() => handleCheckout("alif")}
         />
         <BankCard
           bank={iman}
           pending={!iman.instantLimit && state.alifLimitStatus === "pending"}
-          onCheckout={(tenor) => handleCheckout("iman", tenor)}
+          onCheckout={() => handleCheckout("iman")}
         />
       </div>
 

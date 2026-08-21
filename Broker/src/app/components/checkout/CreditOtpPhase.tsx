@@ -1,10 +1,12 @@
 import { Info } from "lucide-react"
 import { OtpPanel } from "@/app/components/alif/OtpPanel"
 import { useScoringFlow } from "@/app/scoring-flow"
-import { BANKS, ORDER } from "@/lib/broker-mock-data"
+import { buildPlans } from "@/lib/alif-application"
+import { ALIF_LIMITS, ALIF_PREPAYMENT, BANKS, ORDER } from "@/lib/broker-mock-data"
 import { HoldStatusBar } from "./HoldStatusBar"
 
 const ALIF = BANKS.find((b) => b.id === "alif")!
+const PLANS = buildPlans(ALIF_LIMITS, ORDER.amount - ALIF_PREPAYMENT)
 
 // Фаза «Код подтверждения кредита» — контент бывшего CreditOtpDialog без
 // Dialog-обёртки (хост — AlifCheckoutDialog). OtpPanel монтируется вместе с
@@ -13,7 +15,8 @@ const ALIF = BANKS.find((b) => b.id === "alif")!
 // факту confirmCredit — эта фаза не навигирует и ничего локально не хранит.
 export function CreditOtpPhase() {
   const { state, confirmCredit } = useScoringFlow()
-  const tenor = state.tenor ?? ORDER.tenor
+  const plan = PLANS.find((p) => p.id === state.planId) ?? PLANS[0]
+  const tenor = plan.duration
 
   return (
     <div className="px-2 py-4">

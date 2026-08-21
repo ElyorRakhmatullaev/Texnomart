@@ -4,7 +4,7 @@ import { Input } from "@texnomart/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@texnomart/ui/select"
 import { Button } from "@texnomart/ui/button"
 import { DialogFooter } from "@texnomart/ui/dialog"
-import { useScoringFlow, type AdditionalData } from "@/app/scoring-flow"
+import { useScoringFlow, type Relation, type Survey } from "@/app/scoring-flow"
 import { RELATION_KINDS } from "@/lib/broker-mock-data"
 import { HoldStatusBar } from "./HoldStatusBar"
 
@@ -110,16 +110,16 @@ function TrusteeFields({ title, phoneDigits, onPhoneChange, relation, onRelation
 
 // Фаза «Дополнительные данные» — контент бывшей AdditionalDataPage без
 // страничного контейнера/кнопки «назад» (у попапа есть крестик закрытия).
-// Переход на otp происходит сам (деривация в AlifCheckoutDialog) по факту
-// saveAdditionalData.
+// Переход дальше по цепочке происходит сам (деривация в AlifCheckoutDialog)
+// по факту saveDetails.
 export function DetailsPhase() {
-  const { state, saveAdditionalData } = useScoringFlow()
+  const { state, saveDetails } = useScoringFlow()
 
-  const [t1Digits, setT1Digits] = useState(() => digitsFromPhone(state.additionalData?.trustee1.phone))
-  const [t1Relation, setT1Relation] = useState(state.additionalData?.trustee1.relation ?? "")
-  const [t2Digits, setT2Digits] = useState(() => digitsFromPhone(state.additionalData?.trustee2?.phone))
-  const [t2Relation, setT2Relation] = useState(state.additionalData?.trustee2?.relation ?? "")
-  const [debitDate, setDebitDate] = useState(() => state.additionalData?.debitDate ?? defaultDebitDate())
+  const [t1Digits, setT1Digits] = useState(() => digitsFromPhone(state.relations?.[0]?.phone))
+  const [t1Relation, setT1Relation] = useState(state.relations?.[0]?.type ?? "")
+  const [t2Digits, setT2Digits] = useState(() => digitsFromPhone(state.relations?.[1]?.phone))
+  const [t2Relation, setT2Relation] = useState(state.relations?.[1]?.type ?? "")
+  const [debitDate, setDebitDate] = useState(() => defaultDebitDate())
 
   const t1Complete = t1Digits.length === 9
   const t1Valid = t1Complete && t1Relation !== ""
@@ -134,14 +134,10 @@ export function DetailsPhase() {
 
   function handleSubmit() {
     if (!canSubmit) return
-    const data: AdditionalData = {
-      trustee1: { phone: formatUzPhone(t1Digits), relation: t1Relation },
-      debitDate,
-    }
-    if (t2Filled) {
-      data.trustee2 = { phone: formatUzPhone(t2Digits), relation: t2Relation }
-    }
-    saveAdditionalData(data)
+    const relations: Relation[] = [{ type: t1Relation, phone: formatUzPhone(t1Digits), name: "" }]
+    if (t2Filled) relations.push({ type: t2Relation, phone: formatUzPhone(t2Digits), name: "" })
+    const survey: Survey = { activityAreaId: "other", language: "ru" }
+    saveDetails(relations, survey)
   }
 
   return (

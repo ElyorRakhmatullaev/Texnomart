@@ -1,49 +1,32 @@
-import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@texnomart/ui/dialog"
-import { checkoutPhaseOf, useScoringFlow, type CheckoutPhase } from "@/app/scoring-flow"
+import { Progress } from "@texnomart/ui/progress"
+import { CHECKOUT_STEP_COUNT, PHASE_STEP, checkoutPhaseOf, useScoringFlow } from "@/app/scoring-flow"
 import { ALIF_PREPAYMENT } from "@/lib/broker-mock-data"
-import { ConfirmPhase } from "./ConfirmPhase"
-import { HoldPhase } from "./HoldPhase"
+import { ApplicationStatusBadge } from "./ApplicationStatusBadge"
+import { OfferPhase } from "./OfferPhase"
+import { CardAttachPhase } from "./CardAttachPhase"
 import { DetailsPhase } from "./DetailsPhase"
+import { ApplicationPhase } from "./ApplicationPhase"
+import { HoldPhase } from "./HoldPhase"
 import { CreditOtpPhase } from "./CreditOtpPhase"
 import { SuccessPhase } from "./SuccessPhase"
 
-// Задержка перед автосменой hold → details ради читаемости: пользователь
-// должен успеть увидеть зелёный бейдж «Предоплата подтверждена» прежде чем
-// фаза сменится (сама смена фазы — мгновенная деривация из состояния).
-const HOLD_TO_DETAILS_DELAY_MS = 600
-
-// Единый попап оформления Alif Nasiya — хост фазовой машины. Фаза
-// деривируется из состояния потока (checkoutPhaseOf), не хранится отдельно:
-// попап всегда открывается на «текущем» шаге, в т.ч. после перезагрузки
-// страницы или повторного «Оформить».
 export function AlifCheckoutDialog() {
   const { state, closeCheckout } = useScoringFlow()
   const held = state.holdStatus === "held"
-  const derivedPhase = checkoutPhaseOf(state, ALIF_PREPAYMENT)
 
-  // phase лагает за derivedPhase только на уходе с фазы холда — это
-  // единственный переход, для которого нужна пауза на читаемость бейджа
-  // «Предоплата подтверждена». Цель — details при первом проходе и otp, если
-  // холд переудерживают после отмены (доп. данные уже введены). Все остальные
-  // смены фаз применяются сразу.
-  const [phase, setPhase] = useState<CheckoutPhase>(derivedPhase)
+  // Фаза применяется сразу, без локального зеркала и без задержки. Раньше уход
+  // с холда лагал на 600 мс, чтобы оператор успел увидеть бейдж «Предоплата
+  // подтверждена»; теперь с этой фазы уводит явная кнопка «Продолжить», так
+  // что бейдж виден столько, сколько нужно, и задержка стала лишней.
+  const phase = checkoutPhaseOf(state, ALIF_PREPAYMENT)
 
-  useEffect(() => {
-    if (phase === derivedPhase) return
-    if (phase === "hold" && (derivedPhase === "details" || derivedPhase === "otp")) {
-      const t = setTimeout(() => setPhase(derivedPhase), HOLD_TO_DETAILS_DELAY_MS)
-      return () => clearTimeout(t)
-    }
-    setPhase(derivedPhase)
-  }, [derivedPhase, phase])
-
-  // Пока предоплата «держится» (спиннер ~2с в фазе hold), закрытие попапа
-  // запрещено — ни крестиком, ни Escape, ни кликом по оверлею.
   function handleOpenChange(open: boolean) {
     if (open || held) return
     closeCheckout()
   }
+
+  const { step, title } = PHASE_STEP[phase]
 
   return (
     <Dialog open={state.checkoutOpen} onOpenChange={handleOpenChange}>
@@ -56,22 +39,30 @@ export function AlifCheckoutDialog() {
           if (held) e.preventDefault()
         }}
       >
-        {/* Заголовок и описание — только для скринридеров; видимый заголовок
-            рендерит каждая фаза сама (разные формулировки по шагам). */}
         <DialogTitle className="sr-only">Оформление рассрочки Alif Nasiya</DialogTitle>
         <DialogDescription className="sr-only">
-          Пошаговое оформление рассрочки Alif Nasiya: подтверждение предложения, удержание предоплаты,
-          дополнительные данные, код подтверждения и результат оформления.
+          Пошаговое оформление рассрочки Alif Nasiya: выбор условия, привязка карты, дополнительные
+          данные, создание заявки, предоплата, код подтверждения и результат оформления.
         </DialogDescription>
 
-        {phase === "confirm" && <ConfirmPhase />}
+        {/* Шапка мастера: прогресс по ветке Alif + статус заявки. Внешний
+            степпер описывает весь скоринг, здесь — только эта ветка. */}
+        <div className="border-b pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-medium text-gray-700">
+              Шаг {step} из {CHECKOUT_STEP_COUNT} · {title}
+            </p>
+            {state.application && <ApplicationStatusBadge status={state.application.status} />}
+          </div>
+          <Progress value={(step / CHECKOUT_STEP_COUNT) * 100} className="mt-2 h-1" />
+        </div>
 
-        {phase === "hold" && <HoldPhase />}
-
+        {phase === "offer" && <OfferPhase />}
+        {phase === "card" && <CardAttachPhase />}
         {phase === "details" && <DetailsPhase />}
-
+        {phase === "application" && <ApplicationPhase />}
+        {phase === "hold" && <HoldPhase />}
         {phase === "otp" && <CreditOtpPhase />}
-
         {phase === "success" && <SuccessPhase />}
       </DialogContent>
     </Dialog>
