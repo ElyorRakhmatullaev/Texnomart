@@ -2,6 +2,7 @@ import { Loader2 } from "lucide-react"
 import { Button } from "@texnomart/ui/button"
 import { Badge } from "@texnomart/ui/badge"
 import { Skeleton } from "@texnomart/ui/skeleton"
+import { cn } from "@texnomart/ui/utils"
 import type { Bank } from "@/lib/broker-mock-data"
 import { ApplicationStatusBadge } from "@/app/components/checkout/ApplicationStatusBadge"
 import type { ApplicationStatus } from "@/lib/alif-application"
@@ -15,12 +16,20 @@ export interface BankCardProps {
    * фазе успеха, где договор можно посмотреть и скачать.
    */
   completed?: boolean
+  /**
+   * Скоринг отказал (demo-переключатель «Отказ скоринга» на экране 1
+   * попапа) — «Назад к банкам» там закрывает попап, не трогая
+   * alifLimitStatus, и без этого пропа карточка молча падала обратно на
+   * ветку "иначе" — зелёный «✓ Одобрена», живой лимит, активное «Оформить»
+   * поверх отказанной заявки.
+   */
+  rejected?: boolean
   /** Статус заявки — показывается рядом со статусом предложения, когда заявка создана. */
   status?: ApplicationStatus
   onCheckout: () => void
 }
 
-export function BankCard({ bank, pending, completed = false, status, onCheckout }: BankCardProps) {
+export function BankCard({ bank, pending, completed = false, rejected = false, status, onCheckout }: BankCardProps) {
   return (
     <div className="flex flex-col gap-4 rounded-lg bg-white p-4 shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:p-6">
       {/* Хедер: логотип + название + статус-бейдж */}
@@ -40,6 +49,8 @@ export function BankCard({ bank, pending, completed = false, status, onCheckout 
           <Badge className="border-transparent bg-green-50 text-green-700 hover:bg-green-50">
             ✓ Оформлена
           </Badge>
+        ) : rejected ? (
+          <Badge className="border-transparent bg-red-50 text-red-700 hover:bg-red-50">Отказано</Badge>
         ) : (
           <Badge className="border-transparent bg-green-50 text-green-700 hover:bg-green-50">
             ✓ Одобрена
@@ -60,8 +71,11 @@ export function BankCard({ bank, pending, completed = false, status, onCheckout 
         </div>
       ) : (
         <div
-          className="flex flex-col gap-2 rounded-lg border p-4 animate-in fade-in duration-500"
-          style={{ borderColor: "#FFD60A" }}
+          className={cn(
+            "flex flex-col gap-2 rounded-lg border p-4 animate-in fade-in duration-500",
+            rejected && "opacity-50",
+          )}
+          style={{ borderColor: rejected ? undefined : "#FFD60A" }}
         >
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-500">Доступный лимит</span>
@@ -80,12 +94,12 @@ export function BankCard({ bank, pending, completed = false, status, onCheckout 
 
       <Button
         type="button"
-        disabled={pending}
+        disabled={pending || rejected}
         onClick={() => onCheckout()}
         className="h-11 font-semibold text-black hover:opacity-90 disabled:opacity-50"
-        style={pending ? undefined : { background: "#FFD60A", color: "#000" }}
+        style={pending || rejected ? undefined : { background: "#FFD60A", color: "#000" }}
       >
-        {pending ? "Загрузка" : completed ? "Открыть договор" : "Оформить"}
+        {pending ? "Загрузка" : completed ? "Открыть договор" : rejected ? "Отказано" : "Оформить"}
       </Button>
     </div>
   )

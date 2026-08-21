@@ -41,6 +41,7 @@ export function BanksPage() {
           bank={alif}
           pending={!alif.instantLimit && state.alifLimitStatus === "pending"}
           completed={state.creditConfirmed}
+          rejected={state.alifLimitStatus === "rejected"}
           status={state.application?.status}
           onCheckout={() => handleCheckout("alif")}
         />
