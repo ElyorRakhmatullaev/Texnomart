@@ -1,10 +1,52 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
-import { ONE_C_ORDER_NO, makeContractNo, SEED_CARD } from "@/lib/broker-mock-data"
+import { makeApplicationId, sumToTiyin, type ApplicationStatus } from "@/lib/alif-application"
+import { ONE_C_ORDER_NO, makeContractNo, SEED_CARD, HOLD_TILL_DAYS, ALIF_PREPAYMENT } from "@/lib/broker-mock-data"
 
-export interface AdditionalData {
-  trustee1: { phone: string; relation: string }
-  trustee2?: { phone: string; relation: string }
-  debitDate: string // "YYYY-MM-DD"
+export interface Relation {
+  /** Вид родства из RELATION_KINDS. */
+  type: string
+  /** Отформатированный номер: "+998 XX XXX XX XX". */
+  phone: string
+  name: string
+}
+
+export interface Survey {
+  activityAreaId: string
+  language: "ru" | "uz"
+  car?: boolean
+}
+
+export interface AlifCard {
+  /** Маска в формате Alif: 986035******1296. */
+  pan: string
+  /** Маска телефона, куда ушёл код: ********9848. */
+  phone: string
+  phoneMatch: boolean
+}
+
+export interface HoldRecord {
+  /** ISO-строки. */
+  at: string
+  till: string
+  cardPan: string
+  /**
+   * Сумма удержания в тийинах — ровно в том виде, в каком её принимает
+   * hold-down-payment. На экран выводится через tiyinToSum: §2 ТЗ требует
+   * показывать суммы в сумах.
+   */
+  amountTiyin: number
+}
+
+export interface AlifApplication {
+  id: string
+  status: ApplicationStatus
+  createdAt: string
+  firstPaymentDate: string
+  imei?: string
+  amount: number
+  commission: number
+  duration: number
+  cancelReasonKey?: string
 }
 
 export interface AttachedCard {
@@ -17,49 +59,94 @@ export interface ScoringFlowState {
   cards: AttachedCard[]
   photoDone: boolean
   myidDone: boolean
-  alifLimitStatus: "pending" | "ready"
-  alifSelected: boolean
-  tenor?: number
+  alifLimitStatus: "pending" | "ready" | "rejected"
   holdStatus: "none" | "held" | "confirmed" | "cancelled"
   offerConfirmed: boolean
   checkoutOpen: boolean
-  additionalData?: AdditionalData
   creditConfirmed: boolean
   contractNo?: string
   oneCOrderNo?: string
+  planId?: string
+  alifCard?: AlifCard
+  relations?: Relation[]
+  survey?: Survey
+  application?: AlifApplication
+  hold?: HoldRecord
+  contractDate?: string
+  sessionExpired?: boolean
 }
 
-const STORAGE_KEY = "broker:scoring-flow"
+// v2 — состояние поменялось несовместимо (planId вместо tenor, relations
+// вместо additionalData, появилась заявка). Чтение делает {...INITIAL,
+// ...parsed}, поэтому старый снимок дал бы полусостояние.
+const STORAGE_KEY = "broker:scoring-flow:v2"
 
 const INITIAL: ScoringFlowState = {
   cards: [{ ...SEED_CARD, confirmed: true }],
   photoDone: false,
   myidDone: false,
   alifLimitStatus: "pending",
-  alifSelected: false,
   holdStatus: "none",
   offerConfirmed: false,
   checkoutOpen: false,
   creditConfirmed: false,
 }
 
-// Попап оформления Alif — фаза деривируется из состояния потока (не хранится
-// отдельным полем), чтобы попап и степпер всегда были синхронны. Порядок
-// проверок важен и читается сверху вниз как «что сейчас блокирует прогресс»:
-// оформленный кредит → неподтверждённая оферта → неудержанная предоплата →
-// уже введённые доп. данные.
-export type CheckoutPhase = "confirm" | "hold" | "details" | "otp" | "success"
+export type CheckoutPhase =
+  | "offer"
+  | "card"
+  | "details"
+  | "application"
+  | "hold"
+  | "otp"
+  | "success"
 
+// Внутренний прогресс мастера: экраны 7 и 8 ТЗ (итог кредита и договор) в
+// попапе — одна фаза успеха, поэтому шагов семь, а не восемь.
+export const PHASE_STEP: Record<CheckoutPhase, { step: number; title: string }> = {
+  offer: { step: 1, title: "Предложение Alif" },
+  card: { step: 2, title: "Привязка карты" },
+  details: { step: 3, title: "Дополнительные данные" },
+  application: { step: 4, title: "Создание заявки" },
+  hold: { step: 5, title: "Предоплата" },
+  otp: { step: 6, title: "Подтверждение кредита" },
+  success: { step: 7, title: "Кредит оформлен" },
+}
+
+export const CHECKOUT_STEP_COUNT = 7
+
+// Порядок проверок читается сверху вниз как «что сейчас блокирует прогресс»,
+// а не «как далеко зашли». Два места здесь трогать нельзя:
+//
+// 1. Холд стоит ПОСЛЕ создания заявки — по ТЗ заявка сначала создаётся со
+//    статусом NEW, и только потом удерживается предоплата.
+// 2. Холд стоит ВЫШЕ otp — иначе отмена холда с шага OTP оставит оператора
+//    на экране подтверждения кредита при уже разблокированных деньгах. Это
+//    ровно тот баг, который чинили 19.08; менять порядок нельзя.
+//
+// relations и survey сохраняются одним действием экрана 3, поэтому проверки
+// на survey здесь нет: заполненные relations означают пройденный экран.
+//
+// Условие фазы холда двойное. Заявка остаётся «Новой» после удержания — на
+// рассмотрение её отправляет отдельное действие submitForReview с кнопки
+// «Продолжить». Без второй половины условия деривация уводила бы оператора с
+// холда сразу после удержания, а тогда предикат «отменить холд можно только
+// пока заявка новая» стал бы невыполнимым: и кнопка отмены холда, и состояние
+// «Холд отменён» превратились бы в мёртвый код, а статус REVIEWING не был бы
+// виден нигде.
 export function checkoutPhaseOf(state: ScoringFlowState, alifPrepayment: number): CheckoutPhase {
   if (state.creditConfirmed) return "success"
-  if (!state.offerConfirmed) return "confirm"
-  // Пока обязательная предоплата не удержана, фаза холда перевешивает уже
-  // пройденные шаги: отмена холда на «Доп. данных» или на OTP возвращает
-  // сюда. additionalData при этом НЕ стирается — после повторного удержания
-  // деривация приводит пользователя ровно туда, где он был.
-  if (alifPrepayment > 0 && state.holdStatus !== "confirmed") return "hold"
-  if (state.additionalData) return "otp"
-  return "details"
+  if (!state.offerConfirmed) return "offer"
+  if (!state.alifCard) return "card"
+  if (!state.relations) return "details"
+  if (!state.application) return "application"
+  if (
+    alifPrepayment > 0 &&
+    (state.holdStatus !== "confirmed" || state.application.status === "NEW")
+  ) {
+    return "hold"
+  }
+  return "otp"
 }
 
 function readInitialState(): ScoringFlowState {
@@ -76,7 +163,9 @@ function readInitialState(): ScoringFlowState {
 export interface ScoringFlowContextValue {
   state: ScoringFlowState
   markAlifLimitReady: () => void
-  selectAlif: (tenor: number) => void
+  selectPlan: (planId: string) => void
+  setAlifLimitStatus: (alifLimitStatus: ScoringFlowState["alifLimitStatus"]) => void
+  attachAlifCard: (alifCard: AlifCard) => void
   addCard: (mask: string, expiry: string) => void
   confirmCard: (mask: string) => void
   removeCard: (mask: string) => void
@@ -89,7 +178,15 @@ export interface ScoringFlowContextValue {
   cancelOffer: () => void
   openCheckout: () => void
   closeCheckout: () => void
-  saveAdditionalData: (data: AdditionalData) => void
+  saveDetails: (relations: Relation[], survey: Survey) => void
+  createApplication: (application: AlifApplication) => void
+  setApplicationStatus: (status: ApplicationStatus) => void
+  submitForReview: () => void
+  cancelApplication: (cancelReasonKey: string) => void
+  sellApplication: () => void
+  unsellApplication: () => void
+  expireSession: () => void
+  refreshSession: () => void
   confirmCredit: () => void
   resetFlow: () => void
 }
@@ -112,10 +209,16 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
     setState((prev) => (prev.alifLimitStatus === "ready" ? prev : { ...prev, alifLimitStatus: "ready" }))
   }, [])
 
-  const selectAlif = useCallback((tenor: number) => {
-    setState((prev) =>
-      prev.alifSelected && prev.tenor === tenor ? prev : { ...prev, alifSelected: true, tenor },
-    )
+  const selectPlan = useCallback((planId: string) => {
+    setState((prev) => (prev.planId === planId ? prev : { ...prev, planId }))
+  }, [])
+
+  const setAlifLimitStatus = useCallback((alifLimitStatus: ScoringFlowState["alifLimitStatus"]) => {
+    setState((prev) => (prev.alifLimitStatus === alifLimitStatus ? prev : { ...prev, alifLimitStatus }))
+  }, [])
+
+  const attachAlifCard = useCallback((alifCard: AlifCard) => {
+    setState((prev) => ({ ...prev, alifCard }))
   }, [])
 
   const addCard = useCallback((mask: string, expiry: string) => {
@@ -146,11 +249,26 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const holdConfirm = useCallback(() => {
-    setState((prev) => (prev.holdStatus === "confirmed" ? prev : { ...prev, holdStatus: "confirmed" }))
+    setState((prev) => {
+      if (prev.holdStatus === "confirmed") return prev
+      const at = new Date()
+      const till = new Date(at.getTime() + HOLD_TILL_DAYS * 24 * 60 * 60 * 1000)
+      const card = prev.cards.find((c) => c.confirmed)
+      return {
+        ...prev,
+        holdStatus: "confirmed",
+        hold: {
+          at: at.toISOString(),
+          till: till.toISOString(),
+          cardPan: card?.mask ?? SEED_CARD.mask,
+          amountTiyin: sumToTiyin(ALIF_PREPAYMENT),
+        },
+      }
+    })
   }, [])
 
-  // Отмена холда: статус → "cancelled" и ничего больше. Ни alifSelected, ни
-  // offerConfirmed, ни additionalData не сбрасываются — пользователь остаётся
+  // Отмена холда: статус → "cancelled" и ничего больше. Ни offerConfirmed, ни
+  // application, ни relations/survey не сбрасываются — пользователь остаётся
   // в ветке Alif на фазе холда (checkoutPhaseOf), видит статус «Холд отменён»
   // и может удержать заново. Полный выход из ветки — отдельное действие
   // cancelOffer.
@@ -158,12 +276,21 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
     setState((prev) => (prev.holdStatus === "cancelled" ? prev : { ...prev, holdStatus: "cancelled" }))
   }, [])
 
-  // Выход из ветки Alif к выбору предложения: сбрасывает подтверждение оферты
-  // и холд, так что срок на карточке банка снова можно выбрать (BanksPage
-  // «замораживает» его, пока offerConfirmed). Введённые доп. данные
-  // сохраняются — повторный вход не заставляет заполнять их заново.
+  // Выход из ветки Alif к выбору предложения. Заявка и холд стираются: уход с
+  // оферты и есть отказ от заявки, а без очистки отменённая заявка сделала бы
+  // повторный вход тупиком — оператор снова попадал бы на терминальный экран
+  // «Заявка отменена». planId и alifCard, наоборот, переживают выход: экран 1
+  // переоткроется с уже выбранным планом, а повторно вводить код карты
+  // оператор не должен.
   const cancelOffer = useCallback(() => {
-    setState((prev) => ({ ...prev, offerConfirmed: false, holdStatus: "none", checkoutOpen: false }))
+    setState((prev) => ({
+      ...prev,
+      offerConfirmed: false,
+      holdStatus: "none",
+      application: undefined,
+      hold: undefined,
+      checkoutOpen: false,
+    }))
   }, [])
 
   const confirmOffer = useCallback(() => {
@@ -178,8 +305,62 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
     setState((prev) => (prev.checkoutOpen ? { ...prev, checkoutOpen: false } : prev))
   }, [])
 
-  const saveAdditionalData = useCallback((data: AdditionalData) => {
-    setState((prev) => ({ ...prev, additionalData: data }))
+  const saveDetails = useCallback((relations: Relation[], survey: Survey) => {
+    setState((prev) => ({ ...prev, relations, survey }))
+  }, [])
+
+  const createApplication = useCallback((application: AlifApplication) => {
+    setState((prev) => ({ ...prev, application }))
+  }, [])
+
+  const setApplicationStatus = useCallback((status: ApplicationStatus) => {
+    setState((prev) =>
+      prev.application ? { ...prev, application: { ...prev.application, status } } : prev,
+    )
+  }, [])
+
+  // Отправка заявки на рассмотрение — отдельное действие, а не побочный эффект
+  // удержания предоплаты. Пока оператор его не выполнил, заявка остаётся «Новой»,
+  // и холд можно отменить.
+  const submitForReview = useCallback(() => {
+    setState((prev) =>
+      prev.application && prev.application.status === "NEW"
+        ? { ...prev, application: { ...prev.application, status: "REVIEWING" } }
+        : prev,
+    )
+  }, [])
+
+  // Отмена заявки снимает и холд: удержанные деньги не могут пережить заявку.
+  const cancelApplication = useCallback((cancelReasonKey: string) => {
+    setState((prev) =>
+      prev.application
+        ? {
+            ...prev,
+            holdStatus: prev.holdStatus === "confirmed" ? "cancelled" : prev.holdStatus,
+            application: { ...prev.application, status: "CANCELLED", cancelReasonKey },
+          }
+        : prev,
+    )
+  }, [])
+
+  const sellApplication = useCallback(() => {
+    setState((prev) =>
+      prev.application ? { ...prev, application: { ...prev.application, status: "SOLD" } } : prev,
+    )
+  }, [])
+
+  const unsellApplication = useCallback(() => {
+    setState((prev) =>
+      prev.application ? { ...prev, application: { ...prev.application, status: "CANCELLED" } } : prev,
+    )
+  }, [])
+
+  const expireSession = useCallback(() => {
+    setState((prev) => (prev.sessionExpired ? prev : { ...prev, sessionExpired: true }))
+  }, [])
+
+  const refreshSession = useCallback(() => {
+    setState((prev) => (prev.sessionExpired ? { ...prev, sessionExpired: false } : prev))
   }, [])
 
   const confirmCredit = useCallback(() => {
@@ -190,7 +371,12 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
             ...prev,
             creditConfirmed: true,
             contractNo: prev.contractNo ?? makeContractNo(),
+            // Дата подписания фиксируется здесь. Раньше SuccessPhase считала её
+            // как new Date() при рендере, поэтому при повторном открытии
+            // показывалась сегодняшняя дата, а не дата оформления.
+            contractDate: prev.contractDate ?? new Date().toISOString(),
             oneCOrderNo: ONE_C_ORDER_NO,
+            application: prev.application ? { ...prev.application, status: "ACTIVE" } : prev.application,
           },
     )
   }, [])
@@ -209,7 +395,9 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
       value={{
         state,
         markAlifLimitReady,
-        selectAlif,
+        selectPlan,
+        setAlifLimitStatus,
+        attachAlifCard,
         addCard,
         confirmCard,
         removeCard,
@@ -222,7 +410,15 @@ export function ScoringFlowProvider({ children }: { children: ReactNode }) {
         cancelOffer,
         openCheckout,
         closeCheckout,
-        saveAdditionalData,
+        saveDetails,
+        createApplication,
+        setApplicationStatus,
+        submitForReview,
+        cancelApplication,
+        sellApplication,
+        unsellApplication,
+        expireSession,
+        refreshSession,
         confirmCredit,
         resetFlow,
       }}
