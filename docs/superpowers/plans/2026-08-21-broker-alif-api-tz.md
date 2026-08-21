@@ -1807,7 +1807,6 @@ import {
   ORDER_ITEM,
 } from "@/lib/broker-mock-data"
 import { useScoringFlow } from "@/app/scoring-flow"
-import { HoldStatusBar } from "./HoldStatusBar"
 
 const PLANS = buildPlans(ALIF_LIMITS, ORDER.amount - ALIF_PREPAYMENT)
 
@@ -1851,10 +1850,6 @@ export function ApplicationPhase() {
   return (
     <div className="px-2 py-4">
       <h2 className="text-xl font-bold text-gray-900">Создание заявки</h2>
-
-      <div className="mt-4">
-        <HoldStatusBar />
-      </div>
 
       <div className="mt-4 rounded-lg border p-4">
         <p className="font-medium text-gray-900">{ORDER_ITEM.goodName}</p>
@@ -1932,6 +1927,12 @@ export function ApplicationPhase() {
 }
 ```
 
+- [ ] **Step 1b: Убрать `HoldStatusBar` с фазы «Дополнительные данные»**
+
+Плашка «Предоплата удержана» рендерится только при `holdStatus === "confirmed"`, а в новом порядке фаз холд идёт **после** и доп. данных, и создания заявки. Деривация приводит на `details` только при незаполненных `relations`, а на `application` — только при отсутствующей заявке; ни в одном из этих состояний холд подтверждённым быть не может. Значит на обеих фазах плашка — мёртвый код: она есть в репозитории и не существует в продукте.
+
+Поэтому на фазе создания заявки её нет (см. код выше), и её нужно убрать с фазы доп. данных: в `Broker/src/app/components/checkout/DetailsPhase.tsx` удалить импорт `HoldStatusBar` и его использование. Единственная фаза, где плашка живая, — `otp`: туда деривация приводит уже при подтверждённом холде.
+
 - [ ] **Step 2: Проверить сборку**
 
 Запустить: `corepack pnpm build:broker`
@@ -1940,7 +1941,7 @@ export function ApplicationPhase() {
 - [ ] **Step 3: Коммит**
 
 ```bash
-git add Broker/src/app/components/checkout/ApplicationPhase.tsx
+git add Broker/src/app/components/checkout/ApplicationPhase.tsx Broker/src/app/components/checkout/DetailsPhase.tsx
 git commit -m "feat(broker): экран создания заявки — товар из 1С, дата первого платежа, итоги"
 ```
 
