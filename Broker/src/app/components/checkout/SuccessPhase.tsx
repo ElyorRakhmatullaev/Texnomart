@@ -2,10 +2,11 @@ import { Check, Download, ExternalLink } from "lucide-react"
 import { useNavigate } from "react-router"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
+import { toast } from "sonner"
 import { Button, buttonVariants } from "@texnomart/ui/button"
 import { cn } from "@texnomart/ui/utils"
 import { useScoringFlow } from "@/app/scoring-flow"
-import { buildPlans } from "@/lib/alif-application"
+import { buildPlans, canSell, canUnsell } from "@/lib/alif-application"
 import { ALIF_LIMITS, ALIF_PREPAYMENT, BANKS, ORDER } from "@/lib/broker-mock-data"
 
 const ALIF = BANKS.find((b) => b.id === "alif")!
@@ -18,7 +19,7 @@ const PLANS = buildPlans(ALIF_LIMITS, ORDER.amount - ALIF_PREPAYMENT)
 // (checkoutPhaseOf) — после перезагрузки страницы попап откроется сразу на
 // этой фазе, минуя otp.
 export function SuccessPhase() {
-  const { state, resetFlow } = useScoringFlow()
+  const { state, resetFlow, sellApplication, unsellApplication } = useScoringFlow()
   const navigate = useNavigate()
 
   const plan = PLANS.find((p) => p.id === state.planId) ?? PLANS[0]
@@ -94,6 +95,34 @@ export function SuccessPhase() {
             <ExternalLink className="size-4" />
             Посмотреть договор
           </a>
+
+          {state.application && canSell(state.application.status) && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                sellApplication()
+                toast.success("Заявка продана Alif")
+              }}
+              className="h-11 w-full bg-white font-semibold"
+            >
+              Продать Alif
+            </Button>
+          )}
+
+          {state.application && canUnsell(state.application.status) && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                unsellApplication()
+                toast("Продажа отменена")
+              }}
+              className="h-11 w-full bg-white font-semibold"
+            >
+              Отменить продажу
+            </Button>
+          )}
 
           <Button
             type="button"
