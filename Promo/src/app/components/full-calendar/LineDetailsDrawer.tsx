@@ -71,6 +71,10 @@ export function LineDetailsDrawer({
   const pending = line?.pending;
   const isExclusion = Boolean(line?.removalPending || line?.removed);
   const rejected = pending?.rejected;
+  // Дата отправки запроса: у повторного действия она в `pending.at`, у запроса на
+  // исключение — в `removalRequestedAt` (трекер, стр. 46).
+  const requestedAtIso = pending?.at ?? line?.removalRequestedAt;
+  const requestedAt = requestedAtIso ? new Date(requestedAtIso) : undefined;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -177,11 +181,14 @@ export function LineDetailsDrawer({
                 label="Кто отправил"
                 value={pending?.by ?? line.removalRequestedBy ?? "—"}
               />
+              {/* Трекер, стр. 46 (проверка Б/А 09.09.26): у запроса на исключение
+                  даты отправки не было — панель читала только `pending.at`, а
+                  посев исключения хранит её в `removalRequestedAt`. */}
               <Row
                 label="Дата отправки"
                 value={
-                  pending ? (
-                    <RuDate value={new Date(pending.at)} withTime />
+                  requestedAt ? (
+                    <RuDate value={requestedAt} withTime />
                   ) : (
                     "—"
                   )
