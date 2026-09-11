@@ -24,12 +24,15 @@ import {
 import { cn } from "@texnomart/ui/utils";
 import {
   CATEGORY_MANAGERS,
-  NOMENCLATURE,
   formatPromoNo,
   type CategoryDistributionEntry,
   type PromoCampaign,
 } from "../../../lib/promo-mock-data";
-import { toDateOnly, parseDateOnly } from "../../../lib/distribution-store";
+import {
+  PROMO_CATEGORIES,
+  toDateOnly,
+  parseDateOnly,
+} from "../../../lib/distribution-store";
 
 /**
  * «11-я часть» — переработка формы Волны 6 по визуалу PM: правая панель
@@ -65,6 +68,12 @@ interface Props {
   onSave: (entries: CategoryDistributionEntry[]) => void;
   /** Убрать распределение целиком — акция живёт по общей логике. */
   onClear: () => void;
+  /**
+   * Можно ли завести категорию вручную. Трекер, стр. 74 п.6: создание новой
+   * категории оставлено директору маркетинга; коммерческий директор выбирает из
+   * согласованного списка `PROMO_CATEGORIES`.
+   */
+  canCreateCategory?: boolean;
 }
 
 /** Порядок чипов — русская неделя; значения — `getDay` (воскресенье = 0). */
@@ -86,6 +95,52 @@ function weekdayHeading(date: Date): string {
 const dupKey = (date: string, category: string) =>
   `${date}|${category.trim().toLowerCase()}`;
 
+/**
+ * Поле категории. Директор маркетинга заводит категории вручную (свободный ввод с
+ * подсказками), коммерческий директор выбирает из согласованного списка — трекер,
+ * стр. 74 пп.5–6.
+ */
+function CategoryField({
+  id,
+  value,
+  options,
+  canCreate,
+  onChange,
+}: {
+  id?: string;
+  value: string;
+  options: string[];
+  canCreate: boolean;
+  onChange: (v: string) => void;
+}) {
+  if (canCreate) {
+    return (
+      <Input
+        id={id}
+        aria-label="Категория"
+        list="distribution-categories"
+        value={value}
+        placeholder="Категория"
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+  return (
+    <Select value={value || undefined} onValueChange={onChange}>
+      <SelectTrigger id={id} aria-label="Категория">
+        <SelectValue placeholder="Выберите категорию" />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((c) => (
+          <SelectItem key={c} value={c}>
+            {c}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function CategoryDistributionDialog({
   open,
   onOpenChange,
@@ -93,6 +148,7 @@ export function CategoryDistributionDialog({
   initial,
   onSave,
   onClear,
+  canCreateCategory = false,
 }: Props) {
   const keyRef = React.useRef(0);
   const newKey = () => ++keyRef.current;
@@ -131,13 +187,17 @@ export function CategoryDistributionDialog({
     return eachDayOfInterval({ start: campaign.startDate, end: campaign.endDate });
   }, [campaign]);
 
-  /** Подсказки категорий: справочник КМ + категории номенклатуры. Ввод остаётся свободным. */
-  const categorySuggestions = React.useMemo(() => {
-    const set = new Set<string>();
-    for (const km of CATEGORY_MANAGERS) set.add(km.category);
-    for (const item of NOMENCLATURE) if (item.category) set.add(item.category);
-    return [...set].sort((a, b) => a.localeCompare(b, "ru"));
-  }, []);
+  /**
+   * Варианты категорий — согласованный список (стр. 74 п.5) плюс значения, уже
+   * назначенные этой акции ранее: иначе строка со «старой» категорией потеряла бы
+   * её при первом же сохранении.
+   */
+  const categoryOptions = React.useMemo(() => {
+    const set = new Set<string>(PROMO_CATEGORIES);
+    for (const r of rows) if (r.category.trim()) set.add(r.category.trim());
+    for (const e of initial) if (e.category.trim()) set.add(e.category.trim());
+    return [...set];
+  }, [rows, initial]);
 
   /** Группировка по дате для отрисовки; ISO-строки сортируются лексикографически. */
   const groups = React.useMemo(() => {
@@ -385,12 +445,12 @@ export function CategoryDistributionDialog({
                     <Label className="text-xs text-muted-foreground" htmlFor="fill-cat">
                       Категория для всех дат
                     </Label>
-                    <Input
+                    <CategoryField
                       id="fill-cat"
-                      list="distribution-categories"
                       value={fillCategory}
-                      placeholder="Например, Смартфоны и гаджеты"
-                      onChange={(e) => setFillCategory(e.target.value)}
+                      options={categoryOptions}
+                      canCreate={canCreateCategory}
+                      onChange={setFillCategory}
                     />
                   </div>
                   <div className="space-y-1">
@@ -444,12 +504,11 @@ export function CategoryDistributionDialog({
                   </div>
                   {groupRows.map((r) => (
                     <div key={r.key} className="grid gap-2 sm:grid-cols-[1fr_180px_auto]">
-                      <Input
-                        aria-label="Категория"
-                        list="distribution-categories"
+                      <CategoryField
                         value={r.category}
-                        placeholder="Категория"
-                        onChange={(e) => patch(r.key, { category: e.target.value })}
+                        options={categoryOptions}
+                        canCreate={canCreateCategory}
+                        onChange={(v) => patch(r.key, { category: v })}
                       />
                       <Select
                         value={r.responsibleKmId}
@@ -510,7 +569,7 @@ export function CategoryDistributionDialog({
             </div>
 
             <datalist id="distribution-categories">
-              {categorySuggestions.map((c) => (
+              {categoryOptions.map((c) => (
                 <option key={c} value={c} />
               ))}
             </datalist>

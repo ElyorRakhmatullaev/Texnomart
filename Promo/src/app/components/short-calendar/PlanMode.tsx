@@ -402,11 +402,15 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
   // согласование: у черновика распределять ещё нечего.
   const [distributeId, setDistributeId] = React.useState<string | null>(null);
 
+  // Трекер, стр. 74 п.1 (18.08.2026): распределять может не только коммерческий
+  // директор (и его уполномоченное лицо), но и директор маркетинга.
   const canDistribute = React.useCallback(
     (id: string) => {
-      const isKd =
-        currentRole === "Коммерческий директор" || canActAsKd(currentUser);
-      return isKd && sendOf(id) !== "draft";
+      const isDistributor =
+        currentRole === "Коммерческий директор" ||
+        currentRole === PLAN_EDITOR ||
+        canActAsKd(currentUser);
+      return isDistributor && sendOf(id) !== "draft";
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currentRole, currentUser, sendStatus]
@@ -419,8 +423,10 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
 
   // «11-я часть» (визуал PM): распределение доступно и из полосы выбора —
   // кнопка активна при ровно одной выбранной строке, которую можно распределять.
-  const isKdActor =
-    currentRole === "Коммерческий директор" || canActAsKd(currentUser);
+  const isDistributorActor =
+    currentRole === "Коммерческий директор" ||
+    currentRole === PLAN_EDITOR ||
+    canActAsKd(currentUser);
   const soloSelectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
   const canDistributeSolo =
     soloSelectedId !== null && canDistribute(soloSelectedId);
@@ -1083,7 +1089,7 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
                   </div>
                 ) : (
                   <div className="ml-auto flex flex-wrap items-center gap-2">
-                    {isKdActor && (
+                    {isDistributorActor && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1172,6 +1178,8 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
         onOpenChange={(v) => !v && setDistributeId(null)}
         campaign={distributeCampaign}
         initial={distributeInitial}
+        // стр. 74 п.6 — новую категорию заводит только директор маркетинга.
+        canCreateCategory={currentRole === PLAN_EDITOR}
         onSave={(entries) => {
           if (!distributeId) return;
           setDistributionFor(distributeId, entries);
