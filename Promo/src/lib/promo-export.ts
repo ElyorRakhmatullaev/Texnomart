@@ -33,6 +33,19 @@ function csvCell(v: string): string {
   return /[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
 
+/**
+ * Заставляет Excel читать значение как текст. Короткий № промо «26-3» Excel при
+ * открытии CSV сам распознаёт как дату (26 марта) — трекер, стр. 29, замечание
+ * от 17.08.2026. Формула `="26-3"` разбирается Excel уже ПОСЛЕ снятия CSV-кавычек,
+ * поэтому `csvCell` может экранировать её как обычное значение.
+ *
+ * Только для CSV: xlsx-выгрузки (`audit-xlsx`, `report-xlsx`, …) пишут ячейку через
+ * `aoa_to_sheet` строкой, то есть с типом `s`, и повторного разбора там нет.
+ */
+function csvForceText(v: string): string {
+  return `="${v.replace(/"/g, '""')}"`;
+}
+
 export function toCsv(rows: string[][]): string {
   const body = rows.map((r) => r.map(csvCell).join(";")).join("\r\n");
   return "﻿" + body; // BOM so Excel detects UTF-8
@@ -131,7 +144,7 @@ export function buildCalendarCsv(
       )
       .join(" | ");
     return [
-      formatPromoNo(c.id),
+      csvForceText(formatPromoNo(c.id)),
       c.type,
       c.name,
       fmtDate(c.startDate),
@@ -218,7 +231,7 @@ export function buildFullCalendarCsv(
         .map((g) => (getNomenclatureItem(g.nomenclatureId)?.stock ?? 0).toString())
         .join(", ");
       rows.push([
-        formatPromoNo(c.id), // № промо repeated on every line (§13 flat format)
+        csvForceText(formatPromoNo(c.id)), // № промо repeated on every line (§13 flat format)
         c.planned ? "Плановая" : "Внеплановая",
         c.type,
         c.name,
@@ -360,7 +373,7 @@ export function buildPlanCsv(rows: PlanExportRow[]): string {
       : legacy;
     const rejectionAt = rejection ? new Date(rejection.at) : undefined;
     return [
-      formatPromoNo(r.id),
+      csvForceText(formatPromoNo(r.id)),
       lifecycleOf(r.id),
       cyc ? String(cyc.no) : "—",
       r.type,
