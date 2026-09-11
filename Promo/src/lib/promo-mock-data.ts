@@ -1096,7 +1096,7 @@ const LINE_SEED: LineSeed[] = [
   // отделам»): one normal line + one already-approved removal (removed) so the
   // "Исключено" report plashka is demoable on load (see REPORT_CHANGE_SETS).
   { id: "L-0019", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10008", off: 0.11, forecast: 22, utp: "Бесплатная доставка и установка", advKm: true, advMkt: true, supplierCompensation: 300000, compensationLimit: 40 },
-  { id: "L-0020", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10009", off: 0.09, forecast: 30, removalPending: true, removalReason: "Снят с продаж поставщиком — исключить из акции.", supplierCompensation: 200000, compensationLimit: 25 },
+  { id: "L-0020", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10009", off: 0.09, forecast: 30, removalPending: true, removalReason: "Снят с продаж поставщиком — исключить из акции.", removalRequestedAt: new Date(2026, 5, 26, 9, 15).toISOString(), supplierCompensation: 200000, compensationLimit: 25 },
   // Added in the latest report version (S5 «добавленные данные» demo — see REPORT_CHANGE_SETS).
   { id: "L-0021", campaignId: "UN-2026-015", kmId: "km-2", nomenclatureId: "1C-10007", off: 0.13, forecast: 18, utp: "Подарочная упаковка", supplierCompensation: 350000, compensationLimit: 35 },
 ];
@@ -1635,15 +1635,15 @@ export function getFullCalendarAccess(role: PromoRole): FullCalendarAccess {
         marketingFlagOnly: false,
         note: "Просмотр после утверждения коммерческим директором.",
       };
-    case "Сотрудник маркетинга":
-      return {
-        canView: true,
-        canEditOwnLines: false,
-        marketingFlagOnly: true,
-        note: "Доступно изменение только поля «В рекламу (выбрано маркетингом)».",
-      };
     default:
       // Директор маркетинга, Сотрудник закупа, Сотрудник аналитики — нет доступа.
+      //
+      // Трекер, стр. 58 п.3 (18.08.2026): «Сотрудник маркетинга» тоже потерял доступ
+      // к полному промо-календарю. Раньше роль пускали сюда ради одного поля —
+      // «В рекламу (выбрано маркетингом)»; оно редактируется в «Отчётах смежным
+      // отделам» (`getReportAccess().canEditMarketingFlag`, §7.2), поэтому
+      // возможность не теряется. `ACCESS_MATRIX` по этой роли уже стоял `none` —
+      // теперь код и документ совпадают.
       return {
         canView: false,
         canEditOwnLines: false,
@@ -3499,11 +3499,17 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
     {
       id: "ntf-01",
       type: "data-changed",
-      campaignId: "PR-2026-001",
-      campaignName: "Чёрная пятница 2026",
-      reportVersion: 3,
-      actor: { name: "Каримов Шерзод", role: "Категорийный менеджер (КМ)" },
-      description: "Отправлена новая версия отчёта смежным отделам: изменены цены и остатки по 4 позициям.",
+      // Трекер, стр. 61 п.3 — «везде предусмотреть кнопку "Открыть отчёт"».
+      // Уведомление висело на PR-2026-001, у которой отчёт смежным отделам не
+      // отправлен: `/reports` показывает только `getSentCampaigns()`, поэтому
+      // `notificationLinksFor` справедливо прятал ссылку, и у одного отчётного
+      // уведомления кнопки не было. Переведено на PR-2026-003 — её версия 4
+      // действительно отправлена и открывается на экране отчётов.
+      campaignId: "PR-2026-003",
+      campaignName: "1+1 на мелкую бытовую технику",
+      reportVersion: 4,
+      actor: { name: "Каримов Шохрух", role: "Категорийный менеджер (КМ)" },
+      description: "Отправлена новая версия отчёта смежным отделам: изменена новая цена по 2 позициям.",
       sentAt: minutesAgo(5),
       read: false,
       href: "/reports",
