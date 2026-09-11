@@ -13,6 +13,7 @@ import {
 import type { AppShellConfig } from "@texnomart/shared/types";
 import type { PromoRole } from "./role-context";
 import { countApprovalsAwaiting, formatPromoNo } from "../lib/promo-mock-data";
+import { rolesWithAreaAccess } from "../lib/permissions";
 
 const TexnomartLogoFull = (
   <svg width="180" height="38" viewBox="0 0 180 38" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-6 w-auto shrink-0">
@@ -70,7 +71,14 @@ export function createPromoShellConfig(
       {
         items: [
           { label: "Краткий промо-календарь", icon: CalendarRange, href: "/short-calendar" },
-          { label: "Полный промо-календарь", icon: Table2, href: "/full-calendar" },
+          {
+            label: "Полный промо-календарь",
+            icon: Table2,
+            href: "/full-calendar",
+            // Трекер, стр. 58 п.3 — «Сотрудник маркетинга» не должен видеть раздел.
+            // Список берётся из «Матрицы прав», а не перечисляется здесь.
+            roles: rolesWithAreaAccess("fullCalendar") as PromoRole[],
+          },
           {
             label: "Согласование",
             icon: CheckCircle2,

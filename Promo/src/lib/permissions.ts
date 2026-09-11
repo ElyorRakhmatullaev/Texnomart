@@ -407,6 +407,22 @@ export function rolesWithCapability(cap: Capability): PromoRole[] {
   return PROMO_ROLES.filter((r) => cap.allowed(r));
 }
 
+/**
+ * Роли (в каноническом порядке), у которых по матрице есть хоть какой-то доступ к
+ * области. Нужна навигации: пункт меню не должен вести на экран, который матрица
+ * объявляет закрытым.
+ *
+ * Трекер, стр. 58 п.3: «Сотрудник маркетинга» видел «Полный промо-календарь», хотя
+ * `ACCESS_MATRIX` по этой роли уже стоял `none` — пункт меню просто не был закрыт.
+ * Читаем список из матрицы, а не перечисляем роли руками, иначе документ и меню
+ * снова разъедутся.
+ */
+export function rolesWithAreaAccess(areaId: string): PromoRole[] {
+  return PROMO_ROLES.filter(
+    (r) => (ACCESS_MATRIX[r]?.[areaId]?.level ?? "none") !== "none"
+  );
+}
+
 // ── Screen access (this matrix screen) — КД + Администратор ──────────────────
 
 export interface PermissionsScreenAccess {
