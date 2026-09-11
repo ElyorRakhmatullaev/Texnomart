@@ -18,6 +18,8 @@ import {
   getNomenclatureItem,
   getStoreAvailability,
   installmentTerm,
+  isGiftChoiceType,
+  isGiftType,
   programMonthly,
   type PromoCampaign,
   type PromoLine,
@@ -62,6 +64,41 @@ const nomName = (id: string | undefined) =>
 const oldPriceOf = (line: PromoLine) =>
   getNomenclatureItem(line.nomenclatureId)?.oldRetailPrice ?? 0;
 
+/**
+ * Подарки — та же механика, что в полном промо-календаре (трекер, стр. 58 п.1;
+ * гриду соответствует `GiftCell` в `FullCalendarGrid.tsx`):
+ *  • не подарочный тип акции → «—» во всех девяти колонках;
+ *  • «Подарок на выбор» → варианты только в блоке «Подарок на выбор (1)»,
+ *    «Подарок (1)/(2)» показывают «—»;
+ *  • фиксированный подарочный тип → «Подарок (1)» = gifts[0], «Подарок (2)» =
+ *    gifts[1], блок выбора показывает «—».
+ * Отчёт — плоская таблица без подстрок, поэтому варианты «подарка на выбор»
+ * перечисляются в одной ячейке через запятую.
+ */
+type GiftBlock = "fixed1" | "fixed2" | "choice";
+type GiftValue = "nom" | "avail" | "stock";
+
+function giftCell(block: GiftBlock, field: GiftValue): Accessor {
+  return (l, c) => {
+    if (!isGiftType(c.type)) return DASH;
+    const isChoiceCampaign = isGiftChoiceType(c.type);
+    if (isChoiceCampaign !== (block === "choice")) return DASH;
+
+    const gifts = l.gifts ?? [];
+    const picked =
+      block === "choice" ? gifts : gifts.slice(block === "fixed1" ? 0 : 1, block === "fixed1" ? 1 : 2);
+    if (picked.length === 0) return DASH;
+
+    const values = picked.map((g) => {
+      if (field === "nom") return nomName(g.nomenclatureId);
+      if (field === "avail")
+        return formatAvailabilityPct(getStoreAvailability(g.nomenclatureId).pct);
+      return num(getNomenclatureItem(g.nomenclatureId)?.stock);
+    });
+    return values.join(", ");
+  };
+}
+
 // gridFields CellKind ("checkbox") → ReportFieldKind ("check").
 function mapKind(k: CellKind): ReportFieldKind {
   return k === "checkbox" ? "check" : k;
@@ -87,10 +124,6 @@ const ACCESSORS: Record<string, Accessor> = {
   start: (_l, c) => ruDate(c.startDate),
   end: (_l, c) => ruDate(c.endDate),
   nomenclature: (l) => nomName(l.nomenclatureId),
-  giftNomenclature: (l) =>
-    l.gifts && l.gifts.length
-      ? l.gifts.map((g) => nomName(g.nomenclatureId)).join(", ")
-      : DASH,
   // product (from gridFields)
   brand: (l) => getNomenclatureItem(l.nomenclatureId)?.brand ?? DASH,
   storeAvailability: (l) =>
@@ -105,14 +138,30 @@ const ACCESSORS: Record<string, Accessor> = {
   inst006: (l) => money(programMonthly(l.newPrice, 6)),
   inst0012: (l) => money(programMonthly(l.newPrice, 12)),
   inst5002: (l) => money(programMonthly(l.newPrice, 2, 0.5)),
+  // «Платёж (старая)» и «Размер скидки» — трекер, стр. 58 п.2 (отсутствовали в
+  // отчёте для маркетинга, хотя в полном промо-календаре считаются с S4).
+  t12old: (l) => money(installmentTerm(l, oldPriceOf(l), 12).oldMonthly),
   t12new: (l) => money(installmentTerm(l, oldPriceOf(l), 12).newMonthly),
+  t12disc: (l) => money(installmentTerm(l, oldPriceOf(l), 12).discount),
   t12full: (l) => money(installmentTerm(l, oldPriceOf(l), 12).newFullPrice),
+  t24old: (l) => money(installmentTerm(l, oldPriceOf(l), 24).oldMonthly),
   t24new: (l) => money(installmentTerm(l, oldPriceOf(l), 24).newMonthly),
+  t24disc: (l) => money(installmentTerm(l, oldPriceOf(l), 24).discount),
   t24full: (l) => money(installmentTerm(l, oldPriceOf(l), 24).newFullPrice),
+  t36old: (l) => money(installmentTerm(l, oldPriceOf(l), 36).oldMonthly),
   t36new: (l) => money(installmentTerm(l, oldPriceOf(l), 36).newMonthly),
+  t36disc: (l) => money(installmentTerm(l, oldPriceOf(l), 36).discount),
   t36full: (l) => money(installmentTerm(l, oldPriceOf(l), 36).newFullPrice),
-  // marketing
-  giftStock: (l) => num(getNomenclatureItem(l.gifts?.[0]?.nomenclatureId ?? "")?.stock),
+  // marketing — подарки блоками, как в полном промо-календаре (стр. 58 п.1)
+  gift1Nomenclature: giftCell("fixed1", "nom"),
+  gift1Availability: giftCell("fixed1", "avail"),
+  gift1Stock: giftCell("fixed1", "stock"),
+  gift2Nomenclature: giftCell("fixed2", "nom"),
+  gift2Availability: giftCell("fixed2", "avail"),
+  gift2Stock: giftCell("fixed2", "stock"),
+  giftChoiceNomenclature: giftCell("choice", "nom"),
+  giftChoiceAvailability: giftCell("choice", "avail"),
+  giftChoiceStock: giftCell("choice", "stock"),
   utp: (l) => l.utp ?? DASH,
   advRecommendedKm: (l) => l.advRecommendedKm,
   advSelectedMarketing: (l) => l.advSelectedMarketing,
@@ -131,8 +180,6 @@ const LOCAL_COLUMNS: Record<string, Omit<ReportColumn, "value">> = {
   start: { id: "start", label: "Начало", kind: "date", group: "Идентификация", width: 110 },
   end: { id: "end", label: "Окончание", kind: "date", group: "Идентификация", width: 110 },
   nomenclature: { id: "nomenclature", label: "Номенклатура", kind: "text", group: "Товар", width: 260 },
-  giftNomenclature: { id: "giftNomenclature", label: "Номенклатура по подаркам", kind: "text", group: "Товар", width: 200 },
-  giftStock: { id: "giftStock", label: "Остаток подарка", kind: "number", group: "Подарки", width: 130 },
 };
 
 const GRID_BY_ID = new Map<string, ColumnDef>(GRID_COLUMNS.map((c) => [c.id, c]));
@@ -163,17 +210,28 @@ function buildColumn(id: string): ReportColumn {
 }
 
 // Ordered per-department id lists (subset of gridFields + local identity columns).
+// Порядок внутри групп повторяет gridFields — требование «последовательность полей
+// должна соответствовать полному промо-календарю» (трекер, стр. 58).
 const MARKETING_IDS = [
   "priznak", "km", "promoNo", "type", "name", "start", "end",
   "nomenclature", "brand", "storeAvailability", "stock", "oldPrice",
   "newPrice", "discountPct", "cashDiscountPct",
   "inst006", "inst0012", "inst5002",
-  "t12new", "t12full", "t24new", "t24full", "t36new", "t36full",
-  "giftNomenclature", "giftStock", "utp", "advRecommendedKm", "advSelectedMarketing",
+  "t12old", "t12new", "t12disc", "t12full",
+  "t24old", "t24new", "t24disc", "t24full",
+  "t36old", "t36new", "t36disc", "t36full",
+  "gift1Nomenclature", "gift1Availability", "gift1Stock",
+  "gift2Nomenclature", "gift2Availability", "gift2Stock",
+  "giftChoiceNomenclature", "giftChoiceAvailability", "giftChoiceStock",
+  "utp", "advRecommendedKm", "advSelectedMarketing",
 ];
+// Закуп/Аналитика: механики подарков разделены так же, как в полном промо-календаре,
+// но без колонок наличия/остатка — эти два отчёта их никогда не показывали и служат
+// расчёту компенсации поставщика.
 const COMPENSATION_IDS = [
-  "type", "name", "start", "end",
-  "nomenclature", "giftNomenclature", "supplierCompensation", "compensationLimit",
+  "type", "name", "start", "end", "nomenclature",
+  "gift1Nomenclature", "gift2Nomenclature", "giftChoiceNomenclature",
+  "supplierCompensation", "compensationLimit",
 ];
 
 const MARKETING_COLUMNS = MARKETING_IDS.map(buildColumn);

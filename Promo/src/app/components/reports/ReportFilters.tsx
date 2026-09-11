@@ -50,8 +50,11 @@ export interface ReportFilterState {
 }
 export const EMPTY_REPORT_FILTERS: ReportFilterState = { columns: {}, change: [], ack: "all" };
 
-// columns treated as enum multi-selects (low-cardinality); all other text = search
-const ENUM_COLUMN_IDS = new Set(["priznak", "type"]);
+// Колонки со списком уникальных значений вместо строки поиска. Трекер, стр. 58 п.4
+// (18.08.2026): по «ФИО КМ» и «Номенклатуре» был доступен только ручной ввод —
+// теперь у них тот же Excel-подобный контрол (список, поиск, множественный выбор,
+// «Выбрать все», «Очистить фильтр»), что у признака и типа промо.
+const ENUM_COLUMN_IDS = new Set(["priznak", "type", "km", "nomenclature"]);
 
 function parseNum(s: string): number | null {
   const cleaned = s.replace(/[^\d,.-]/g, "").replace(",", ".");
@@ -272,20 +275,7 @@ function EnumMultiSelect({
               </CommandGroup>
             </CommandList>
           </Command>
-          {selected.length > 0 && (
-            <div className="border-t p-1">
-              <button
-                type="button"
-                onClick={() => onChange([])}
-                className={cn(
-                  buttonVariants({ variant: "ghost", size: "sm" }),
-                  "h-7 w-full justify-start text-xs text-muted-foreground"
-                )}
-              >
-                Очистить выбор ({selected.length})
-              </button>
-            </div>
-          )}
+          <EnumFooter options={options} selected={selected} onChange={onChange} />
         </PopoverContent>
       </Popover>
     </label>
@@ -320,6 +310,57 @@ export function isColumnFilterActive(f: ColumnFilter | undefined): boolean {
   if (!f) return false;
   return Boolean(
     f.text?.trim() || f.selected?.length || f.min != null || f.max != null || f.from || f.to
+  );
+}
+
+/**
+ * Футер Excel-подобного фильтра: «Выбрать все» отмечает весь список, «Очистить
+ * фильтр» снимает отбор (пустой выбор = фильтр не применён). Трекер, стр. 58 п.4.
+ */
+function EnumFooter({
+  options,
+  selected,
+  onChange,
+  showClear = true,
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+  /**
+   * false — когда у поповера уже есть собственная «Очистить фильтр» (воронка в
+   * заголовке колонки сбрасывает разом все виды отбора по колонке), иначе кнопка
+   * задваивается.
+   */
+  showClear?: boolean;
+}) {
+  const allSelected = options.length > 0 && selected.length === options.length;
+  return (
+    <div className="flex items-center justify-between gap-1 border-t p-1">
+      <button
+        type="button"
+        disabled={allSelected}
+        onClick={() => onChange([...options])}
+        className={cn(
+          buttonVariants({ variant: "ghost", size: "sm" }),
+          "h-7 flex-1 justify-start text-xs"
+        )}
+      >
+        Выбрать все
+      </button>
+      {showClear && (
+        <button
+          type="button"
+          disabled={selected.length === 0}
+          onClick={() => onChange([])}
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "sm" }),
+            "h-7 flex-1 justify-start text-xs text-muted-foreground"
+          )}
+        >
+          Очистить фильтр
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -362,6 +403,7 @@ function EnumCheckList({
           })}
         </CommandGroup>
       </CommandList>
+      <EnumFooter options={options} selected={selected} onChange={onChange} showClear={false} />
     </Command>
   );
 }
