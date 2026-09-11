@@ -11,6 +11,23 @@ import { PromoNoFilter, type PromoNoOption } from "../short-calendar/PromoNoFilt
 import type { ControlPoint, ControlResult } from "../../../lib/audit-control";
 import type { AuditGlobalFilters } from "./AuditPage";
 
+/**
+ * Опция фильтра «Период плана». Значением остаётся `label` («Ноябрь 2026») — это
+ * стабильный ключ, по которому фильтрует `applyControlFilters`; в списке же
+ * показывается диапазон дат, как в таблице.
+ *
+ * Трекер, стр. 63 (18.08.2026): «в списке отображается только месяц… Необходимо
+ * отображать конкретный период плана диапазоном дат, например "01.11.2026 —
+ * 30.11.2026". Месяц можно оставить как дополнительную подпись».
+ */
+export interface PlanPeriodOption {
+  label: string;
+  start: Date;
+  end: Date;
+}
+
+const ruDate = (d: Date) => d.toLocaleDateString("ru-RU");
+
 export interface ControlFilters {
   /** Выбранные акции (id). Пусто = все. Подписи — «26-N · Название», как в кратком календаре. */
   promoIds: string[];
@@ -72,7 +89,7 @@ function Fields({
   responsibles: string[];
   checkpoints: string[];
   /** Плановые периоды — только вкладка «Сроки по плану»; на вкладке промо не передаются. */
-  planPeriods: string[];
+  planPeriods: PlanPeriodOption[];
   promoOptions: PromoNoOption[];
   /** Период проведения акции — только вкладка «Сроки по промо и отчётам». */
   showPromoPeriod: boolean;
@@ -110,7 +127,12 @@ function Fields({
           <SelectTrigger className="h-9 w-full sm:w-48 bg-white dark:bg-card text-sm"><SelectValue placeholder="Период плана" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Все периоды плана</SelectItem>
-            {planPeriods.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+            {planPeriods.map((o) => (
+              <SelectItem key={o.label} value={o.label}>
+                <span className="tabular-nums">{ruDate(o.start)} — {ruDate(o.end)}</span>
+                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{o.label}</span>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       )}
@@ -160,13 +182,17 @@ export function ControlDeadlinesFilters({
     [points]
   );
   // Пусто на вкладке промо (у её точек нет planPeriod) → фильтр там не рисуется.
-  const planPeriods = React.useMemo(
-    () =>
-      Array.from(
-        new Set(points.map((p) => p.planPeriod?.label).filter((l): l is string => !!l))
-      ),
-    [points]
-  );
+  const planPeriods = React.useMemo<PlanPeriodOption[]>(() => {
+    const map = new Map<string, PlanPeriodOption>();
+    for (const p of points) {
+      if (p.planPeriod && !map.has(p.planPeriod.label)) {
+        map.set(p.planPeriod.label, { ...p.planPeriod });
+      }
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => a.start.getTime() - b.start.getTime()
+    );
+  }, [points]);
   // Значение опции — campaignId; форматируется только подпись («26-N»), как в кратком календаре.
   const promoOptions = React.useMemo<PromoNoOption[]>(() => {
     const map = new Map<string, PromoNoOption>();
