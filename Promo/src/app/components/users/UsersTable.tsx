@@ -188,11 +188,18 @@ export function UsersTable(props: UsersTableProps) {
   return (
     <>
       {/* Desktop */}
+      {/* Трекер, стр. 70 п.1 (18.08.2026): при горизонтальной прокрутке колонка «ФИО»
+          закреплена слева, иначе не видно, к какому пользователю относятся данные.
+          Приём тот же, что в «Матрице прав»: обычная таблица в `overflow-x-auto` +
+          `sticky left-0` с непрозрачным фоном (Pattern F со сдвоенными панелями здесь
+          не нужен — строки обычной высоты). Своего скроллера не добавляем: shadcn
+          <Table> уже обёрнут в `relative w-full overflow-x-auto`, и именно он —
+          ближайший прокручиваемый предок, относительно которого работает sticky. */}
       <div className="hidden overflow-hidden rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:block">
         <Table>
           <TableHeader className="bg-gray-50 dark:bg-muted/40">
             <TableRow>
-              <TableHead className="min-w-[180px]">ФИО</TableHead>
+              <TableHead className="sticky left-0 z-20 min-w-[180px] bg-gray-50 dark:bg-muted/40">ФИО</TableHead>
               <TableHead className="min-w-[200px]">Email</TableHead>
               <TableHead className="min-w-[180px]">Роли</TableHead>
               <TableHead className="min-w-[160px]">Подразделение</TableHead>
@@ -207,7 +214,7 @@ export function UsersTable(props: UsersTableProps) {
           <TableBody>
             {users.map((u) => (
               <TableRow key={u.id}>
-                <TableCell className="font-medium text-gray-900 dark:text-gray-100">{u.fullName}</TableCell>
+                <TableCell className="sticky left-0 z-10 bg-white font-medium text-gray-900 dark:bg-card dark:text-gray-100">{u.fullName}</TableCell>
                 <TableCell className="text-gray-700 dark:text-gray-200">{u.email}</TableCell>
                 <TableCell>
                   <RoleChips user={u} />
