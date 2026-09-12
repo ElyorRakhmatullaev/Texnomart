@@ -6,6 +6,8 @@ import { UserMinus } from "lucide-react";
 import { Button } from "@texnomart/ui/button";
 import { Card } from "@texnomart/ui/card";
 import { FilterBar } from "@texnomart/shared/components/filter-bar";
+import { DateRangeFilter } from "../../../components/DateRangeFilter";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import type { FilterConfig } from "@texnomart/shared/types";
 import {
   Select,
@@ -216,26 +218,21 @@ export function MyParticipationsPanel() {
           selected={promoIds}
           onChange={setPromoIds}
         />
-        {/* §10: Период акции date-range. */}
-        <div className="flex h-8 items-center gap-1.5 rounded-md border bg-white dark:bg-card px-2.5 text-sm">
-          <span className="text-xs text-muted-foreground">Период</span>
-          <input
-            type="date"
-            aria-label="Период акции — с"
-            value={periodStart}
-            onChange={(e) => setPeriodStart(e.target.value)}
-            className="bg-transparent text-xs tabular-nums outline-none"
-          />
-          <span className="text-xs text-muted-foreground">—</span>
-          <input
-            type="date"
-            aria-label="Период акции — по"
-            value={periodEnd}
-            min={periodStart || undefined}
-            onChange={(e) => setPeriodEnd(e.target.value)}
-            className="bg-transparent text-xs tabular-nums outline-none"
-          />
-        </div>
+        {/* §10: Период акции date-range — один контрол вместо пары
+            нативных полей (оформление как у остальных фильтров). */}
+        <DateRangeFilter
+          value={
+            parseInputDate(periodStart) && parseInputDate(periodEnd)
+              ? [parseInputDate(periodStart) as Date, parseInputDate(periodEnd) as Date]
+              : null
+          }
+          onChange={(range) => {
+            setPeriodStart(range ? toInputDate(range[0]) : "");
+            setPeriodEnd(range ? toInputDate(range[1]) : "");
+          }}
+          placeholder="Период акции"
+          className="h-8 gap-1.5 bg-white text-sm font-normal dark:bg-card"
+        />
         {/* §10: Статус. */}
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="h-8 w-[220px] bg-white text-sm dark:bg-card">

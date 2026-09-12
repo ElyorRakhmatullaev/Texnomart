@@ -14,6 +14,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@texnomart/ui/tabs";
 import { Input } from "@texnomart/ui/input";
 import { Label } from "@texnomart/ui/label";
 import {
+  describeOpenDates,
+  openDaysFor,
+} from "../../../lib/open-plan-days";
+import { DatePickerField } from "../../../components/DatePickerField";
+import { parseInputDate } from "../../../components/date-input-value";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -132,6 +138,11 @@ export function CreateCampaignDialog({
   };
 
   const selectedPlanned = plannedCampaigns.find((c) => c.id === integrateId);
+  // Что из периода выбранной акции ещё не разобрано (трекер, п. 7).
+  const openDays = React.useMemo(
+    () => (selectedPlanned ? openDaysFor(selectedPlanned) : null),
+    [selectedPlanned]
+  );
 
   const submitIntegrate = () => {
     if (!integrateId) return;
@@ -234,6 +245,19 @@ export function CreateCampaignDialog({
                         {selectedPlanned.endDate.toLocaleDateString("ru-RU")}
                       </span>
                     </p>
+                    {openDays && (
+                      <p className="text-muted-foreground">
+                        Свободные дни:{" "}
+                        <span className="tabular-nums text-gray-800 dark:text-gray-100">
+                          {describeOpenDates(openDays)}
+                        </span>
+                      </p>
+                    )}
+                    {openDays?.noDistribution && (
+                      <p className="font-medium text-emerald-700 dark:text-emerald-300">
+                        Доступны всем КМ (без распределения)
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -341,13 +365,12 @@ function UnplannedForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="unplanned-start">Дата начала</Label>
-          <Input
+          <DatePickerField
             id="unplanned-start"
-            type="date"
-            value={start}
-            min={minStart ? toInputDate(minStart) : undefined}
-            onChange={(e) => setStart(e.target.value)}
-            aria-invalid={Boolean(errors.startDate)}
+            value={parseInputDate(start)}
+            minDate={minStart ?? undefined}
+            onChange={(d) => setStart(d ? toInputDate(d) : "")}
+            invalid={Boolean(errors.startDate)}
           />
           {errors.startDate && (
             <p className="text-xs text-red-600 dark:text-red-400">{errors.startDate}</p>
@@ -355,13 +378,12 @@ function UnplannedForm({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="unplanned-end">Дата окончания</Label>
-          <Input
+          <DatePickerField
             id="unplanned-end"
-            type="date"
-            value={end}
-            min={start || undefined}
-            onChange={(e) => setEnd(e.target.value)}
-            aria-invalid={Boolean(errors.endDate)}
+            value={parseInputDate(end)}
+            minDate={parseInputDate(start) ?? undefined}
+            onChange={(d) => setEnd(d ? toInputDate(d) : "")}
+            invalid={Boolean(errors.endDate)}
           />
           {errors.endDate && (
             <p className="text-xs text-red-600 dark:text-red-400">{errors.endDate}</p>

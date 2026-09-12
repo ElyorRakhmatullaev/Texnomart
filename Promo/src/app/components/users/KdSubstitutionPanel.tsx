@@ -29,8 +29,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@texnomart/ui/select";
-import { Input } from "@texnomart/ui/input";
 import { Label } from "@texnomart/ui/label";
+import { DatePickerField } from "../../../components/DatePickerField";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import { Textarea } from "@texnomart/ui/textarea";
 import { cn } from "@texnomart/ui/utils";
 import { formatDateFull } from "@texnomart/shared/utils/formatters";
@@ -289,21 +290,19 @@ export function KdSubstitutionPanel() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="sub-from">С даты</Label>
-                <Input
+                <DatePickerField
                   id="sub-from"
-                  type="date"
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
+                  value={parseInputDate(from)}
+                  onChange={(d) => setFrom(d ? toInputDate(d) : "")}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="sub-to">По дату</Label>
-                <Input
+                <DatePickerField
                   id="sub-to"
-                  type="date"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  min={from || undefined}
+                  value={parseInputDate(to)}
+                  minDate={parseInputDate(from) ?? undefined}
+                  onChange={(d) => setTo(d ? toInputDate(d) : "")}
                 />
               </div>
             </div>

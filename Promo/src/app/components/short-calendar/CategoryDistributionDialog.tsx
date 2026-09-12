@@ -13,6 +13,8 @@ import {
 } from "@texnomart/ui/sheet";
 import { Button } from "@texnomart/ui/button";
 import { Input } from "@texnomart/ui/input";
+import { DatePickerField } from "../../../components/DatePickerField";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import { Label } from "@texnomart/ui/label";
 import {
   Select,
@@ -359,22 +361,20 @@ export function CategoryDistributionDialog({
               1. Выберите период распределения
             </h3>
             <div className="flex items-center gap-2">
-              <Input
-                type="date"
-                aria-label="Начало периода распределения"
-                min={minDate}
-                max={maxDate}
-                value={genStart}
-                onChange={(e) => setGenStart(e.target.value)}
+              <DatePickerField
+                value={parseInputDate(genStart)}
+                minDate={parseInputDate(minDate) ?? undefined}
+                maxDate={parseInputDate(maxDate) ?? undefined}
+                onChange={(d) => setGenStart(d ? toInputDate(d) : "")}
+                placeholder="Начало периода"
               />
               <span className="text-muted-foreground">—</span>
-              <Input
-                type="date"
-                aria-label="Окончание периода распределения"
-                min={minDate}
-                max={maxDate}
-                value={genEnd}
-                onChange={(e) => setGenEnd(e.target.value)}
+              <DatePickerField
+                value={parseInputDate(genEnd)}
+                minDate={parseInputDate(genStart || minDate) ?? undefined}
+                maxDate={parseInputDate(maxDate) ?? undefined}
+                onChange={(d) => setGenEnd(d ? toInputDate(d) : "")}
+                placeholder="Окончание периода"
               />
             </div>
             <p

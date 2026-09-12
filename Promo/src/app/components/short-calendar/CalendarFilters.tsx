@@ -4,8 +4,9 @@ import * as React from "react";
 import { ChevronsLeftRight, ChevronsRightLeft, X } from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
 import { Button } from "@texnomart/ui/button";
-import { Input } from "@texnomart/ui/input";
 import { Label } from "@texnomart/ui/label";
+import { DateRangeFilter } from "../../../components/DateRangeFilter";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import { Switch } from "@texnomart/ui/switch";
 import {
   Select,
@@ -283,21 +284,22 @@ export function CalendarFilters({
             <span className="text-[11px] font-medium text-muted-foreground">
               Период акции
             </span>
-            <div className="flex items-center gap-1">
-              <Input
-                type="date"
-                value={values.periodFrom}
-                onChange={(e) => onChange("periodFrom", e.target.value)}
-                className="h-8 w-[140px] bg-white text-sm dark:bg-card"
-              />
-              <span className="text-muted-foreground">—</span>
-              <Input
-                type="date"
-                value={values.periodTo}
-                onChange={(e) => onChange("periodTo", e.target.value)}
-                className="h-8 w-[140px] bg-white text-sm dark:bg-card"
-              />
-            </div>
+            <DateRangeFilter
+              value={
+                parseInputDate(values.periodFrom) && parseInputDate(values.periodTo)
+                  ? [
+                      parseInputDate(values.periodFrom) as Date,
+                      parseInputDate(values.periodTo) as Date,
+                    ]
+                  : null
+              }
+              onChange={(range) => {
+                onChange("periodFrom", range ? toInputDate(range[0]) : "");
+                onChange("periodTo", range ? toInputDate(range[1]) : "");
+              }}
+              placeholder="Период акции"
+              className="h-8 gap-1.5 bg-white text-sm font-normal dark:bg-card"
+            />
           </label>
           {showReportSend && (
             <FilterSelect

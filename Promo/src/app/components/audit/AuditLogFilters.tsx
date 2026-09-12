@@ -10,6 +10,8 @@ import {
   SelectValue,
 } from "@texnomart/ui/select";
 import { Button } from "@texnomart/ui/button";
+import { DatePickerField } from "../../../components/DatePickerField";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import {
   AUDIT_ACTION_META,
   AUDIT_OBJECT_LABEL,
@@ -153,21 +155,22 @@ export function AuditLogFilters({
       </Field>
 
       <Field label="Дата, с" stack={stack}>
-        <input
-          type="date"
-          value={values.from}
-          onChange={(e) => onChange({ from: e.target.value })}
-          className={`${triggerW} ${FIELD} tabular-nums`}
-        />
+        <div className={triggerW}>
+          <DatePickerField
+            value={parseInputDate(values.from)}
+            onChange={(d) => onChange({ from: d ? toInputDate(d) : "" })}
+          />
+        </div>
       </Field>
 
       <Field label="Дата, по" stack={stack}>
-        <input
-          type="date"
-          value={values.to}
-          onChange={(e) => onChange({ to: e.target.value })}
-          className={`${triggerW} ${FIELD} tabular-nums`}
-        />
+        <div className={triggerW}>
+          <DatePickerField
+            value={parseInputDate(values.to)}
+            onChange={(d) => onChange({ to: d ? toInputDate(d) : "" })}
+            minDate={parseInputDate(values.from) ?? undefined}
+          />
+        </div>
       </Field>
 
       {hasActiveAuditFilters(values) && (

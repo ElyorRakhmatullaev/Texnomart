@@ -7,6 +7,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@texnomart/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@texnomart/ui/sheet";
+import { DateRangeFilter } from "../../../components/DateRangeFilter";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import { PromoNoFilter, type PromoNoOption } from "../short-calendar/PromoNoFilter";
 import type { ControlPoint, ControlResult } from "../../../lib/audit-control";
 import type { AuditGlobalFilters } from "./AuditPage";
@@ -108,16 +110,26 @@ function Fields({
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Период акции</span>
           <div className="flex items-center gap-2">
-            <input
-              type="date" value={values.promoFrom} onChange={(e) => onChange({ promoFrom: e.target.value })}
-              className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
-              aria-label="Период акции, с"
-            />
-            <span className="text-gray-400">—</span>
-            <input
-              type="date" value={values.promoTo} onChange={(e) => onChange({ promoTo: e.target.value })}
-              className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
-              aria-label="Период акции, по"
+            {/* Диапазон одним контролом — как «Период акции» в остальных
+                разделах: два отдельных поля здесь читались как независимые
+                фильтры, хотя это один период. */}
+            <DateRangeFilter
+              value={
+                parseInputDate(values.promoFrom) && parseInputDate(values.promoTo)
+                  ? [
+                      parseInputDate(values.promoFrom) as Date,
+                      parseInputDate(values.promoTo) as Date,
+                    ]
+                  : null
+              }
+              onChange={(range) =>
+                onChange({
+                  promoFrom: range ? toInputDate(range[0]) : "",
+                  promoTo: range ? toInputDate(range[1]) : "",
+                })
+              }
+              placeholder="Период акции"
+              className="h-9 gap-1.5 bg-background text-sm font-normal"
             />
           </div>
         </div>

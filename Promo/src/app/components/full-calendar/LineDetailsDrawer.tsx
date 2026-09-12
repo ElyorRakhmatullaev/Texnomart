@@ -9,7 +9,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@texnomart/ui/sheet";
+import { Button } from "@texnomart/ui/button";
+import { Textarea } from "@texnomart/ui/textarea";
 import { RuDate } from "../../../components/RuDate";
+import {
+  getLineEditComment,
+  setLineEditComment,
+  type LineEditComment,
+} from "../../../lib/line-edit-comment-store";
 import {
   formatPromoNo,
   getCategoryManager,
@@ -24,6 +31,77 @@ export interface LineDetailsDrawerProps {
   onOpenChange: (open: boolean) => void;
   campaign?: PromoCampaign;
   line?: PromoLine;
+  /**
+   * Может ли смотрящий приложить комментарий к правке (трекер стр. 57 п. 2) —
+   * это КМ-владелец строки. Остальным тот же комментарий показывается текстом.
+   */
+  canComment?: boolean;
+  /** Роль-подпись под сохранённым комментарием (персональной идентичности нет). */
+  commentAuthor?: string;
+}
+
+/**
+ * Комментарий КМ к правке. Кнопка сохранения появляется только когда текст
+ * отличается от сохранённого — пустое нажатие исключено; пустой текст снимает
+ * комментарий, а не сохраняет пустую строку.
+ */
+function EditCommentField({
+  lineId,
+  canComment,
+  author,
+}: {
+  lineId: string;
+  canComment: boolean;
+  author: string;
+}) {
+  const [saved, setSaved] = React.useState<LineEditComment | undefined>(() =>
+    getLineEditComment(lineId)
+  );
+  const [draft, setDraft] = React.useState(saved?.comment ?? "");
+
+  // Панель переиспользуется между строками — при смене строки подтягиваем её
+  // собственный комментарий, иначе в поле остался бы текст от предыдущей.
+  React.useEffect(() => {
+    const next = getLineEditComment(lineId);
+    setSaved(next);
+    setDraft(next?.comment ?? "");
+  }, [lineId]);
+
+  if (!canComment) {
+    return <Row label="Комментарий КМ к правке" value={saved?.comment ?? "—"} />;
+  }
+
+  const dirty = draft.trim() !== (saved?.comment ?? "");
+  return (
+    <div className="pt-1">
+      <p className="mb-1 text-sm text-muted-foreground">Комментарий КМ к правке</p>
+      <Textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="Комментарий к правке (необязательно)"
+        className="min-h-16 text-sm"
+      />
+      {saved && (
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {saved.by} · <RuDate value={new Date(saved.at)} withTime />
+        </p>
+      )}
+      {dirty && (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className="mt-1.5 h-7 text-xs"
+          onClick={() => {
+            setLineEditComment(lineId, draft, author);
+            setSaved(getLineEditComment(lineId));
+          }}
+        >
+          Сохранить комментарий
+        </Button>
+      )}
+    </div>
+  );
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -63,6 +141,8 @@ export function LineDetailsDrawer({
   onOpenChange,
   campaign,
   line,
+  canComment = false,
+  commentAuthor = "Категорийный менеджер (КМ)",
 }: LineDetailsDrawerProps) {
   const status =
     campaign && line ? lineDisplayStatus(campaign, line) : undefined;
@@ -197,6 +277,13 @@ export function LineDetailsDrawer({
               <Row
                 label="Комментарий"
                 value={pending?.comment ?? line.removalReason ?? "—"}
+              />
+              {/* Комментарий КМ к правке — в отличие от комментария выше,
+                  приходящего вместе с запросом, этот КМ пишет сам. */}
+              <EditCommentField
+                lineId={line.id}
+                canComment={canComment}
+                author={commentAuthor}
               />
             </Section>
 

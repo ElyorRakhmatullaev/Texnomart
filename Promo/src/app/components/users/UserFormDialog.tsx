@@ -12,6 +12,8 @@ import {
 import { Button } from "@texnomart/ui/button";
 import { Input } from "@texnomart/ui/input";
 import { Label } from "@texnomart/ui/label";
+import { DatePickerField } from "../../../components/DatePickerField";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import {
   Select,
   SelectContent,
@@ -276,25 +278,27 @@ export function UserFormDialog({
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">С даты</Label>
-                      <Input
-                        type="date"
-                        value={a.from ?? ""}
-                        onChange={(e) =>
+                      <DatePickerField
+                        value={parseInputDate(a.from ?? "")}
+                        onChange={(d) =>
                           setTemporary((p) =>
-                            p.map((x, j) => (j === i ? { ...x, from: e.target.value } : x))
+                            p.map((x, j) =>
+                              j === i ? { ...x, from: d ? toInputDate(d) : "" } : x
+                            )
                           )
                         }
                       />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">По дату</Label>
-                      <Input
-                        type="date"
-                        value={a.to ?? ""}
-                        min={a.from || undefined}
-                        onChange={(e) =>
+                      <DatePickerField
+                        value={parseInputDate(a.to ?? "")}
+                        minDate={parseInputDate(a.from ?? "") ?? undefined}
+                        onChange={(d) =>
                           setTemporary((p) =>
-                            p.map((x, j) => (j === i ? { ...x, to: e.target.value } : x))
+                            p.map((x, j) =>
+                              j === i ? { ...x, to: d ? toInputDate(d) : "" } : x
+                            )
                           )
                         }
                       />

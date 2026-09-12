@@ -18,6 +18,8 @@ import { Card, CardContent, CardHeader } from "@texnomart/ui/card";
 import { Button } from "@texnomart/ui/button";
 import { Input } from "@texnomart/ui/input";
 import { Label } from "@texnomart/ui/label";
+import { DatePickerField } from "../../../components/DatePickerField";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import {
   Dialog,
   DialogContent,
@@ -1431,20 +1433,19 @@ function PlanRowDialog({
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="plan-start">Дата начала</Label>
-              <Input
+              <DatePickerField
                 id="plan-start"
-                type="date"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
+                value={parseInputDate(start)}
+                onChange={(d) => setStart(d ? toInputDate(d) : "")}
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="plan-end">Дата окончания</Label>
-              <Input
+              <DatePickerField
                 id="plan-end"
-                type="date"
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
+                value={parseInputDate(end)}
+                minDate={parseInputDate(start) ?? undefined}
+                onChange={(d) => setEnd(d ? toInputDate(d) : "")}
               />
             </div>
           </div>

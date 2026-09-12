@@ -8,6 +8,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@texnomart/ui/select";
 import { PromoNoFilter } from "../short-calendar/PromoNoFilter";
+import { DatePickerField } from "../../../components/DatePickerField";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import {
   buildParticipantMetrics, participantFilterOptions, EMPTY_PARTICIPANT_FILTERS,
   PARTICIPANT_ROLES,
@@ -97,17 +99,22 @@ export function ParticipantMetricsTab({ access }: { access: AuditAccess }) {
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Период дедлайна</span>
             <div className="flex items-center gap-2">
-              <input
-                type="date" value={filters.from} onChange={(e) => patch({ from: e.target.value })}
-                className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
-                aria-label="Период дедлайна показателей, с"
-              />
+              <div className="w-[150px]">
+                <DatePickerField
+                  value={parseInputDate(filters.from)}
+                  onChange={(d) => patch({ from: d ? toInputDate(d) : "" })}
+                  placeholder="с"
+                />
+              </div>
               <span className="text-gray-400">—</span>
-              <input
-                type="date" value={filters.to} onChange={(e) => patch({ to: e.target.value })}
-                className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
-                aria-label="Период дедлайна показателей, по"
-              />
+              <div className="w-[150px]">
+                <DatePickerField
+                  value={parseInputDate(filters.to)}
+                  onChange={(d) => patch({ to: d ? toInputDate(d) : "" })}
+                  minDate={parseInputDate(filters.from) ?? undefined}
+                  placeholder="по"
+                />
+              </div>
             </div>
           </div>
 

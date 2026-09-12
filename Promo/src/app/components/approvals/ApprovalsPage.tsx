@@ -23,6 +23,8 @@ import { ReviewQueueTable } from "./ReviewQueueTable";
 import { MyParticipationsPanel } from "./MyParticipationsPanel";
 import { PromoNoFilter } from "../short-calendar/PromoNoFilter";
 import { KmMultiSelect } from "./KmMultiSelect";
+import { DateRangeFilter } from "../../../components/DateRangeFilter";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import {
   CATEGORY_MANAGERS,
   PROMO_TYPES,
@@ -319,26 +321,21 @@ export function ApprovalsPage() {
               selected={promoIds}
               onChange={setPromoIds}
             />
-            {/* §2: Период акции date-range. */}
-            <div className="flex h-8 items-center gap-1.5 rounded-md border bg-white dark:bg-card px-2.5 text-sm">
-              <span className="text-xs text-muted-foreground">Период</span>
-              <input
-                type="date"
-                aria-label="Период акции — с"
-                value={periodStart}
-                onChange={(e) => setPeriodStart(e.target.value)}
-                className="bg-transparent text-xs tabular-nums outline-none"
-              />
-              <span className="text-xs text-muted-foreground">—</span>
-              <input
-                type="date"
-                aria-label="Период акции — по"
-                value={periodEnd}
-                min={periodStart || undefined}
-                onChange={(e) => setPeriodEnd(e.target.value)}
-                className="bg-transparent text-xs tabular-nums outline-none"
-              />
-            </div>
+            {/* §2: Период акции date-range — один контрол вместо пары
+                нативных полей (оформление как у остальных фильтров). */}
+            <DateRangeFilter
+              value={
+                parseInputDate(periodStart) && parseInputDate(periodEnd)
+                  ? [parseInputDate(periodStart) as Date, parseInputDate(periodEnd) as Date]
+                  : null
+              }
+              onChange={(range) => {
+                setPeriodStart(range ? toInputDate(range[0]) : "");
+                setPeriodEnd(range ? toInputDate(range[1]) : "");
+              }}
+              placeholder="Период акции"
+              className="h-8 gap-1.5 bg-white text-sm font-normal dark:bg-card"
+            />
             {/* §4: «КМ» multi-select (persisted per user). */}
             <KmMultiSelect
               options={kmOptions}

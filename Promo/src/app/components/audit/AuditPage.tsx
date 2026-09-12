@@ -8,6 +8,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@texnomart/ui/select";
 import { PageHeader } from "@texnomart/shared/components/page-header";
+import { DatePickerField } from "../../../components/DatePickerField";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import { useRole } from "../../role-context";
 import { useCurrentUser } from "../../current-user-context";
 import { OWN_AUDIT_KM_ID } from "../../../lib/promo-mock-data";
@@ -83,17 +85,22 @@ export function AuditPage() {
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-muted-foreground">Период дедлайна</span>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="date" value={globals.from} onChange={(e) => patch({ from: e.target.value })}
-                    className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
-                    aria-label="Период дедлайна, с"
-                  />
+                  <div className="w-[150px]">
+                    <DatePickerField
+                      value={parseInputDate(globals.from)}
+                      onChange={(d) => patch({ from: d ? toInputDate(d) : "" })}
+                      placeholder="с"
+                    />
+                  </div>
                   <span className="text-gray-400">—</span>
-                  <input
-                    type="date" value={globals.to} onChange={(e) => patch({ to: e.target.value })}
-                    className="h-9 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-card px-2 text-sm"
-                    aria-label="Период дедлайна, по"
-                  />
+                  <div className="w-[150px]">
+                    <DatePickerField
+                      value={parseInputDate(globals.to)}
+                      onChange={(d) => patch({ to: d ? toInputDate(d) : "" })}
+                      minDate={parseInputDate(globals.from) ?? undefined}
+                      placeholder="по"
+                    />
+                  </div>
                 </div>
               </div>
               <Select

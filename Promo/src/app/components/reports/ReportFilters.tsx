@@ -13,6 +13,8 @@ import { Check, ChevronsUpDown, Filter, X } from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
 import { buttonVariants } from "@texnomart/ui/button";
 import { Input } from "@texnomart/ui/input";
+import { DatePickerField } from "../../../components/DatePickerField";
+import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import {
   Select,
   SelectContent,
@@ -485,19 +487,22 @@ function ColumnFilterBody({
   if (col.kind === "date") {
     return (
       <div className={cn("flex items-center gap-1", full && "flex-col items-stretch")}>
-        <Input
-          type="date"
-          value={filter.from ?? ""}
-          onChange={(e) => onChange({ from: e.target.value || undefined })}
-          className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[140px]")}
-        />
+        <div className={full ? "w-full" : "w-[140px]"}>
+          <DatePickerField
+            value={parseInputDate(filter.from ?? "")}
+            onChange={(d) => onChange({ from: d ? toInputDate(d) : undefined })}
+            placeholder="с"
+          />
+        </div>
         <span className="text-center text-muted-foreground">—</span>
-        <Input
-          type="date"
-          value={filter.to ?? ""}
-          onChange={(e) => onChange({ to: e.target.value || undefined })}
-          className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[140px]")}
-        />
+        <div className={full ? "w-full" : "w-[140px]"}>
+          <DatePickerField
+            value={parseInputDate(filter.to ?? "")}
+            onChange={(d) => onChange({ to: d ? toInputDate(d) : undefined })}
+            minDate={parseInputDate(filter.from ?? "") ?? undefined}
+            placeholder="по"
+          />
+        </div>
       </div>
     );
   }

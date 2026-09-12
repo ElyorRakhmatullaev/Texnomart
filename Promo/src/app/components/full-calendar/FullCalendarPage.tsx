@@ -24,6 +24,9 @@ import { FilterBar } from "@texnomart/shared/components/filter-bar";
 import type { FilterConfig } from "@texnomart/shared/types";
 import { Button } from "@texnomart/ui/button";
 import { Switch } from "@texnomart/ui/switch";
+import { DatePickerField } from "../../../components/DatePickerField";
+import { DateRangeFilter } from "../../../components/DateRangeFilter";
+import { parseInputDate } from "../../../components/date-input-value";
 import { Label } from "@texnomart/ui/label";
 import {
   Tooltip,
@@ -1333,26 +1336,24 @@ export function FullCalendarPage() {
               selected={promoIds}
               onChange={setPromoIds}
             />
-            {/* §10: Период акции date-range. */}
-            <div className="flex h-9 items-center gap-1.5 rounded-md border bg-white dark:bg-card px-2.5 text-sm">
-              <span className="text-xs text-muted-foreground">Период</span>
-              <input
-                type="date"
-                aria-label="Период акции — с"
-                value={periodStart}
-                onChange={(e) => setPeriodStart(e.target.value)}
-                className="bg-transparent text-xs tabular-nums outline-none"
-              />
-              <span className="text-xs text-muted-foreground">—</span>
-              <input
-                type="date"
-                aria-label="Период акции — по"
-                value={periodEnd}
-                min={periodStart || undefined}
-                onChange={(e) => setPeriodEnd(e.target.value)}
-                className="bg-transparent text-xs tabular-nums outline-none"
-              />
-            </div>
+            {/* §10: Период акции date-range — один контрол вместо пары
+                нативных полей (оформление как у остальных фильтров). */}
+            <DateRangeFilter
+              value={
+                parseInputDate(periodStart) && parseInputDate(periodEnd)
+                  ? [
+                      parseInputDate(periodStart) as Date,
+                      parseInputDate(periodEnd) as Date,
+                    ]
+                  : null
+              }
+              onChange={(range) => {
+                setPeriodStart(range ? toInputDate(range[0]) : "");
+                setPeriodEnd(range ? toInputDate(range[1]) : "");
+              }}
+              placeholder="Период акции"
+              className="h-9 gap-1.5 bg-white text-sm font-normal dark:bg-card"
+            />
             <label className="flex h-9 items-center gap-2 rounded-md border bg-white dark:bg-card px-3">
               <Switch
                 id="hide-cancelled"
@@ -1499,6 +1500,10 @@ export function FullCalendarPage() {
         onOpenChange={(o) => !o && setDetailsLineId(null)}
         campaign={detailsCampaign}
         line={detailsLine}
+        // Комментарий к правке пишет только КМ-владелец строки; остальные
+        // видят его текстом (трекер стр. 57 п. 2).
+        canComment={Boolean(ownKmId && detailsLine && detailsLine.kmId === ownKmId)}
+        commentAuthor={currentRole}
       />
 
       {/* Add-a-line picker (§8.2.1) — searchable 1С reference, no free-text. */}
@@ -1924,21 +1929,17 @@ function PeriodEditDialog({
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-muted-foreground">Начало</span>
-            <input
-              type="date"
-              value={start}
-              onChange={(ev) => setStart(ev.target.value)}
-              className="h-9 rounded-md border px-2 text-sm"
+            <DatePickerField
+              value={parseInputDate(start)}
+              onChange={(d) => setStart(d ? toInputDate(d) : "")}
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-muted-foreground">Окончание</span>
-            <input
-              type="date"
-              value={end}
-              min={start || undefined}
-              onChange={(ev) => setEnd(ev.target.value)}
-              className="h-9 rounded-md border px-2 text-sm"
+            <DatePickerField
+              value={parseInputDate(end)}
+              minDate={parseInputDate(start) ?? undefined}
+              onChange={(d) => setEnd(d ? toInputDate(d) : "")}
             />
           </label>
         </div>
