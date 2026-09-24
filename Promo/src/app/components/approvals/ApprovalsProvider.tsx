@@ -227,20 +227,38 @@ export function ApprovalsProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: "approve", itemId, actor, at: new Date().toISOString() });
         const it = items.find((i) => i.id === itemId);
         if (!it) return;
-        // Старший КМ передаёт набор дальше — для КД это НОВОЕ промо на согласование;
-        // решение КД финальное, о нём узнают КМ и старший КМ.
+        // Адресаты — по согласованной схеме (D61; проверка прода 14–15.09, №17 п.1).
+        // Старший КМ передаёт набор дальше — это НОВОЕ на согласование для КД, и
+        // только для него; решение КД финальное — о нём узнаёт КМ.
+        if (actor === "Старший КМ") {
+          notifyFor(it.campaignId, {
+            type: "review-new",
+            description:
+              it.kind === "non-participation"
+                ? `Заявка КМ ${kmName(it.kmId)} о неучастии согласована старшим КМ и передана коммерческому директору.`
+                : `Набор КМ ${kmName(it.kmId)} согласован старшим КМ и передан коммерческому директору.`,
+            href: "/approvals",
+            visibleTo: ["Коммерческий директор"],
+          });
+          return;
+        }
         notifyFor(
           it.campaignId,
-          actor === "Старший КМ"
+          it.kind === "non-participation"
             ? {
-                type: "review-new",
-                description: `Набор КМ ${kmName(it.kmId)} согласован старшим КМ и передан коммерческому директору.`,
+                type: "non-participation",
+                description: `Заявка КМ ${kmName(it.kmId)} о неучастии согласована — КМ освобождён от участия в акции.`,
                 href: "/approvals",
+                visibleTo: ["Категорийный менеджер (КМ)"],
               }
             : {
                 type: "kd-approved",
-                description: `Коммерческий директор согласовал данные КМ ${kmName(it.kmId)}.`,
+                description:
+                  it.kind === "repeat"
+                    ? `Коммерческий директор согласовал изменения КМ ${kmName(it.kmId)} по согласованной акции.`
+                    : `Коммерческий директор согласовал данные КМ ${kmName(it.kmId)}.`,
                 href: "/approvals",
+                visibleTo: ["Категорийный менеджер (КМ)"],
               }
         );
       },
@@ -248,11 +266,24 @@ export function ApprovalsProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: "reject", itemId, ...opts, at: new Date().toISOString() });
         const it = items.find((i) => i.id === itemId);
         if (!it) return;
-        notifyFor(it.campaignId, {
-          type: "review-returned",
-          description: `Данные КМ ${kmName(it.kmId)} возвращены на корректировку: ${opts.comment}`,
-          href: "/approvals",
-        });
+        // Отказ адресован КМ: для заявки о неучастии это её результат, для данных —
+        // возврат на корректировку с комментарием согласующего (D61).
+        notifyFor(
+          it.campaignId,
+          it.kind === "non-participation"
+            ? {
+                type: "non-participation",
+                description: `Заявка КМ ${kmName(it.kmId)} о неучастии отклонена: ${opts.comment}`,
+                href: "/approvals",
+                visibleTo: ["Категорийный менеджер (КМ)"],
+              }
+            : {
+                type: "review-returned",
+                description: `Данные КМ ${kmName(it.kmId)} возвращены на корректировку: ${opts.comment}`,
+                href: "/approvals",
+                visibleTo: ["Категорийный менеджер (КМ)"],
+              }
+        );
       },
       requestNonParticipation: (campaignId, kmId, reason) => {
         dispatch({
@@ -262,10 +293,13 @@ export function ApprovalsProvider({ children }: { children: React.ReactNode }) {
           reason,
           at: new Date().toISOString(),
         });
+        // Для старшего КМ заявка о неучастии — новое на согласование (D61);
+        // КМ получит уже результат — согласование или отказ.
         notifyFor(campaignId, {
-          type: "non-participation",
-          description: `КМ ${kmName(kmId)} отправил заявку о неучастии: ${reason}`,
+          type: "review-new",
+          description: `КМ ${kmName(kmId)} отправил заявку о неучастии: ${reason}. Требуется решение старшего КМ.`,
           href: "/approvals",
+          visibleTo: ["Старший КМ"],
         });
       },
       setNonParticipationByKd: (campaignId, kmId, reason) => {

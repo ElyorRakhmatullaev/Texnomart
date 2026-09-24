@@ -32,7 +32,7 @@ import {
   type NotificationType,
   type PromoNotification,
 } from "../../../lib/promo-mock-data";
-import { rolesForType } from "../../../lib/notification-settings-store";
+import { recipientsOf } from "../../../lib/notification-settings-store";
 import { rolesOf } from "../../../lib/users-store";
 import { useCurrentUser } from "../../current-user-context";
 import { useRole } from "../../role-context";
@@ -71,7 +71,8 @@ export function NotificationItem({
   const { config } = useNotificationSettings();
   const { currentRole } = useRole();
   const { currentUser } = useCurrentUser();
-  const tagRoles = rolesForType(n.type, config);
+  // Адресаты именно этого события (тип + этап), а не все роли с таким типом.
+  const tagRoles = recipientsOf(n, config);
   const links = notificationLinksFor(n);
 
   // Волна 5 (5B): у пользователя может быть несколько ролей, и клиенту важно

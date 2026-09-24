@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { BellOff, CheckCheck } from "lucide-react";
-import { Button } from "@texnomart/ui/button";
+import { Link } from "react-router";
+import { BellOff, CheckCheck, ChevronDown } from "lucide-react";
+import { Button, buttonVariants } from "@texnomart/ui/button";
 import { Badge } from "@texnomart/ui/badge";
 import { cn } from "@texnomart/ui/utils";
 import { FilterBar } from "@texnomart/shared/components/filter-bar";
@@ -12,10 +13,14 @@ import { useRole, type PromoRole } from "../../role-context";
 import { useNotifications } from "./NotificationsProvider";
 import { useNotificationSettings } from "../notification-settings/NotificationSettingsProvider";
 import { NotificationItem } from "./NotificationItem";
+import { RuDate } from "../../../components/RuDate";
 import {
   NOTIFICATION_TYPE_META,
+  formatPromoNo,
   groupNotificationsByDate,
+  notificationLinksFor,
   notificationsForRole,
+  roleReceivesNotification,
   type NotificationType,
   type PromoNotification,
 } from "../../../lib/promo-mock-data";
@@ -64,25 +69,148 @@ function GroupedList({
 /**
  * Волна 5 (5B): Администратор видит все уведомления, и сплошным списком это
  * нечитаемо. Клиент просит разделить их на блоки по ролям — КМ, старший КМ,
- * коммерческий директор и смежные отделы. Одно событие может попасть в
- * несколько блоков: это не дубль, а разные адресаты одного события.
+ * коммерческий директор и смежные отделы (трекер, D61). Одно событие может
+ * попасть в несколько блоков: это не дубль, а разные адресаты одного события.
+ *
+ * Проверка прода 14–15.09, №17 п.4: блоки должны быть компактными и обзорными,
+ * а не длинным вертикальным списком полных карточек. «Смежные отделы» — только
+ * маркетинг, закуп и аналитика (раньше туда попадали ДМ и ОД, а с ними отмены и
+ * исключения позиций); события директоров вынесены в отдельный блок.
  */
 const ADMIN_BLOCKS: { key: string; label: string; roles: PromoRole[] }[] = [
-  { key: "km", label: "Категорийные менеджеры", roles: ["Категорийный менеджер (КМ)"] },
+  { key: "km", label: "КМ", roles: ["Категорийный менеджер (КМ)"] },
   { key: "senior", label: "Старший КМ", roles: ["Старший КМ"] },
   { key: "kd", label: "Коммерческий директор", roles: ["Коммерческий директор"] },
   {
     key: "adj",
     label: "Смежные отделы",
-    roles: [
-      "Директор маркетинга",
-      "Сотрудник маркетинга",
-      "Сотрудник закупа",
-      "Сотрудник аналитики",
-      "Операционный директор",
-    ],
+    roles: ["Сотрудник маркетинга", "Сотрудник закупа", "Сотрудник аналитики"],
+  },
+  {
+    key: "directors",
+    label: "Директор маркетинга и операционный директор",
+    roles: ["Директор маркетинга", "Операционный директор"],
   },
 ];
+
+/** Сколько строк блока видно до «Показать все». */
+const BLOCK_PREVIEW = 5;
+
+/** Компактная строка события в блоке Администратора. */
+function CompactNotificationRow({
+  n,
+  onAcknowledge,
+}: {
+  n: PromoNotification;
+  onAcknowledge: (id: string) => void;
+}) {
+  const meta = NOTIFICATION_TYPE_META[n.type];
+  const link = notificationLinksFor(n)[0];
+  return (
+    <li className="flex items-start gap-2.5 px-3 py-2">
+      <span
+        aria-label={n.read ? "Прочитано" : "Новое"}
+        className={cn(
+          "mt-1.5 size-2 shrink-0 rounded-full",
+          n.read ? "bg-transparent" : "bg-primary"
+        )}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+          <span
+            className={cn(
+              "inline-flex items-center rounded px-1.5 py-0.5 font-medium",
+              meta.bg,
+              meta.text
+            )}
+          >
+            {meta.label}
+          </span>
+          {n.campaignId && (
+            <span className="min-w-0 truncate text-gray-700 dark:text-gray-200">
+              <span className="font-medium tabular-nums">{formatPromoNo(n.campaignId)}</span>
+              {n.campaignName ? ` · ${n.campaignName}` : ""}
+            </span>
+          )}
+        </div>
+        <p
+          className={cn(
+            "mt-0.5 line-clamp-2 text-sm",
+            n.read ? "text-gray-600 dark:text-gray-300" : "text-gray-900 dark:text-gray-100"
+          )}
+          title={n.description}
+        >
+          {n.description}
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <RuDate
+          value={n.sentAt}
+          withTime
+          className="text-[11px] tabular-nums text-muted-foreground"
+        />
+        {link && (
+          <Link
+            to={link.href}
+            onClick={() => {
+              if (!n.read) onAcknowledge(n.id);
+            }}
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-7 px-2 text-xs")}
+          >
+            {link.label}
+          </Link>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/** Блок роли: заголовок со счётчиками и первые события, остальное — по кнопке. */
+function AdminRoleBlock({
+  label,
+  items,
+  onAcknowledge,
+}: {
+  label: string;
+  items: PromoNotification[];
+  onAcknowledge: (id: string) => void;
+}) {
+  const [showAll, setShowAll] = React.useState(false);
+  const unread = items.filter((n) => !n.read).length;
+  const visible = showAll ? items : items.slice(0, BLOCK_PREVIEW);
+  return (
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-border dark:bg-card">
+      <header className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2 dark:border-border dark:bg-muted/40">
+        <h2 className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+          {label}
+        </h2>
+        <Badge variant="secondary" className="tabular-nums">
+          {items.length}
+        </Badge>
+        {unread > 0 && (
+          <Badge variant="destructive" className="tabular-nums">
+            {unread} новых
+          </Badge>
+        )}
+      </header>
+      <ul className="divide-y divide-gray-100 dark:divide-border">
+        {visible.map((n) => (
+          <CompactNotificationRow key={n.id} n={n} onAcknowledge={onAcknowledge} />
+        ))}
+      </ul>
+      {items.length > BLOCK_PREVIEW && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="flex min-h-10 items-center justify-center gap-1 border-t border-gray-100 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:border-border dark:text-gray-300 dark:hover:bg-muted/40 dark:hover:text-gray-100"
+        >
+          {showAll ? "Свернуть" : `Показать все (${items.length})`}
+          <ChevronDown className={cn("size-3.5 transition-transform", showAll && "rotate-180")} />
+        </button>
+      )}
+    </section>
+  );
+}
 
 export function NotificationsPage() {
   const { currentRole } = useRole();
@@ -117,8 +245,9 @@ export function NotificationsPage() {
     if (!isAdmin) return [];
     return ADMIN_BLOCKS.map((b) => ({
       ...b,
+      // То же правило адресата, что у самих ролей: тип в настройке + этап события.
       items: filtered.filter((n) =>
-        b.roles.some((r) => notificationConfig[r]?.includes(n.type))
+        b.roles.some((r) => roleReceivesNotification(r, n, notificationConfig))
       ),
     })).filter((b) => b.items.length > 0);
   }, [isAdmin, filtered, notificationConfig]);
@@ -206,28 +335,15 @@ export function NotificationsPage() {
           </div>
         </div>
       ) : isAdmin && adminView === "roles" ? (
-        <div className="space-y-8">
-          {adminBlocks.map((b) => {
-            const blockUnread = b.items.filter((n) => !n.read).length;
-            return (
-              <section key={b.key} className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    {b.label}
-                  </h2>
-                  <Badge variant="secondary" className="tabular-nums">
-                    {b.items.length}
-                  </Badge>
-                  {blockUnread > 0 && (
-                    <Badge variant="destructive" className="tabular-nums">
-                      {blockUnread} непрочит.
-                    </Badge>
-                  )}
-                </div>
-                <GroupedList notifications={b.items} onAcknowledge={acknowledge} />
-              </section>
-            );
-          })}
+        <div className="grid items-start gap-4 xl:grid-cols-2">
+          {adminBlocks.map((b) => (
+            <AdminRoleBlock
+              key={b.key}
+              label={b.label}
+              items={b.items}
+              onAcknowledge={acknowledge}
+            />
+          ))}
         </div>
       ) : (
         <div className="space-y-8">

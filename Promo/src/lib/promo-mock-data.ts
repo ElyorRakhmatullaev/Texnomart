@@ -3375,12 +3375,12 @@ export interface PromoNotification {
   /** In-app quick link (campaign/report). */
   href: string;
   /**
-   * Roles allowed to see this notification (§11.3.1 — availability depends on
-   * the user's role/rights). Undefined → visible to everyone. Администратор
-   * always sees all (handled in `notificationsForRole`). Since E-2b, actual
-   * visibility is governed by the per-role `RoleNotificationConfig`
-   * (`notificationsForRole(role, list, config)` / the notification-settings
-   * store); this field is retained for seed provenance and back-compat only.
+   * Addressees of this particular event (§11.3.1). Undefined → any role whose
+   * config includes the type. Администратор always sees all (handled in
+   * `notificationsForRole`). Since E-2b the per-role `RoleNotificationConfig`
+   * decides which TYPES a role receives; this field narrows a single event to
+   * the stage it is addressed to (`roleReceivesNotification`) — e.g. «поступило
+   * на согласование» to the senior КМ OR to the КД, not both.
    */
   visibleTo?: PromoRole[];
 }
@@ -3534,6 +3534,8 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: minutesAgo(40),
       read: false,
       href: "/full-calendar",
+      // Адресат — сам назначенный КМ (согласованная схема уведомлений, D61).
+      visibleTo: ["Категорийный менеджер (КМ)"],
     },
     {
       id: "ntf-03",
@@ -3606,6 +3608,8 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: daysAgo(2),
       read: true,
       href: "/full-calendar",
+      // Сообщение о чужом назначении — директорам, не другим КМ.
+      visibleTo: ["Директор маркетинга", "Операционный директор"],
     },
 
     // ── Волна 5 (5B): перечень событий контура согласования для КМ / ст. КМ / КД.
@@ -3621,7 +3625,8 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: minutesAgo(12),
       read: false,
       href: "/approvals",
-      visibleTo: REVIEWERS_AUDIENCE,
+      // Событие этапа старшего КМ — КД его не адресат (№17 п.1).
+      visibleTo: ["Старший КМ"],
     },
     {
       id: "ntf-10",
@@ -3674,14 +3679,16 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
     {
       id: "ntf-14",
       type: "deadline-today",
-      campaignId: "PR-2026-005",
-      campaignName: "Cashback на смартфоны",
+      // По схеме D61 «срок истекает сегодня» — срок СОГЛАСОВАНИЯ у проверяющего
+      // (старшего КМ / КД), а не срок заполнения КМ; акция — на этапе старшего КМ.
+      campaignId: "PR-2026-009",
+      campaignName: "Рассрочка на крупную бытовую технику",
       actor: { name: "Система", role: "Администратор" },
-      description: "Сегодня истекает крайний срок заполнения данных КМ по акции.",
+      description: "Сегодня истекает срок согласования по акции — решение старшего КМ ещё не принято.",
       sentAt: hoursAgo(7),
       read: false,
-      href: "/full-calendar",
-      visibleTo: REVIEW_AUDIENCE,
+      href: "/approvals",
+      visibleTo: ["Старший КМ"],
     },
     {
       id: "ntf-15",
@@ -3700,12 +3707,14 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       type: "non-participation",
       campaignId: "PR-2026-006",
       campaignName: "Скидки на климатическую технику",
-      actor: { name: "Юсупова Нигора", role: "Категорийный менеджер (КМ)" },
-      description: "Отправлена заявка о неучастии в акции: нет подходящих позиций в категории.",
+      // По схеме D61 КМ получает РЕЗУЛЬТАТ заявки о неучастии, а не эхо своей
+      // же отправки: сама заявка приходит старшему КМ как «новое на согласование».
+      actor: { name: "Сардор Мавлянов", role: "Коммерческий директор" },
+      description: "Заявка о неучастии согласована: вы освобождены от участия в акции (нет подходящих позиций в категории).",
       sentAt: daysAgo(1),
       read: true,
       href: "/approvals",
-      visibleTo: REVIEW_AUDIENCE,
+      visibleTo: ["Категорийный менеджер (КМ)"],
     },
     {
       id: "ntf-17",
@@ -3719,6 +3728,20 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       read: true,
       href: "/reports",
       visibleTo: ADJ_DEPARTMENTS_AUDIENCE,
+    },
+    {
+      // Событие этапа КД: старший КМ согласовал набор и передал его дальше (D61,
+      // «промо поступило на согласование коммерческому директору»).
+      id: "ntf-18",
+      type: "review-new",
+      campaignId: "PR-2026-008",
+      campaignName: "Скидки на телевизоры к плей-офф",
+      actor: { name: "Исмаилов Жасур", role: "Старший КМ" },
+      description: "Набор КМ согласован старшим КМ и передан коммерческому директору. Требуется решение КД.",
+      sentAt: minutesAgo(25),
+      read: false,
+      href: "/approvals",
+      visibleTo: ["Коммерческий директор"],
     },
   ];
 }
@@ -3756,11 +3779,25 @@ export function notificationsForRole(
   config?: RoleNotificationConfig
 ): PromoNotification[] {
   if (role === "Администратор") return list;
-  if (config) {
-    const allowed = config[role] ?? [];
-    return list.filter((n) => allowed.includes(n.type));
-  }
+  if (config) return list.filter((n) => roleReceivesNotification(role, n, config));
   return list.filter((n) => !n.visibleTo || n.visibleTo.includes(role));
+}
+
+/**
+ * Получает ли роль это уведомление: тип включён в её настройку И роль входит в
+ * адресатов самого события (`visibleTo`). Одного типа мало: «поступило на
+ * согласование» бывает на этапе старшего КМ и на этапе КД, и без адресата
+ * событие одного этапа уходило другому (проверка прода 14–15.09, №17 п.1 —
+ * «лишние уведомления»). Единое правило для ленты, колокольчика, блоков
+ * Администратора и подписи «Вам как».
+ */
+export function roleReceivesNotification(
+  role: PromoRole,
+  n: Pick<PromoNotification, "type" | "visibleTo">,
+  config: RoleNotificationConfig
+): boolean {
+  if (!config[role]?.includes(n.type)) return false;
+  return !n.visibleTo || n.visibleTo.includes(role);
 }
 
 /** E-2b — a context deep-link surfaced on a notification. */

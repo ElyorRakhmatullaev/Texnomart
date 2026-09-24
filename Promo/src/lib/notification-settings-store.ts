@@ -1,13 +1,19 @@
 // E-2b — per-role notification config (which categories each role receives).
-// localStorage `promo:notification-role-config`. Defaults reproduce the pre-E-2b
-// audiences EXACTLY (no regression); the Администратор edits from there.
+// localStorage `promo:notification-role-config`. Defaults follow the agreed
+// routing scheme (see below); the Администратор edits from there.
 import { PROMO_ROLES, type PromoRole } from "../app/role-context";
-import type { NotificationType, RoleNotificationConfig } from "./promo-mock-data";
+import {
+  roleReceivesNotification,
+  type NotificationType,
+  type PromoNotification,
+  type RoleNotificationConfig,
+} from "./promo-mock-data";
 
 // `-v2`: маршрутизация смежных подразделений исправлена (трекер, стр. 61 п.2).
-// Сохранённый конфиг перекрывает дефолты, поэтому без смены ключа у тех, кто уже
-// открывал экран настроек, осталась бы старая — неверная — раскладка.
-const STORAGE_KEY = "promo:notification-role-config-v2";
+// `-v3`: КМ / старший КМ / КД приведены к согласованной схеме (проверка прода
+// 14–15.09, №17 п.1). Сохранённый конфиг перекрывает дефолты, поэтому без смены
+// ключа у тех, кто уже открывал экран настроек, осталась бы старая раскладка.
+const STORAGE_KEY = "promo:notification-role-config-v3";
 
 // Операционные события промо (отмена, исключение позиции, маркетинг, назначение).
 const OPS: NotificationType[] = [
@@ -59,16 +65,39 @@ const OD: NotificationType[] = [
   "line-removed",
   "km-assignment",
 ];
-// Старший КМ: весь контур согласования + назначение КМ.
-const SENIOR_KM: NotificationType[] = [...REVIEW, "km-assignment"];
-// КМ: то же, минус два события, адресованные проверяющим («поступило на
-// согласование» и «повторно отправлено») — их инициирует сам КМ.
-const KM: NotificationType[] = SENIOR_KM.filter(
-  (t) => t !== "review-new" && t !== "review-resubmitted"
-);
+/*
+ * КМ / старший КМ / КД — строго по согласованной схеме (трекер, D61; проверка
+ * прода 14–15.09, №17 п.1 «по отдельным ролям отображаются лишние уведомления»).
+ * Раньше КД получал все 15 типов, старший КМ — 9, КМ — 7.
+ */
+// КМ: возврат на корректировку (старшим КМ или КД), согласование КД, результат
+// заявки о неучастии, назначение ответственным по промо.
+const KM: NotificationType[] = [
+  "review-returned",
+  "kd-approved",
+  "non-participation",
+  "km-assignment",
+];
+// Старший КМ: новое промо на согласование, повторная отправка после
+// корректировки, срок согласования истекает сегодня, передача КД по просрочке.
+const SENIOR_KM: NotificationType[] = [
+  "review-new",
+  "review-resubmitted",
+  "deadline-today",
+  "auto-forwarded",
+];
+// КД: поступило на согласование КД, автопередача от старшего КМ, повторная
+// отправка, срок истекает сегодня, срок просрочен.
+const KD: NotificationType[] = [
+  "review-new",
+  "auto-forwarded",
+  "review-resubmitted",
+  "deadline-today",
+  "sla-overdue",
+];
 
 export const DEFAULT_ROLE_CONFIG: RoleNotificationConfig = {
-  "Коммерческий директор": [...ALL],
+  "Коммерческий директор": [...KD],
   "Операционный директор": [...OD],
   "Директор маркетинга": [...OPS, ...REPORTS],
   "Категорийный менеджер (КМ)": [...KM],
@@ -127,4 +156,17 @@ export function rolesForType(
   config: RoleNotificationConfig
 ): PromoRole[] {
   return PROMO_ROLES.filter((r) => config[r]?.includes(type));
+}
+
+/**
+ * Кто получает КОНКРЕТНОЕ уведомление — с учётом адресата события, а не только
+ * типа (см. `roleReceivesNotification`). Администратор — наблюдатель, не адресат.
+ */
+export function recipientsOf(
+  n: Pick<PromoNotification, "type" | "visibleTo">,
+  config: RoleNotificationConfig
+): PromoRole[] {
+  return PROMO_ROLES.filter(
+    (r) => r !== "Администратор" && roleReceivesNotification(r, n, config)
+  );
 }

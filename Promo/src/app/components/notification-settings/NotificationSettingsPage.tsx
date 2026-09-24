@@ -34,7 +34,7 @@ export function NotificationSettingsPage() {
     <div className="flex flex-col gap-4 pb-6">
       <PageHeader
         title="Настройки уведомлений"
-        subtitle="Какие категории уведомлений получает каждая роль."
+        subtitle="Какие категории уведомлений получает каждая роль. Событие этапа согласования приходит только тому, кому адресовано: «поступило на согласование» — старшему КМ или коммерческому директору, в зависимости от этапа."
         showCompare={false}
         showExport={false}
         actions={
