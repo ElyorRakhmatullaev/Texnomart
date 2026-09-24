@@ -1,14 +1,29 @@
 "use client";
 
-import { Check, Clock, FilePen, History, Pencil, Send, Trash2, TriangleAlert, Users, X } from "lucide-react";
+import * as React from "react";
+import {
+  Check,
+  ChevronDown,
+  Clock,
+  FilePen,
+  History,
+  Pencil,
+  Send,
+  Trash2,
+  TriangleAlert,
+  Users,
+  X,
+} from "lucide-react";
 import { cn } from "@texnomart/ui/utils";
 import { Checkbox } from "@texnomart/ui/checkbox";
 import { Button } from "@texnomart/ui/button";
 import {
   formatPromoNo,
+  getCategoryManager,
   PLAN_DIRECTOR_SLA_WORKING_DAYS,
   PLAN_MARKETING_REVIEW_LEAD_DAYS,
   PLAN_MARKETING_SUBMIT_LEAD_DAYS,
+  type CategoryDistributionEntry,
   type PlanStageStatus,
 } from "../../../lib/promo-mock-data";
 import {
@@ -17,6 +32,11 @@ import {
   type StageCellData,
 } from "../../../lib/plan-approval";
 import type { PlanRowJournal } from "../../../lib/plan-store";
+import {
+  compactDistribution,
+  formatSpanDates,
+  type DistributionSpan,
+} from "../../../lib/distribution-store";
 
 // Per-campaign plan approval (client feedback §5): for each plan row, the approval
 // progress is shown separately across the three directors — when the stage was sent /
@@ -81,6 +101,13 @@ interface PlanApprovalTableProps {
   canDistribute?: (id: string) => boolean;
   /** Волна 6: открыть форму распределения. */
   onDistribute?: (id: string) => void;
+  /**
+   * Распределение строки по категориям / КМ (замечание №3; проверка прода
+   * 14–15.09, №27 пп.2–3): свёрнутый блок «только просмотр» под названием
+   * акции. Его видит каждый следующий согласующий до своего решения — КД то,
+   * что задал директор маркетинга, ОД то, что прошло этап КД.
+   */
+  distributionFor?: (id: string) => CategoryDistributionEntry[] | undefined;
 }
 
 function formatDateTime(d: Date): string {
@@ -374,6 +401,126 @@ function RowActions({
   );
 }
 
+function weekdayShort(d: Date): string {
+  const w = new Intl.DateTimeFormat("ru-RU", { weekday: "short" }).format(d);
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
+
+/** «Пн» для одной даты, «Пн–Пт · 5 дн.» для периода. */
+function spanNote(s: DistributionSpan): string {
+  return s.days > 1
+    ? `${weekdayShort(s.from)}–${weekdayShort(s.to)} · ${s.days} дн.`
+    : weekdayShort(s.from);
+}
+
+const kmName = (id: string) => getCategoryManager(id)?.name ?? id;
+
+/** Свёрнутый по умолчанию переключатель блока распределения. */
+function DistributionToggle({
+  count,
+  open,
+  onToggle,
+}: {
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="mt-1 inline-flex min-h-7 items-center gap-1 rounded-md text-xs font-medium text-gray-600 underline decoration-gray-300 decoration-dotted underline-offset-2 hover:text-gray-900 dark:text-gray-300 dark:decoration-gray-600 dark:hover:text-gray-100"
+    >
+      <Users className="size-3.5" />
+      Распределение по категориям ({count})
+      <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+    </button>
+  );
+}
+
+const READ_ONLY_NOTE =
+  "Только просмотр — распределение задают директор маркетинга и коммерческий директор.";
+
+/** Раскрытый блок, десктоп: дата или период · категория · ответственный КМ. */
+function DistributionTable({
+  spans,
+  readOnly,
+}: {
+  spans: DistributionSpan[];
+  readOnly: boolean;
+}) {
+  const grid = "grid grid-cols-[200px_minmax(0,1fr)_200px] gap-x-4 px-3";
+  return (
+    <div className="max-w-[920px] overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-border dark:bg-card">
+      <div
+        className={cn(
+          grid,
+          "border-b border-gray-200 bg-gray-50 py-1.5 text-[11px] font-semibold text-gray-600 dark:border-border dark:bg-muted/40 dark:text-gray-300"
+        )}
+      >
+        <span>Дата / период</span>
+        <span>Категория</span>
+        <span>Ответственный КМ</span>
+      </div>
+      {spans.map((s, i) => (
+        <div
+          key={i}
+          className={cn(
+            grid,
+            "border-b border-gray-100 py-1.5 text-xs last:border-b-0 dark:border-border"
+          )}
+        >
+          <span className="tabular-nums">
+            <span className="font-medium text-gray-900 dark:text-gray-100">
+              {formatSpanDates(s)}
+            </span>
+            <span className="text-muted-foreground"> · {spanNote(s)}</span>
+          </span>
+          <span className="text-gray-800 dark:text-gray-100">{s.category}</span>
+          <span className="text-gray-700 dark:text-gray-200">
+            {kmName(s.responsibleKmId)}
+          </span>
+        </div>
+      ))}
+      {readOnly && (
+        <p className="border-t border-gray-100 px-3 py-1.5 text-[11px] text-muted-foreground dark:border-border">
+          {READ_ONLY_NOTE}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Раскрытый блок, мобильная карточка: строка на запись. */
+function DistributionStack({
+  spans,
+  readOnly,
+}: {
+  spans: DistributionSpan[];
+  readOnly: boolean;
+}) {
+  return (
+    <div className="mt-2 space-y-1.5 rounded-lg border border-gray-200 p-2 dark:border-border">
+      {spans.map((s, i) => (
+        <div key={i} className="text-xs">
+          <div className="tabular-nums">
+            <span className="font-medium text-gray-900 dark:text-gray-100">
+              {formatSpanDates(s)}
+            </span>
+            <span className="text-muted-foreground"> · {spanNote(s)}</span>
+          </div>
+          <div className="text-gray-800 dark:text-gray-100">{s.category}</div>
+          <div className="text-muted-foreground">{kmName(s.responsibleKmId)}</div>
+        </div>
+      ))}
+      {readOnly && (
+        <p className="border-t pt-1.5 text-[11px] text-muted-foreground">{READ_ONLY_NOTE}</p>
+      )}
+    </div>
+  );
+}
+
 function StageHeader({ title, note }: { title: string; note: string }) {
   return (
     <div className="flex flex-col gap-0.5">
@@ -414,7 +561,21 @@ export function PlanApprovalTable({
   onDistribute,
   journalFor,
   onShowHistory,
+  distributionFor,
 }: PlanApprovalTableProps) {
+  // Раскрытые блоки распределения — по умолчанию все свёрнуты.
+  const [openDist, setOpenDist] = React.useState<Set<string>>(() => new Set());
+  const toggleDist = (id: string) =>
+    setOpenDist((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const spansOf = (id: string) => compactDistribution(distributionFor?.(id) ?? []);
+  // Колонки: [чекбокс] + статус, №, тип, название, период, три этапа, действия.
+  const colCount = (selectable ? 1 : 0) + 9;
+
   const marketingNote = `ознакомление: за ${PLAN_MARKETING_REVIEW_LEAD_DAYS} кал. дн · отправка на согл.: за ${PLAN_MARKETING_SUBMIT_LEAD_DAYS} кал. дн`;
   const directorNote = `согласование: ${PLAN_DIRECTOR_SLA_WORKING_DAYS} раб. дн`;
 
@@ -483,9 +644,11 @@ export function PlanApprovalTable({
               const decision = decisionFor?.(r.id);
               const send = sendStatusFor?.(r.id);
               const checked = selectedIds?.has(r.id) ?? false;
+              const spans = spansOf(r.id);
+              const distOpen = spans.length > 0 && openDist.has(r.id);
               return (
+                <React.Fragment key={r.id}>
                 <tr
-                  key={r.id}
                   className={cn(
                     "hover:bg-gray-50/60 dark:hover:bg-accent",
                     decision === "approved" &&
@@ -530,6 +693,15 @@ export function PlanApprovalTable({
                   </td>
                   <td className={cn(CELL, "font-medium text-gray-900 dark:text-gray-100")}>
                     {r.name}
+                    {spans.length > 0 && (
+                      <div>
+                        <DistributionToggle
+                          count={spans.length}
+                          open={distOpen}
+                          onToggle={() => toggleDist(r.id)}
+                        />
+                      </div>
+                    )}
                   </td>
                   <td className={cn(CELL, "tabular-nums text-gray-700 dark:text-gray-200")}>
                     {formatDate(r.startDate)} — {formatDate(r.endDate)}
@@ -556,6 +728,20 @@ export function PlanApprovalTable({
                     />
                   </td>
                 </tr>
+                {distOpen && (
+                  <tr>
+                    <td
+                      colSpan={colCount}
+                      className="border-b border-gray-100 bg-gray-50/60 px-3 pb-3 pt-2 dark:border-border dark:bg-muted/20"
+                    >
+                      <DistributionTable
+                        spans={spans}
+                        readOnly={!canDistribute?.(r.id)}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -571,6 +757,8 @@ export function PlanApprovalTable({
           const decision = decisionFor?.(r.id);
           const send = sendStatusFor?.(r.id);
           const checked = selectedIds?.has(r.id) ?? false;
+          const spans = spansOf(r.id);
+          const distOpen = spans.length > 0 && openDist.has(r.id);
           return (
             <div
               key={r.id}
@@ -614,6 +802,21 @@ export function PlanApprovalTable({
               <div className="text-xs tabular-nums text-muted-foreground">
                 {formatDate(r.startDate)} — {formatDate(r.endDate)}
               </div>
+              {spans.length > 0 && (
+                <>
+                  <DistributionToggle
+                    count={spans.length}
+                    open={distOpen}
+                    onToggle={() => toggleDist(r.id)}
+                  />
+                  {distOpen && (
+                    <DistributionStack
+                      spans={spans}
+                      readOnly={!canDistribute?.(r.id)}
+                    />
+                  )}
+                </>
+              )}
               <dl className="mt-3 space-y-2 border-t pt-3">
                 <div>
                   <dt className="text-[11px] font-medium text-gray-500 dark:text-gray-400">

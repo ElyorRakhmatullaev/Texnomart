@@ -4,12 +4,12 @@ import type { CategoryDistributionEntry, PromoCampaign } from "./promo-mock-data
  * Волна 6 — «Распределение промо по КМ, дням недели и категориям» (строки 73–74
  * трекера). Блок «Распределение по категориям» в кратком календаре существовал
  * с правок 19.06, но данные для него были только в сидах. Здесь живёт то, что
- * ввёл коммерческий директор.
+ * ввели директор маркетинга или коммерческий директор.
  *
  * Приём тот же, что у `line-decision-store` (Волна 3): общий факт → persist +
  * чистая свёртка `applyDistribution` на входе каждого потребителя. Никакого
- * провайдера и подъёма состояния — потребителей всего два (краткий календарь и
- * его экспорт), и оба сеются из одного места.
+ * провайдера и подъёма состояния — потребители (краткий календарь, его экспорт
+ * и блок распределения на вкладке «План акций») сеются из одного места.
  */
 
 const STORAGE_KEY = "promo:category-distribution";
@@ -18,11 +18,11 @@ const STORAGE_KEY = "promo:category-distribution";
  * Согласованный список категорий (трекер, стр. 74 п.5 от 18.08.2026 — перечислен
  * клиентом дословно, «все остальные категории из текущего списка удалить»).
  *
- * Коммерческий директор выбирает только отсюда; создание категории вручную
- * оставлено директору маркетинга (п.6) — за это отвечает проп
- * `canCreateCategory` в `CategoryDistributionDialog`. Категория, назначенная
- * раньше и отсутствующая в списке, из строки не пропадает: диалог добавляет её
- * к вариантам выбора.
+ * Завести новую категорию вручную могут директор маркетинга и коммерческий
+ * директор (проверка прода 14–15.09, №27 п.1: прежнее «только ДМ» аналитик
+ * назвала своей ошибкой) — за это отвечает проп `canCreateCategory` в
+ * `CategoryDistributionDialog`. Категория, назначенная раньше и отсутствующая
+ * в списке, из строки не пропадает: диалог добавляет её к вариантам выбора.
  */
 export const PROMO_CATEGORIES: string[] = [
   "Климатическая техника и техника для ухода за домом",
@@ -113,6 +113,84 @@ export function clearDistributionFor(campaignId: string): void {
 
 export function hasStoredDistribution(campaignId: string): boolean {
   return campaignId in read();
+}
+
+/** Строка распределения для показа: одна дата или период подряд идущих дат. */
+export interface DistributionSpan {
+  from: Date;
+  to: Date;
+  /** Календарных дней в строке (`to − from + 1`). */
+  days: number;
+  category: string;
+  responsibleKmId: string;
+}
+
+function nextDateOnly(iso: string): string {
+  const d = parseDateOnly(iso);
+  return toDateOnly(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1));
+}
+
+/**
+ * Компактный вид распределения (замечание №5 от 17.08): подряд идущие даты с
+ * одной категорией и одним ответственным КМ сливаются в период, смена
+ * категории или КМ начинает новую строку. Хранилище не меняется — это только
+ * представление; порядок — по дате начала, затем по категории.
+ */
+export function compactDistribution(
+  entries: CategoryDistributionEntry[]
+): DistributionSpan[] {
+  const byPair = new Map<string, { category: string; kmId: string; dates: Set<string> }>();
+  for (const e of entries) {
+    const key = `${e.category.trim().toLowerCase()}|${e.responsibleKmId}`;
+    const pair = byPair.get(key) ?? {
+      category: e.category.trim(),
+      kmId: e.responsibleKmId,
+      dates: new Set<string>(),
+    };
+    pair.dates.add(toDateOnly(e.date));
+    byPair.set(key, pair);
+  }
+
+  const spans: DistributionSpan[] = [];
+  for (const { category, kmId, dates } of byPair.values()) {
+    const sorted = [...dates].sort();
+    let start = sorted[0];
+    let prev = sorted[0];
+    const close = () => {
+      const from = parseDateOnly(start);
+      const to = parseDateOnly(prev);
+      const days = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
+      spans.push({ from, to, days, category, responsibleKmId: kmId });
+    };
+    for (const iso of sorted.slice(1)) {
+      if (iso === nextDateOnly(prev)) {
+        prev = iso;
+        continue;
+      }
+      close();
+      start = iso;
+      prev = iso;
+    }
+    close();
+  }
+  return spans.sort(
+    (a, b) =>
+      a.from.getTime() - b.from.getTime() ||
+      a.to.getTime() - b.to.getTime() ||
+      a.category.localeCompare(b.category, "ru")
+  );
+}
+
+function ddmmyyyy(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+}
+
+/** «01.11.2026» для одной даты, «01.11.2026–05.11.2026» для периода. */
+export function formatSpanDates(span: Pick<DistributionSpan, "from" | "to" | "days">): string {
+  return span.days > 1
+    ? `${ddmmyyyy(span.from)}–${ddmmyyyy(span.to)}`
+    : ddmmyyyy(span.from);
 }
 
 /**

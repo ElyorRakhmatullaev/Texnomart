@@ -10,6 +10,11 @@ import { OverdueTag } from "../../../components/OverdueTag";
 import { PromoStatusBadge } from "../../../components/PromoStatusBadge";
 import { ReadinessCell } from "./ReadinessCell";
 import {
+  compactDistribution,
+  formatSpanDates,
+  type DistributionSpan,
+} from "../../../lib/distribution-store";
+import {
   CATEGORY_MANAGERS,
   formatPromoNo,
   getFillDeadline,
@@ -58,20 +63,25 @@ function lastName(name: string): string {
   return name.split(" ")[0];
 }
 
-/** Group distribution entries by day (one date label per group; §2 «не дублировать дату»). */
+/**
+ * Distribution sub-rows, grouped by identical date / period so each group shows its
+ * label once (§2 «не дублировать дату»). Rows come from `compactDistribution`:
+ * consecutive dates with the same category + КМ merge into one «ДД.ММ.ГГГГ–ДД.ММ.ГГГГ»
+ * row (замечание №5 от 17.08) — the row count, and so the row height, follow the
+ * merged rows, not the raw entries.
+ */
 interface DistGroup {
-  key: number;
-  date: Date;
-  items: CategoryDistributionEntry[];
+  key: string;
+  span: DistributionSpan;
+  items: DistributionSpan[];
 }
 function groupDistribution(entries: CategoryDistributionEntry[]): DistGroup[] {
-  const sorted = [...entries].sort((a, b) => a.date.getTime() - b.date.getTime());
   const groups: DistGroup[] = [];
-  for (const e of sorted) {
-    const key = e.date.getTime();
+  for (const s of compactDistribution(entries)) {
+    const key = `${s.from.getTime()}|${s.to.getTime()}`;
     const last = groups[groups.length - 1];
-    if (last && last.key === key) last.items.push(e);
-    else groups.push({ key, date: e.date, items: [e] });
+    if (last && last.key === key) last.items.push(s);
+    else groups.push({ key, span: s, items: [s] });
   }
   return groups;
 }
@@ -149,7 +159,8 @@ export function ShortCalendarTable({
     const entries = (c.categoryDistribution ?? []).filter((e) =>
       matchesDistFilter(e, distFilter)
     );
-    const n = entries.length;
+    // Merged rows, not raw entries — must match what `groupDistribution` renders.
+    const n = compactDistribution(entries).length;
     const distH = expanded && n > 0 ? n * SUBROW_H : 0;
     const readinessH = expandedReadiness.has(c.id) ? READINESS_EXPANDED_H : 0;
     return Math.max(BASE_ROW_H, distH, readinessH);
@@ -236,7 +247,7 @@ export function ShortCalendarTable({
             )}
             {expanded && (
               <>
-                <span className={cn("w-[150px] px-3", CELL)}>День / дата</span>
+                <span className={cn("w-[170px] px-3", CELL)}>День / дата</span>
                 <span className={cn("w-[190px] px-3", CELL)}>Категория</span>
                 <span className={cn("w-[180px] px-3", CELL)}>
                   Ответственный КМ
@@ -392,8 +403,9 @@ export function ShortCalendarTable({
                       The day is shown once per group (not duplicated). */}
                   {expanded && (
                     <>
-                      {/* День / дата */}
-                      <div className={cn("w-[150px] px-3", CELL)}>
+                      {/* День / дата — одна дата: день недели + дата; период подряд
+                          идущих дат: «ДД.ММ.ГГГГ–ДД.ММ.ГГГГ» + число дней. */}
+                      <div className={cn("w-[170px] px-3", CELL)}>
                         {hasDist ? (
                           <div className="flex h-full flex-col justify-center">
                             {groups.map((g, gi) => (
@@ -409,12 +421,26 @@ export function ShortCalendarTable({
                                   style={{ height: SUBROW_H }}
                                   className="flex flex-col justify-center"
                                 >
-                                  <span className="text-xs font-medium text-gray-800 dark:text-gray-100">
-                                    {weekdayFull(g.date)}
-                                  </span>
-                                  <span className="text-[11px] tabular-nums text-muted-foreground">
-                                    <RuDate value={g.date} />
-                                  </span>
+                                  {g.span.days > 1 ? (
+                                    <>
+                                      <span className="text-[11px] font-medium tabular-nums text-gray-800 dark:text-gray-100">
+                                        {formatSpanDates(g.span)}
+                                      </span>
+                                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                                        {weekdayShort(g.span.from)}–{weekdayShort(g.span.to)} ·{" "}
+                                        {g.span.days} дн.
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-xs font-medium text-gray-800 dark:text-gray-100">
+                                        {weekdayFull(g.span.from)}
+                                      </span>
+                                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                                        <RuDate value={g.span.from} />
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             ))}

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Info, Plus, Trash2 } from "lucide-react";
-import { eachDayOfInterval, format, getDay } from "date-fns";
+import { eachDayOfInterval, format } from "date-fns";
 import { ru } from "date-fns/locale";
 import {
   Sheet,
@@ -42,15 +42,27 @@ import {
  *
  * 1. Отдельный день — «+ Добавить дату»: конкретная дата из периода акции,
  *    категория вручную, КМ из списка.
- * 2. Период — выбор под-периода внутри срока акции + дни недели; система
- *    формирует все подходящие даты, затем пара «категория + КМ», указанная
- *    один раз, применяется ко всем сформированным датам («Применить ко всем
- *    датам»). После этого любая дата правится отдельно.
+ * 2. Период — выбор под-периода внутри срока акции; система формирует все
+ *    входящие в него даты, затем пара «категория + КМ», указанная один раз,
+ *    применяется ко всем сформированным датам («Применить ко всем датам»).
+ *    После этого любая дата правится отдельно.
+ *
+ * Кнопок дней недели Пн–Вс больше нет (замечания №10 и №27 п.2 от 18.08): в
+ * согласованной логике распределение идёт по дате или по периоду.
  *
  * На одну дату — несколько категорий, каждая со своим ответственным КМ
  * («+ Добавить категорию / КМ на этот день»). Хранилище прежнее: плоский
  * `CategoryDistributionEntry[]`, группировка по дням — только представление.
  */
+
+/**
+ * Что распределяется: акция из сида или строка плана, созданная в сессии, —
+ * форме нужны только номер, название и период.
+ */
+export type DistributionTarget = Pick<
+  PromoCampaign,
+  "id" | "name" | "startDate" | "endDate"
+>;
 
 /** Черновик строки формы — даты держим строкой «YYYY-MM-DD», как в Select. */
 interface RowDraft {
@@ -64,30 +76,20 @@ interface RowDraft {
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  campaign: PromoCampaign | null;
+  campaign: DistributionTarget | null;
   /** Текущее распределение акции (сид или введённое ранее). */
   initial: CategoryDistributionEntry[];
   onSave: (entries: CategoryDistributionEntry[]) => void;
   /** Убрать распределение целиком — акция живёт по общей логике. */
   onClear: () => void;
   /**
-   * Можно ли завести категорию вручную. Трекер, стр. 74 п.6: создание новой
-   * категории оставлено директору маркетинга; коммерческий директор выбирает из
-   * согласованного списка `PROMO_CATEGORIES`.
+   * Можно ли завести категорию вручную (свободный ввод с подсказками из
+   * `PROMO_CATEGORIES`). Проверка прода 14–15.09, №27 п.1: создавать категории
+   * могут и директор маркетинга, и коммерческий директор; без права — выбор из
+   * согласованного списка.
    */
   canCreateCategory?: boolean;
 }
-
-/** Порядок чипов — русская неделя; значения — `getDay` (воскресенье = 0). */
-const WEEKDAYS: Array<{ label: string; day: number }> = [
-  { label: "Пн", day: 1 },
-  { label: "Вт", day: 2 },
-  { label: "Ср", day: 3 },
-  { label: "Чт", day: 4 },
-  { label: "Пт", day: 5 },
-  { label: "Сб", day: 6 },
-  { label: "Вс", day: 0 },
-];
 
 function weekdayHeading(date: Date): string {
   const name = format(date, "EEEE", { locale: ru });
@@ -98,9 +100,11 @@ const dupKey = (date: string, category: string) =>
   `${date}|${category.trim().toLowerCase()}`;
 
 /**
- * Поле категории. Директор маркетинга заводит категории вручную (свободный ввод с
- * подсказками), коммерческий директор выбирает из согласованного списка — трекер,
- * стр. 74 пп.5–6.
+ * Поле категории: с правом создания — свободный ввод с подсказками, без него —
+ * выбор из согласованного списка (трекер, стр. 74 пп.5–6; права — №27 п.1).
+ *
+ * Длинное название обрезается многоточием, полное — в подсказке: без этого
+ * `whitespace-nowrap` триггера распирал колонку и сдвигал поле КМ.
  */
 function CategoryField({
   id,
@@ -122,15 +126,19 @@ function CategoryField({
         aria-label="Категория"
         list="distribution-categories"
         value={value}
+        title={value || undefined}
         placeholder="Категория"
+        className="min-w-0"
         onChange={(e) => onChange(e.target.value)}
       />
     );
   }
   return (
     <Select value={value || undefined} onValueChange={onChange}>
-      <SelectTrigger id={id} aria-label="Категория">
-        <SelectValue placeholder="Выберите категорию" />
+      <SelectTrigger id={id} aria-label="Категория" title={value || undefined} className="min-w-0">
+        <SelectValue placeholder="Выберите категорию">
+          {value ? <span className="block min-w-0 truncate">{value}</span> : undefined}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {options.map((c) => (
@@ -159,7 +167,6 @@ export function CategoryDistributionDialog({
   // Вариант 2 — генерация по периоду.
   const [genStart, setGenStart] = React.useState("");
   const [genEnd, setGenEnd] = React.useState("");
-  const [genDays, setGenDays] = React.useState<Set<number>>(new Set());
   // Однократные «категория + КМ», применяемые ко всем датам сразу.
   const [fillCategory, setFillCategory] = React.useState("");
   const [fillKmId, setFillKmId] = React.useState("");
@@ -176,7 +183,6 @@ export function CategoryDistributionDialog({
     );
     setGenStart(toDateOnly(campaign.startDate));
     setGenEnd(toDateOnly(campaign.endDate));
-    setGenDays(new Set());
     setFillCategory("");
     setFillKmId("");
     // `initial` пересобирается на каждом рендере родителя — ключом берём id акции.
@@ -240,21 +246,16 @@ export function CategoryDistributionDialog({
 
   if (!campaign) return null;
 
-  const toggleDay = (day: number) =>
-    setGenDays((prev) => {
-      const next = new Set(prev);
-      if (next.has(day)) next.delete(day);
-      else next.add(day);
-      return next;
-    });
-
-  /** Вариант 2, шаг «Сформировать даты»: пустая строка на каждую новую дату. */
+  /**
+   * Вариант 2, «Сформировать даты»: пустая строка на каждую дату выбранного
+   * периода, которой в форме ещё нет.
+   */
   const generateDates = () => {
-    if (periodError || genDays.size === 0) return;
+    if (periodError) return;
     const picked = eachDayOfInterval({
       start: parseDateOnly(genStart),
       end: parseDateOnly(genEnd),
-    }).filter((d) => genDays.has(getDay(d)));
+    });
     setRows((prev) => {
       const existingDates = new Set(prev.map((r) => r.date));
       const added = picked
@@ -322,7 +323,7 @@ export function CategoryDistributionDialog({
 
   const minDate = toDateOnly(campaign.startDate);
   const maxDate = toDateOnly(campaign.endDate);
-  const canGenerate = !periodError && genDays.size > 0;
+  const canGenerate = !periodError;
   const canApplyAll = !!fillCategory.trim() && !!fillKmId && rows.length > 0;
 
   return (
@@ -347,15 +348,15 @@ export function CategoryDistributionDialog({
           <div className="flex gap-2 rounded-lg bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-blue-900 dark:bg-blue-500/15 dark:text-blue-200">
             <Info className="mt-0.5 size-4 shrink-0" />
             <span>
-              Коммерческий директор выбирает период и отмечает дни недели — система
-              автоматически формирует строки по соответствующим датам. Для одной даты
-              можно добавить несколько категорий и назначить отдельного ответственного
-              КМ для каждой категории. Распределение необязательно: без него акция
-              отображается по общей логике.
+              Выберите период внутри срока акции — система сформирует входящие в него
+              даты. Категорию и ответственного КМ можно указать один раз для всех дат, а
+              затем изменить по отдельной дате. На одну дату можно добавить несколько
+              категорий, у каждой — свой ответственный КМ. Распределение необязательно:
+              без него акция отображается по общей логике.
             </span>
           </div>
 
-          {/* Шаг 1 — период распределения (вариант «на период»). */}
+          {/* Шаг 1 — период распределения (вариант «на период») → генерация дат. */}
           <section className="space-y-2">
             <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
               1. Выберите период распределения
@@ -385,44 +386,16 @@ export function CategoryDistributionDialog({
             >
               {periodError ?? "Период должен быть в пределах срока акции."}
             </p>
-          </section>
-
-          {/* Шаг 2 — дни недели → генерация дат. */}
-          <section className="space-y-2">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-              2. Выберите дни недели для генерации дат
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {WEEKDAYS.map(({ label, day }) => {
-                const active = genDays.has(day);
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => toggleDay(day)}
-                    className={cn(
-                      "rounded-md border px-3 py-1.5 text-sm transition-colors",
-                      active
-                        ? "border-primary bg-primary/15 font-medium text-gray-900 dark:text-gray-100"
-                        : "border-gray-200 text-gray-600 hover:bg-accent dark:border-border dark:text-gray-300"
-                    )}
-                  >
-                    {active ? "✓ " : ""}
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">
-                Даты будут сформированы автоматически в пределах выбранного периода на
-                основе отмеченных дней недели.
+                Будут сформированы все даты выбранного периода; уже добавленные даты не
+                дублируются.
               </p>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                className="shrink-0"
                 disabled={!canGenerate}
                 onClick={generateDates}
               >
@@ -431,10 +404,10 @@ export function CategoryDistributionDialog({
             </div>
           </section>
 
-          {/* Шаг 3 — распределение по дням. */}
+          {/* Шаг 2 — распределение по дням. */}
           <section className="space-y-2.5">
             <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-              3. Распределите категории и ответственных КМ
+              2. Распределите категории и ответственных КМ
             </h3>
 
             {/* Однократное указание пары «категория + КМ» на все даты формы. */}
@@ -503,7 +476,10 @@ export function CategoryDistributionDialog({
                     {weekdayHeading(d)} · {format(d, "dd.MM.yyyy")}
                   </div>
                   {groupRows.map((r) => (
-                    <div key={r.key} className="grid gap-2 sm:grid-cols-[1fr_180px_auto]">
+                    <div
+                      key={r.key}
+                      className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]"
+                    >
                       <CategoryField
                         value={r.category}
                         options={categoryOptions}

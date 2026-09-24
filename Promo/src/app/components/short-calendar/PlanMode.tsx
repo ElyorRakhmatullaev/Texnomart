@@ -44,7 +44,10 @@ import {
   type RowDecision,
 } from "./PlanApprovalTable";
 import { PlanRowHistoryDrawer } from "./PlanRowHistoryDrawer";
-import { CategoryDistributionDialog } from "./CategoryDistributionDialog";
+import {
+  CategoryDistributionDialog,
+  type DistributionTarget,
+} from "./CategoryDistributionDialog";
 import { canActAsKd } from "../../../lib/kd-substitution-store";
 import {
   clearDistributionFor,
@@ -400,19 +403,20 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
   }
 
   // ── Волна 6: распределение по КМ / дням / категориям ──────────────────────
-  // Действие КД (или уполномоченного лица) на строке, уже отправленной на
-  // согласование: у черновика распределять ещё нечего.
+  // Кто и на каких строках распределяет — см. `canDistribute` ниже.
   const [distributeId, setDistributeId] = React.useState<string | null>(null);
 
   // Трекер, стр. 74 п.1 (18.08.2026): распределять может не только коммерческий
-  // директор (и его уполномоченное лицо), но и директор маркетинга.
+  // директор (и его уполномоченное лицо), но и директор маркетинга. ДМ — владелец
+  // строки, поэтому распределяет и черновик: заданное им распределение КД видит
+  // уже на своём этапе (проверка прода 14–15.09, №27 п.2). КД — только
+  // отправленные строки: у черновика ему решать ещё нечего.
   const canDistribute = React.useCallback(
     (id: string) => {
-      const isDistributor =
-        currentRole === "Коммерческий директор" ||
-        currentRole === PLAN_EDITOR ||
-        canActAsKd(currentUser);
-      return isDistributor && sendOf(id) !== "draft";
+      if (currentRole === PLAN_EDITOR) return true;
+      const isKdActor =
+        currentRole === "Коммерческий директор" || canActAsKd(currentUser);
+      return isKdActor && sendOf(id) !== "draft";
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currentRole, currentUser, sendStatus]
@@ -433,9 +437,27 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
   const canDistributeSolo =
     soloSelectedId !== null && canDistribute(soloSelectedId);
 
-  const distributeCampaign = React.useMemo(
-    () => campaigns.find((c) => c.id === distributeId) ?? null,
-    [campaigns, distributeId]
+  // Строка плана, созданная в сессии, в `campaigns` не входит — форме хватает её
+  // номера, названия и периода. Раньше такой строке доставалась «мёртвая»
+  // кнопка «Распределить»: форма получала null и не открывалась.
+  const distributeCampaign = React.useMemo<DistributionTarget | null>(() => {
+    if (!distributeId) return null;
+    const campaign = campaigns.find((c) => c.id === distributeId);
+    if (campaign) return campaign;
+    const row = rows.find((r) => r.id === distributeId);
+    return row
+      ? { id: row.id, name: row.name, startDate: row.startDate, endDate: row.endDate }
+      : null;
+  }, [campaigns, rows, distributeId]);
+
+  // Распределение строки для блока «только просмотр» (№3 и №27 пп.2–3): у акций
+  // из сида оно уже свёрнуто со стором (`applyDistribution` на странице), у строк,
+  // созданных в сессии, читается из стора напрямую.
+  const distributionFor = React.useCallback(
+    (id: string) =>
+      campaigns.find((c) => c.id === id)?.categoryDistribution ??
+      getDistributionFor(id),
+    [campaigns]
   );
 
   const distributeInitial = React.useMemo(
@@ -1053,6 +1075,7 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
             onShowHistory={setHistoryRowId}
             canDistribute={canDistribute}
             onDistribute={openDistribute}
+            distributionFor={distributionFor}
           />
 
           {/* Selection strip — send mode (marketing) or review mode (КД/ОД).
@@ -1180,8 +1203,9 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
         onOpenChange={(v) => !v && setDistributeId(null)}
         campaign={distributeCampaign}
         initial={distributeInitial}
-        // стр. 74 п.6 — новую категорию заводит только директор маркетинга.
-        canCreateCategory={currentRole === PLAN_EDITOR}
+        // №27 п.1 (проверка прода 14–15.09): новую категорию заводят и директор
+        // маркетинга, и коммерческий директор (с уполномоченным лицом).
+        canCreateCategory={isDistributorActor}
         onSave={(entries) => {
           if (!distributeId) return;
           setDistributionFor(distributeId, entries);

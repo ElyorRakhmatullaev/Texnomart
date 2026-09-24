@@ -19,6 +19,7 @@ import {
   type PromoLine,
 } from "./promo-mock-data";
 import { getPlanState } from "./plan-store";
+import { compactDistribution, formatSpanDates } from "./distribution-store";
 import {
   approvedStages,
   currentCycle,
@@ -135,11 +136,13 @@ export function buildCalendarCsv(
           rs.overdueDays > 0 ? ` (+${rs.overdueDays} дн.)` : ""
         }`
       : "Не отправлено";
-    const dist = (c.categoryDistribution ?? [])
+    // Те же строки, что на экране: подряд идущие даты с одной категорией и КМ —
+    // одним периодом (замечание №5 от 17.08).
+    const dist = compactDistribution(c.categoryDistribution ?? [])
       .map(
-        (e) =>
-          `${fmtDate(e.date)}: ${e.category} — ${
-            getCategoryManager(e.responsibleKmId)?.name ?? e.responsibleKmId
+        (s) =>
+          `${formatSpanDates(s)}: ${s.category} — ${
+            getCategoryManager(s.responsibleKmId)?.name ?? s.responsibleKmId
           }`
       )
       .join(" | ");
