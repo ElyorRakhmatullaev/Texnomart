@@ -36,6 +36,7 @@ Monorepo containing Texnomart web applications with a shared design system, comp
 
 ```
 Texnomart/
+├── .github/workflows/deploy.yml # GitHub Pages deploy of all three apps (see «Deployment»)
 ├── .claude/                    # Shared Claude commands & rules
 │   ├── commands/               # Custom slash commands (all sub-projects)
 │   └── rules/                  # Layer-specific rules (design, etc.)
@@ -113,6 +114,8 @@ pnpm dev                        # Start all dev servers in parallel
 > **Note**: `pnpm` may not be on PATH; if so, prefix commands with `corepack` (e.g. `corepack pnpm install`). corepack ships with Node.
 
 > **Note**: pnpm v11 requires build script approvals. `pnpm-workspace.yaml` has `allowBuilds` set to `true` for `@tailwindcss/oxide` and `esbuild`. If `pnpm install` fails with `ERR_PNPM_IGNORED_BUILDS`, check that file.
+
+> **Note**: the Vite builds are **transpile-only** (esbuild) — there is no `typescript` package or `tsconfig.json` in the repo, so a green build does not mean the types check. A full `tsc` check of Promo works from the session scratchpad (TypeScript installed there + a `tsconfig.json` with path aliases and `@types/react` from the pnpm store); recipe and the current baseline of 3 known errors — `tasks/lessons.md`, 2026-09-24.
 
 ## Deployment (GitHub Pages)
 
