@@ -248,7 +248,7 @@ export function ShortCalendarTable({
             {expanded && (
               <>
                 <span className={cn("w-[170px] px-3", CELL)}>День / дата</span>
-                <span className={cn("w-[190px] px-3", CELL)}>Категория</span>
+                <span className={cn("w-[260px] px-3", CELL)}>Категория</span>
                 <span className={cn("w-[180px] px-3", CELL)}>
                   Ответственный КМ
                 </span>
@@ -450,8 +450,10 @@ export function ShortCalendarTable({
                         )}
                       </div>
 
-                      {/* Категория */}
-                      <div className={cn("w-[190px] px-3", CELL)}>
+                      {/* Категория — согласованные названия длинные (до ~70 знаков):
+                          две строки вместо обрезки, полное название в подсказке.
+                          2 × 15px (text-xs leading-tight) укладываются в SUBROW_H. */}
+                      <div className={cn("w-[260px] px-3", CELL)}>
                         {hasDist ? (
                           <div className="flex h-full flex-col justify-center">
                             {groups.flatMap((g) =>
@@ -461,7 +463,12 @@ export function ShortCalendarTable({
                                   style={{ height: SUBROW_H }}
                                   className="flex items-center border-b border-gray-100 text-xs text-gray-800 last:border-b-0 dark:border-border dark:text-gray-100"
                                 >
-                                  <span className="truncate">{it.category}</span>
+                                  <span
+                                    title={it.category}
+                                    className="[display:-webkit-box] overflow-hidden leading-tight [-webkit-box-orient:vertical] [-webkit-line-clamp:2]"
+                                  >
+                                    {it.category}
+                                  </span>
                                 </div>
                               ))
                             )}

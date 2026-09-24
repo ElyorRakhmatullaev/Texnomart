@@ -134,16 +134,31 @@ function FilterSelect({
   options: Option[];
   width?: string;
 }) {
+  const selectedLabel =
+    value === ALL ? undefined : options.find((o) => o.value === value)?.label;
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[11px] font-medium text-muted-foreground">
         {label}
       </span>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className={cn("h-8 bg-white text-sm dark:bg-card", width)}>
-          <SelectValue placeholder={placeholder} />
+        {/* Длинное значение (согласованные категории — до ~70 знаков) обрезается
+            многоточием, полное — в подсказке; `whitespace-nowrap` триггера иначе
+            просто отрезает текст по краю. */}
+        <SelectTrigger
+          title={selectedLabel}
+          className={cn("h-8 bg-white text-sm dark:bg-card", width)}
+        >
+          <SelectValue placeholder={placeholder}>
+            {selectedLabel ? (
+              <span className="block min-w-0 truncate">{selectedLabel}</span>
+            ) : undefined}
+          </SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        {/* Popper ставит обёртке `min-width: max-content`, поэтому без потолка
+            длинная категория раздвигала список за край экрана на 390px; с ним
+            пункты переносятся на вторую строку. */}
+        <SelectContent className="max-w-(--radix-select-content-available-width)">
           <SelectItem value={ALL}>{placeholder}</SelectItem>
           {options.map((o) => (
             <SelectItem key={o.value} value={o.value}>

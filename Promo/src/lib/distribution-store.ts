@@ -36,6 +36,26 @@ export const PROMO_CATEGORIES: string[] = [
   "Посуда для дома",
 ];
 
+/**
+ * Прежние посевные названия → согласованные (24.09.2026). Распределение,
+ * сохранённое в браузере до перевода сидов, начиналось с этих названий, а
+ * сохранённое перекрывает сид целиком — без перевода при чтении старые
+ * категории остались бы у тех, кто уже сохранял форму. Ключ хранилища не
+ * меняем: иначе пропали бы и распределения, введённые пользователем.
+ */
+const LEGACY_CATEGORY_NAMES: Record<string, string> = {
+  "Телевизоры и аудио": "Аудио и видео техника, геймерские товары",
+  "Холодильники и крупная БТ": "Крупно-бытовая техника для кухни",
+  "Смартфоны и гаджеты": "Персональная электроника",
+  "Мелкая бытовая техника": "Мелко-бытовая техника для кухни",
+  "Ноутбуки и ПК": "Техника для офиса, умный дом, компьютеры и периферия",
+  "Климатическая техника": "Климатическая техника и техника для ухода за домом",
+};
+
+function currentCategoryName(category: string): string {
+  return LEGACY_CATEGORY_NAMES[category.trim()] ?? category;
+}
+
 /** Сериализуемый вид записи: Date → «YYYY-MM-DD». */
 interface StoredEntry {
   date: string;
@@ -51,7 +71,18 @@ function read(): StoredMap {
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw) as StoredMap;
-    return parsed && typeof parsed === "object" ? parsed : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    const map: StoredMap = {};
+    for (const [id, entries] of Object.entries(parsed)) {
+      map[id] = Array.isArray(entries)
+        ? entries.map((e) =>
+            typeof e?.category === "string"
+              ? { ...e, category: currentCategoryName(e.category) }
+              : e
+          )
+        : entries;
+    }
+    return map;
   } catch {
     return {};
   }
