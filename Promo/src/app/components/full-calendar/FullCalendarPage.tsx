@@ -803,12 +803,15 @@ export function FullCalendarPage() {
   // to the campaign's first existing КМ (else its first participant / a default).
   const kmForCampaign = React.useCallback(
     (campaignId: string): string => {
+      // КМ добавляет позицию себе: раньше строка уходила «первому КМ акции» и тут
+      // же пропадала из его вида — КМ видит только свои позиции (§7).
+      if (ownKmId) return ownKmId;
       const existing = lines.values();
       for (const l of existing) if (l.campaignId === campaignId) return l.kmId;
       const c = campaignsById.get(campaignId);
       return c?.participatingKmIds[0] ?? CATEGORY_MANAGERS[0].id;
     },
-    [lines, campaignsById]
+    [lines, campaignsById, ownKmId]
   );
 
   const commitAdd = React.useCallback(

@@ -1010,7 +1010,10 @@ type LineSeed = {
 const LINE_SEED: LineSeed[] = [
   // PR-2026-001 «Чёрная пятница 2026» (Скидка) — km-1, km-2, km-3, km-6
   { id: "L-0001", campaignId: "PR-2026-001", kmId: "km-1", nomenclatureId: "1C-10001", off: 0.15, forecast: 120, regular: 35, cash: 5, advKm: true, advMkt: true },
-  { id: "L-0002", campaignId: "PR-2026-001", kmId: "km-1", nomenclatureId: "1C-10003", off: 0.18, forecast: 200, regular: 80, advKm: true, duplicate: true },
+  // Проверка прода 14–15.09, №13 п.4: у КМ роли god-mode (km-1) должна быть своя
+  // отклонённая позиция — иначе сценарий «фильтр „на корректировке“ → красная точка
+  // → гаснет после деталей» в прототипе не проверить (L-0005 / L-0008 — чужие КМ).
+  { id: "L-0002", campaignId: "PR-2026-001", kmId: "km-1", nomenclatureId: "1C-10003", off: 0.18, forecast: 200, regular: 80, advKm: true, duplicate: true, rejected: true, rejectComment: "Скидка выше согласованного лимита по категории — пересчитайте новую цену." },
   { id: "L-0003", campaignId: "PR-2026-001", kmId: "km-2", nomenclatureId: "1C-10006", off: 0.12, forecast: 60, regular: 18, cash: 3 },
   // missing forecast → invalid until filled (red required marker)
   { id: "L-0004", campaignId: "PR-2026-001", kmId: "km-3", nomenclatureId: "1C-10011", off: 0.1, regular: 90, advKm: true },

@@ -425,16 +425,21 @@ function DistributionToggle({
   open: boolean;
   onToggle: () => void;
 }) {
+  // Колонка названия узкая: полная подпись переносилась на две строки и
+  // разводила иконку и шеврон — видимая подпись короткая, полная — в подсказке.
+  const full = `Распределение по категориям (${count})`;
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      className="mt-1 inline-flex min-h-7 items-center gap-1 rounded-md text-xs font-medium text-gray-600 underline decoration-gray-300 decoration-dotted underline-offset-2 hover:text-gray-900 dark:text-gray-300 dark:decoration-gray-600 dark:hover:text-gray-100"
+      aria-label={full}
+      title={full}
+      className="mt-1 inline-flex min-h-7 items-center gap-1 whitespace-nowrap rounded-md text-xs font-medium text-gray-600 underline decoration-gray-300 decoration-dotted underline-offset-2 hover:text-gray-900 dark:text-gray-300 dark:decoration-gray-600 dark:hover:text-gray-100"
     >
-      <Users className="size-3.5" />
-      Распределение по категориям ({count})
-      <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+      <Users className="size-3.5 shrink-0" />
+      Распределение ({count})
+      <ChevronDown className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")} />
     </button>
   );
 }

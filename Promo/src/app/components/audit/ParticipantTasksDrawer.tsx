@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@texnomart/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@texnomart/ui/sheet";
 import { RuDate } from "../../../components/RuDate";
 import {
   buildParticipantTasks, isPeriodSelected, overdueLabel, METRIC_LABEL,
@@ -42,13 +48,13 @@ export function ParticipantTasksDrawer({
           <SheetTitle>
             Задачи: {name} — {title}: {tasks.length}
           </SheetTitle>
-          {metric === "all" && (
-            <p className="text-xs text-muted-foreground">
-              {periodSelected
+          <SheetDescription className="text-xs">
+            {metric !== "all"
+              ? "Задачи, из которых складывается выбранный показатель."
+              : periodSelected
                 ? "Показаны все задачи выбранного периода; задачи, дедлайн которых ещё не наступил, в рейтинг не входят."
                 : "Период не выбран — показаны только задачи с наступившим дедлайном, как в расчёте рейтинга."}
-            </p>
-          )}
+          </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-2.5 px-4 pb-6">
           {tasks.length === 0 && <p className="text-sm text-muted-foreground">Нет задач за период.</p>}

@@ -150,7 +150,7 @@ export function KdSubstitutionPanel() {
       "снятие замещения",
       active.substituteUserId,
       name,
-      `Досрочно снято замещение КД, назначенное c ${formatDateFull(parseDateOnly(active.from))} по ${formatDateFull(parseDateOnly(active.to))} (основание назначения: ${active.reason})`
+      `Досрочно снято замещение КД, назначенное c ${formatDateFull(parseDateOnly(active.from))} по ${formatDateFull(parseDateOnly(active.to))} (основание назначения: ${active.reason.trim().replace(/\.$/, "")})`
     );
     setRevokeOpen(false);
     setTick((t) => t + 1);

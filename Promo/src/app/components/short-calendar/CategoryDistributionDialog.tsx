@@ -275,12 +275,16 @@ export function CategoryDistributionDialog({
       const taken = new Set(
         prev.filter((r) => r.category.trim()).map((r) => dupKey(r.date, r.category))
       );
-      const next = prev.map((r) =>
-        // Пустая строка-заготовка (после «Сформировать даты») заполняется на месте.
-        !r.category.trim() && !r.responsibleKmId && !taken.has(dupKey(r.date, category))
-          ? { ...r, category, responsibleKmId: fillKmId }
-          : r
-      );
+      // Строка без категории заполняется на месте, даже если КМ в ней уже выбран
+      // (его выбор сохраняется): раньше такая строка оставалась незаполненной
+      // рядом с добавленной и блокировала сохранение.
+      const next = prev.map((r) => {
+        if (r.category.trim()) return r;
+        const key = dupKey(r.date, category);
+        if (taken.has(key)) return r;
+        taken.add(key);
+        return { ...r, category, responsibleKmId: r.responsibleKmId || fillKmId };
+      });
       const covered = new Set(
         next.filter((r) => r.category.trim()).map((r) => dupKey(r.date, r.category))
       );
@@ -361,22 +365,28 @@ export function CategoryDistributionDialog({
             <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
               1. Выберите период распределения
             </h3>
+            {/* У триггера DatePickerField ширина `w-full`: без ячеек flex-1 первое
+                поле забирало всю строку, а «—» и второе поле уезжали за край панели. */}
             <div className="flex items-center gap-2">
-              <DatePickerField
-                value={parseInputDate(genStart)}
-                minDate={parseInputDate(minDate) ?? undefined}
-                maxDate={parseInputDate(maxDate) ?? undefined}
-                onChange={(d) => setGenStart(d ? toInputDate(d) : "")}
-                placeholder="Начало периода"
-              />
+              <div className="min-w-0 flex-1">
+                <DatePickerField
+                  value={parseInputDate(genStart)}
+                  minDate={parseInputDate(minDate) ?? undefined}
+                  maxDate={parseInputDate(maxDate) ?? undefined}
+                  onChange={(d) => setGenStart(d ? toInputDate(d) : "")}
+                  placeholder="Начало периода"
+                />
+              </div>
               <span className="text-muted-foreground">—</span>
-              <DatePickerField
-                value={parseInputDate(genEnd)}
-                minDate={parseInputDate(genStart || minDate) ?? undefined}
-                maxDate={parseInputDate(maxDate) ?? undefined}
-                onChange={(d) => setGenEnd(d ? toInputDate(d) : "")}
-                placeholder="Окончание периода"
-              />
+              <div className="min-w-0 flex-1">
+                <DatePickerField
+                  value={parseInputDate(genEnd)}
+                  minDate={parseInputDate(genStart || minDate) ?? undefined}
+                  maxDate={parseInputDate(maxDate) ?? undefined}
+                  onChange={(d) => setGenEnd(d ? toInputDate(d) : "")}
+                  placeholder="Окончание периода"
+                />
+              </div>
             </div>
             <p
               className={cn(
@@ -431,7 +441,7 @@ export function CategoryDistributionDialog({
                       Ответственный КМ
                     </Label>
                     <Select value={fillKmId} onValueChange={setFillKmId}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Ответственный КМ для всех дат">
                         <SelectValue placeholder="Выберите КМ" />
                       </SelectTrigger>
                       <SelectContent>

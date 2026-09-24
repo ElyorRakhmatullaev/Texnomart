@@ -173,10 +173,16 @@ export function LineDetailsDrawer({
   const km = line ? getCategoryManager(line.kmId) : undefined;
   const pending = line?.pending;
   const isExclusion = Boolean(line?.removalPending || line?.removed);
+  // Активный запрос на исключение — текущий запрос строки, даже если у неё
+  // осталось прошлое (отклонённое) изменение: иначе «Детали запроса» показывали
+  // тип, автора и дату старого изменения вместо нового запроса.
+  const exclusionRequest = Boolean(line?.removalPending);
   const rejected = pending?.rejected;
   // Дата отправки запроса: у повторного действия она в `pending.at`, у запроса на
   // исключение — в `removalRequestedAt` (трекер, стр. 46).
-  const requestedAtIso = pending?.at ?? line?.removalRequestedAt;
+  const requestedAtIso = exclusionRequest
+    ? line?.removalRequestedAt
+    : pending?.at ?? line?.removalRequestedAt;
   const requestedAt = requestedAtIso ? new Date(requestedAtIso) : undefined;
   // Панель с решением заканчивается закреплённым футером — нижний отступ ему не нужен.
   const decidable = Boolean(
@@ -227,7 +233,8 @@ export function LineDetailsDrawer({
               />
             </Section>
 
-            {pending?.action === "change" &&
+            {!exclusionRequest &&
+              pending?.action === "change" &&
               pending.fields &&
               pending.fields.length > 0 && (
                 <Section title="Изменение">
@@ -280,13 +287,18 @@ export function LineDetailsDrawer({
               <Row
                 label="Тип запроса"
                 value={
+                  (exclusionRequest ? "Запрос на исключение из промо" : undefined) ??
                   pending?.requestType ??
                   (isExclusion ? "Запрос на исключение из промо" : "—")
                 }
               />
               <Row
                 label="Кто отправил"
-                value={pending?.by ?? line.removalRequestedBy ?? "—"}
+                value={
+                  (exclusionRequest ? line.removalRequestedBy : pending?.by) ??
+                  line.removalRequestedBy ??
+                  "—"
+                }
               />
               {/* Трекер, стр. 46 (проверка Б/А 09.09.26): у запроса на исключение
                   даты отправки не было — панель читала только `pending.at`, а
@@ -303,7 +315,11 @@ export function LineDetailsDrawer({
               />
               <Row
                 label="Комментарий"
-                value={pending?.comment ?? line.removalReason ?? "—"}
+                value={
+                  (exclusionRequest ? line.removalReason : pending?.comment) ??
+                  line.removalReason ??
+                  "—"
+                }
               />
               {/* Комментарий КМ к правке — в отличие от комментария выше,
                   приходящего вместе с запросом, этот КМ пишет сам. */}
@@ -322,6 +338,16 @@ export function LineDetailsDrawer({
                   value={<RuDate value={new Date(rejected.at)} withTime />}
                 />
                 <Row label="Причина" value={rejected.reason} />
+              </Section>
+            )}
+
+            {/* №13 п.4: отклонение в основном потоке (позиция возвращена КМ на
+                корректировку) — причина тоже видна в панели, по открытию которой
+                гаснет красная точка. */}
+            {!rejected && line.rejected && (
+              <Section title="Отклонение">
+                <Row label="Статус" value="Возвращено на корректировку КМ" />
+                <Row label="Причина" value={line.rejectComment ?? "—"} />
               </Section>
             )}
 
