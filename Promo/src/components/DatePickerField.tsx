@@ -3,7 +3,7 @@
 import * as React from "react";
 import { CalendarIcon } from "lucide-react";
 import { ru } from "date-fns/locale";
-import { Button } from "@texnomart/ui/button";
+import { buttonVariants } from "@texnomart/ui/button";
 import { Calendar } from "@texnomart/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@texnomart/ui/popover";
 import { cn } from "@texnomart/ui/utils";
@@ -40,13 +40,17 @@ export function DatePickerField({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
+      {/* Нативная <button>, а не общий <Button>: он не пробрасывает ref, и Radix
+          не находил якорь — календарь открывался за экраном (translate -200%),
+          дату было не выбрать. Тот же дефект и лечение, что в Волне 1
+          (tasks/lessons.md, «off-screen Radix-контент»). */}
       <PopoverTrigger asChild>
-        <Button
+        <button
           id={id}
           type="button"
-          variant="outline"
           aria-invalid={invalid}
           className={cn(
+            buttonVariants({ variant: "outline" }),
             "h-9 w-full justify-start gap-1.5 bg-background text-sm font-normal",
             invalid && "border-red-500"
           )}
@@ -57,7 +61,7 @@ export function DatePickerField({
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
           )}
-        </Button>
+        </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
         <Calendar

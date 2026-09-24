@@ -3,7 +3,8 @@
 import * as React from "react";
 import { CalendarIcon } from "lucide-react";
 import { ru } from "date-fns/locale";
-import { Button } from "@texnomart/ui/button";
+import { Button, buttonVariants } from "@texnomart/ui/button";
+import { cn } from "@texnomart/ui/utils";
 import { Calendar } from "@texnomart/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@texnomart/ui/popover";
 import { formatDateFull } from "@texnomart/shared/utils/formatters";
@@ -39,11 +40,15 @@ export function DateRangeFilter({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
+      {/* Нативная <button>: общий <Button> не пробрасывает ref, Radix не находил
+          якорь, и календарь открывался за экраном (см. DatePickerField). */}
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={className ?? "h-8 gap-1.5 bg-background text-sm font-normal"}
+        <button
+          type="button"
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            className ?? "h-8 gap-1.5 bg-background text-sm font-normal"
+          )}
         >
           <CalendarIcon className="size-3.5 text-muted-foreground" />
           {value ? (
@@ -53,7 +58,7 @@ export function DateRangeFilter({
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
           )}
-        </Button>
+        </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
         <Calendar
