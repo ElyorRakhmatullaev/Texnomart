@@ -33,7 +33,8 @@ const TAB_TRIGGER =
 const STATUS_META: Record<UserStatus, { label: string; cls: string }> = {
   active: { label: "Активен", cls: "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
   "temp-password": { label: "Временный пароль", cls: "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300" },
-  blocked: { label: "Заблокирован", cls: "bg-gray-200 dark:bg-muted text-gray-600 dark:text-gray-300" },
+  // Тот же термин, что в списке и карточке пользователя (5D, №21 п.3).
+  blocked: { label: "Деактивирован", cls: "bg-gray-200 dark:bg-muted text-gray-600 dark:text-gray-300" },
 };
 
 function ReadRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -233,6 +234,9 @@ export function ProfilePage() {
         action,
         objectType: "пользователь",
         objectLabel: currentUser.fullName,
+        // Без адресата событие не попадало в «Журнал действий» карточки
+        // пользователя, который фильтрует по `targetUserId` (№26 п.1).
+        targetUserId: currentUser.id,
         comment,
       });
     },

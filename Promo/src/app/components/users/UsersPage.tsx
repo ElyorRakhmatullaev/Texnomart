@@ -114,7 +114,8 @@ export function UsersPage() {
         managerId: value.managerId,
         createdBy: currentUser?.fullName ?? "Администратор",
       });
-      audit("создание", user, `Создан пользователь · роль «${user.role}»`);
+      // №26 п.3: фиксируется сам факт выдачи временного пароля, не пароль.
+      audit("создание", user, `Создан пользователь · роль «${user.role}» · выдан временный пароль`);
       setCreateOpen(false);
       setTempUserName(user.fullName);
       setTempPassword(pwd);

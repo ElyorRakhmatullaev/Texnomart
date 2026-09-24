@@ -10,7 +10,6 @@ import {
   DropdownMenuTrigger,
 } from "@texnomart/ui/dropdown-menu";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -185,57 +184,121 @@ export function UsersTable(props: UsersTableProps) {
   const { users, allUsers = [] } = props;
   const managerName = (u: PromoUser): string =>
     allUsers.find((a) => a.id === u.managerId)?.fullName ?? "—";
+
+  // Проверка прода 14–15.09, №21 п.2: собственная горизонтальная полоса таблицы
+  // уезжает под сгиб вместе с последней строкой. Дублируем её закреплённой у
+  // нижнего края видимой области дорожкой — тот же приём, что в аудит-логе и
+  // отчётах; родная полоса тела скрыта, чтобы две полосы не стояли друг над другом.
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const trackRef = React.useRef<HTMLDivElement>(null);
+  const [dims, setDims] = React.useState({ scroll: 0, client: 0 });
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // Обе величины в состоянии: при изменении ширины окна `scrollWidth` может не
+    // поменяться, а `clientWidth` — да, и решение «нужна ли дорожка» устареет.
+    const measure = () =>
+      setDims((d) =>
+        d.scroll === el.scrollWidth && d.client === el.clientWidth
+          ? d
+          : { scroll: el.scrollWidth, client: el.clientWidth }
+      );
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => ro.disconnect();
+  }, [users]);
+  const needsTrack = dims.scroll > dims.client + 1;
+  // Присваивание того же значения событие scroll не порождает — цикла нет.
+  const syncFromBody = () => {
+    if (scrollRef.current && trackRef.current)
+      trackRef.current.scrollLeft = scrollRef.current.scrollLeft;
+  };
+  const syncFromTrack = () => {
+    if (scrollRef.current && trackRef.current)
+      scrollRef.current.scrollLeft = trackRef.current.scrollLeft;
+  };
+
+  const TEXT = "whitespace-normal break-words text-gray-700 dark:text-gray-200";
   return (
     <>
       {/* Desktop */}
-      {/* Трекер, стр. 70 п.1 (18.08.2026): при горизонтальной прокрутке колонка «ФИО»
-          закреплена слева, иначе не видно, к какому пользователю относятся данные.
-          Приём тот же, что в «Матрице прав»: обычная таблица в `overflow-x-auto` +
-          `sticky left-0` с непрозрачным фоном (Pattern F со сдвоенными панелями здесь
-          не нужен — строки обычной высоты). Своего скроллера не добавляем: shadcn
-          <Table> уже обёрнут в `relative w-full overflow-x-auto`, и именно он —
-          ближайший прокручиваемый предок, относительно которого работает sticky. */}
-      <div className="hidden overflow-hidden rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:block">
-        <Table>
-          <TableHeader className="bg-gray-50 dark:bg-muted/40">
-            <TableRow>
-              <TableHead className="sticky left-0 z-20 min-w-[180px] bg-gray-50 dark:bg-muted/40">ФИО</TableHead>
-              <TableHead className="min-w-[200px]">Email</TableHead>
-              <TableHead className="min-w-[180px]">Роли</TableHead>
-              <TableHead className="min-w-[160px]">Подразделение</TableHead>
-              <TableHead className="min-w-[160px]">Должность</TableHead>
-              <TableHead className="min-w-[160px]">Руководитель</TableHead>
-              <TableHead className="w-[170px]">Статус</TableHead>
-              <TableHead className="w-[110px]">Создан</TableHead>
-              <TableHead className="w-[160px]">Кем создана</TableHead>
-              <TableHead className="w-[60px]" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.map((u) => (
-              <TableRow key={u.id}>
-                <TableCell className="sticky left-0 z-10 bg-white font-medium text-gray-900 dark:bg-card dark:text-gray-100">{u.fullName}</TableCell>
-                <TableCell className="text-gray-700 dark:text-gray-200">{u.email}</TableCell>
-                <TableCell>
-                  <RoleChips user={u} />
-                </TableCell>
-                <TableCell className="text-gray-700 dark:text-gray-200">{u.department ?? "—"}</TableCell>
-                <TableCell className="text-gray-700 dark:text-gray-200">{u.position ?? "—"}</TableCell>
-                <TableCell className="text-gray-700 dark:text-gray-200">{managerName(u)}</TableCell>
-                <TableCell>
-                  <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", STATUS_META[u.status].cls)}>
-                    {STATUS_META[u.status].label}
-                  </span>
-                </TableCell>
-                <TableCell className="tabular-nums text-sm text-gray-600 dark:text-gray-300">{formatDate(u.createdAt)}</TableCell>
-                <TableCell className="text-sm text-gray-600 dark:text-gray-300">{u.createdBy ?? "—"}</TableCell>
-                <TableCell className="text-right">
-                  <RowMenu {...props} user={u} />
-                </TableCell>
+      {/* Проверка прода 14–15.09, №21 п.1: таблица не помещалась по ширине — десять
+          колонок с `whitespace-nowrap` давали ~1540px минимума при ~1130px на экране
+          1440. Связанные данные сведены в двухстрочные ячейки (ФИО + email,
+          подразделение + должность, дата + кем создана), текст переносится.
+          Трекер, стр. 70 п.1: колонка «ФИО» закреплена слева (`sticky left-0` с
+          непрозрачным фоном) — относительно собственного скроллера тела таблицы.
+          `overflow-clip`, а не `overflow-hidden`: hidden создал бы контейнер
+          прокрутки, и закреплённая снизу дорожка прилипла бы к низу карточки. */}
+      <div className="hidden overflow-clip rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:block">
+        <div
+          ref={scrollRef}
+          onScroll={syncFromBody}
+          className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <table className="w-full caption-bottom text-sm">
+            <TableHeader className="bg-gray-50 dark:bg-muted/40">
+              <TableRow>
+                <TableHead className="sticky left-0 z-20 min-w-[210px] bg-gray-50 dark:bg-muted/40">
+                  ФИО · email
+                </TableHead>
+                <TableHead className="min-w-[190px]">Роли</TableHead>
+                <TableHead className="min-w-[180px]">Подразделение · должность</TableHead>
+                <TableHead className="min-w-[140px]">Руководитель</TableHead>
+                <TableHead className="w-[150px]">Статус</TableHead>
+                <TableHead className="min-w-[150px]">Создана · кем</TableHead>
+                <TableHead className="w-[52px]" />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {users.map((u) => (
+                <TableRow key={u.id}>
+                  <TableCell className="sticky left-0 z-10 max-w-[260px] bg-white whitespace-normal dark:bg-card">
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{u.fullName}</p>
+                    <p className="truncate text-xs text-gray-500 dark:text-gray-400" title={u.email}>
+                      {u.email}
+                    </p>
+                  </TableCell>
+                  <TableCell className="whitespace-normal">
+                    <RoleChips user={u} />
+                  </TableCell>
+                  <TableCell className={TEXT}>
+                    <p>{u.department ?? "—"}</p>
+                    {u.position && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{u.position}</p>
+                    )}
+                  </TableCell>
+                  <TableCell className={TEXT}>{managerName(u)}</TableCell>
+                  <TableCell>
+                    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", STATUS_META[u.status].cls)}>
+                      {STATUS_META[u.status].label}
+                    </span>
+                  </TableCell>
+                  <TableCell className={TEXT}>
+                    <p className="tabular-nums text-gray-600 dark:text-gray-300">{formatDate(u.createdAt)}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{u.createdBy ?? "—"}</p>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <RowMenu {...props} user={u} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </table>
+        </div>
+
+        {needsTrack && (
+          <div
+            ref={trackRef}
+            onScroll={syncFromTrack}
+            className="sticky bottom-0 z-30 overflow-x-auto overflow-y-hidden border-t border-gray-200 dark:border-border bg-white dark:bg-card"
+            aria-hidden="true"
+          >
+            <div style={{ width: dims.scroll, height: 1 }} />
+          </div>
+        )}
       </div>
 
       {/* Mobile cards */}

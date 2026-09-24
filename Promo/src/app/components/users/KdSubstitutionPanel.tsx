@@ -144,7 +144,14 @@ export function KdSubstitutionPanel() {
     if (!active) return;
     const name = substituteName(active);
     revokeSubstitution(active.id);
-    audit("снятие замещения", active.substituteUserId, name, "Снято замещение КД");
+    // №25 п.2: в записи о снятии — какое именно замещение снято (период) и на
+    // каком основании оно было назначено; новое основание при снятии не вводится.
+    audit(
+      "снятие замещения",
+      active.substituteUserId,
+      name,
+      `Досрочно снято замещение КД, назначенное c ${formatDateFull(parseDateOnly(active.from))} по ${formatDateFull(parseDateOnly(active.to))} (основание назначения: ${active.reason})`
+    );
     setRevokeOpen(false);
     setTick((t) => t + 1);
     toast.success("Замещение снято");
