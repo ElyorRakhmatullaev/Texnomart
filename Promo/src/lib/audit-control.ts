@@ -437,6 +437,8 @@ export interface ParticipantTask {
   overdueDays: number;
   unit: "cal" | "work";
   comment?: string;
+  /** Дедлайн уже наступил — задача входит в расчёт рейтинга. */
+  due: boolean;
 }
 
 /** Фильтры вкладки «Показатели участников» (5C, вкладка 3, пп. 1–3). */
@@ -606,10 +608,22 @@ export const METRIC_LABEL: Record<MetricKey, string> = {
   overdue: "С просрочкой",
 };
 
-/** Отбор задач под конкретный показатель — теми же предикатами, что считают метрики. */
-function matchesMetric(p: ControlPoint, metric: MetricKey, ref: Date): boolean {
-  if (metric === "all") return true;
+/**
+ * Отбор задач под конкретный показатель — теми же предикатами, что считают метрики.
+ *
+ * «Все задачи» (клик по ФИО) без выбранного периода — только задачи с наступившим
+ * дедлайном, как в расчёте рейтинга (проверка прода 14–15.09, №20 п.1): иначе в
+ * панель попадали будущие задачи, которые в рейтинге не участвуют. С выбранным
+ * периодом показываются все задачи периода, будущие — с пометкой.
+ */
+function matchesMetric(
+  p: ControlPoint,
+  metric: MetricKey,
+  ref: Date,
+  periodSelected: boolean
+): boolean {
   const due = p.deadline.getTime() <= ref.getTime();
+  if (metric === "all") return periodSelected || due;
   if (metric === "due") return due;
   if (metric === "onTime") return due && p.result === "В срок";
   return due && p.overdueDays > 0; // overdue
@@ -623,13 +637,20 @@ export function buildParticipantTasks(
   opts?: ParticipantOptions,
   metric: MetricKey = "all"
 ): ParticipantTask[] {
+  const periodSelected = isPeriodSelected(opts?.filters);
   return roleControlPoints(role, ref, opts)
     .filter((p) => p.responsibleName === responsibleName)
-    .filter((p) => matchesMetric(p, metric, ref))
+    .filter((p) => matchesMetric(p, metric, ref, periodSelected))
     .sort((a, b) => b.deadline.getTime() - a.deadline.getTime())
     .map((p) => ({
       campaignId: p.campaignId, promoNo: p.promoNo, promoName: p.promoName,
       checkpoint: p.checkpoint, deadline: p.deadline, actualAt: p.actualAt,
       overdueDays: p.overdueDays, unit: p.unit, comment: p.comment,
+      due: p.deadline.getTime() <= ref.getTime(),
     }));
+}
+
+/** Выбран ли «Период дедлайна» (хотя бы одна граница). */
+export function isPeriodSelected(f: ParticipantFilters | undefined): boolean {
+  return Boolean(f?.from || f?.to);
 }
