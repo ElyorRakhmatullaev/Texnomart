@@ -50,7 +50,8 @@ const APPROVED_STATUS: CampaignStatus = "Согласовано и отправ�
 
 /**
  * The one per-line status (10-я Блоки 1–7). Priority: removed → exclusion-pending →
- * rejected-repeat → pending-repeat → cancelled campaign → campaign.status/line.rejected.
+ * rejected-repeat → pending-repeat → cancelled campaign → line draft → line rejected →
+ * campaign.status.
  */
 export function lineDisplayStatus(
   campaign: PromoCampaign,
@@ -61,6 +62,13 @@ export function lineDisplayStatus(
   if (line.pending?.rejected) return "Отклонённые изменения";
   if (line.pending) return "Изменения на согласовании"; // change OR addition (Блок 4)
   if (campaign.cancelled) return "Отменена / Удалена";
+  // Позиция, которую КМ ещё не отправил (№13 п.1), — черновик при любом статусе
+  // акции: иначе она наследовала «На согласовании…» и сразу была видна проверяющим.
+  if (line.draft) return "Черновик";
+  // Позиция, отклонённая проверяющим, — на корректировке у КМ при любом статусе
+  // акции (№13 п.4). Прежде эта проверка стояла после `switch` и не срабатывала:
+  // `switch` выходит раньше для всех статусов, кроме «Отменена».
+  if (line.rejected) return "Переотправлено на корректировку КМ";
 
   switch (campaign.status) {
     case "Черновик":
@@ -76,8 +84,6 @@ export function lineDisplayStatus(
     default:
       break;
   }
-  // A primary-flow rejected line on a still-under-review campaign.
-  if (line.rejected) return "Переотправлено на корректировку КМ";
   // Unplanned draft not yet sent → still a draft.
   if (!campaign.planned && !campaign.firstSendDone) return "Черновик";
   return campaign.status === APPROVED_STATUS
@@ -99,6 +105,26 @@ export function isRepeatActionPending(line: PromoLine): boolean {
     (line.pending && !line.pending.rejected) ||
       (line.removalPending && !line.removed)
   );
+}
+
+/**
+ * Позиция, которую можно исключить из согласованной акции (№13 п.2): сама акция
+ * согласована, а позиция — не черновик и не добавление, ждущее или получившее
+ * отказ. Исключать можно только то, что реально было согласовано.
+ */
+export function isApprovedPosition(campaign: PromoCampaign, line: PromoLine): boolean {
+  if (campaign.cancelled || campaign.status !== APPROVED_STATUS) return false;
+  if (line.removed || line.draft) return false;
+  return line.pending?.action !== "addition";
+}
+
+/**
+ * Позиция в составе акции для отчёта смежным отделам: без черновиков и без
+ * добавлений, которые ещё не согласованы (или отклонены), — иначе они попадали
+ * в новую версию отчёта как «добавлена после согласования».
+ */
+export function countsForReport(line: PromoLine): boolean {
+  return !line.draft && line.pending?.action !== "addition";
 }
 
 /** Whether a negative decision exists (drives the КМ red indicator, Блок 6). */

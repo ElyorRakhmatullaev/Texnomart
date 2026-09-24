@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Ban, Eye, Pencil, Plus } from "lucide-react";
+import { Ban, Check, Eye, Pencil, Plus, X } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -24,7 +24,10 @@ import {
   type PromoCampaign,
   type PromoLine,
 } from "../../../lib/promo-mock-data";
-import { lineDisplayStatus } from "../../../lib/full-calendar-status";
+import {
+  isRepeatActionPending,
+  lineDisplayStatus,
+} from "../../../lib/full-calendar-status";
 
 export interface LineDetailsDrawerProps {
   open: boolean;
@@ -38,6 +41,21 @@ export interface LineDetailsDrawerProps {
   canComment?: boolean;
   /** Роль-подпись под сохранённым комментарием (персональной идентичности нет). */
   commentAuthor?: string;
+  /**
+   * Решение по повторному действию — только из этой панели (проверка прода
+   * 14–15.09, №13 п.3): в строке таблицы остаётся просмотр. Передаются, только
+   * если текущая роль решает по строке; согласование страница подтверждает
+   * диалогом, отклонение требует причину.
+   */
+  onApprove?: (lineId: string) => void;
+  onReject?: (lineId: string) => void;
+}
+
+/** Что именно решается — подпись над кнопками. */
+function decisionSubject(line: PromoLine): string {
+  if (line.removalPending) return "исключение позиции из акции";
+  if (line.pending?.action === "addition") return "добавление номенклатуры";
+  return "изменение данных позиции";
 }
 
 /**
@@ -133,8 +151,11 @@ function Section({
 }
 
 /**
- * Read-only «Детали изменений» panel (10-я Блоки 4.3/5.3/6.7). Action decisions
- * (Согласовать/Отклонить строку) belong to the approval card (Волна 3 / R57).
+ * «Детали изменений» panel (10-я Блоки 4.3/5.3/6.7). For the deciding role it also
+ * carries the decision on a pending repeat action (№13 п.3 — decisions live in the
+ * panel, never in the table row); for everyone else it stays read-only. The approval
+ * card (Волна 3 / R57) decides the same repeat actions through the same
+ * `line-decision-store`.
  */
 export function LineDetailsDrawer({
   open,
@@ -143,6 +164,8 @@ export function LineDetailsDrawer({
   line,
   canComment = false,
   commentAuthor = "Категорийный менеджер (КМ)",
+  onApprove,
+  onReject,
 }: LineDetailsDrawerProps) {
   const status =
     campaign && line ? lineDisplayStatus(campaign, line) : undefined;
@@ -155,6 +178,10 @@ export function LineDetailsDrawer({
   // исключение — в `removalRequestedAt` (трекер, стр. 46).
   const requestedAtIso = pending?.at ?? line?.removalRequestedAt;
   const requestedAt = requestedAtIso ? new Date(requestedAtIso) : undefined;
+  // Панель с решением заканчивается закреплённым футером — нижний отступ ему не нужен.
+  const decidable = Boolean(
+    (onApprove || onReject) && line && isRepeatActionPending(line)
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -182,7 +209,7 @@ export function LineDetailsDrawer({
         </SheetHeader>
 
         {campaign && line && (
-          <div className="mt-2 space-y-3 px-6 pb-6">
+          <div className={decidable ? "mt-2 space-y-3 px-6" : "mt-2 space-y-3 px-6 pb-6"}>
             <Section title="Информация об акции">
               <Row label="№ промо" value={formatPromoNo(campaign.id)} />
               <Row label="Номенклатура" value={nom?.name ?? line.nomenclatureId} />
@@ -296,6 +323,32 @@ export function LineDetailsDrawer({
                 />
                 <Row label="Причина" value={rejected.reason} />
               </Section>
+            )}
+
+            {decidable && (
+              <div className="sticky bottom-0 -mx-6 space-y-2 border-t bg-white px-6 py-3 dark:bg-card">
+                <p className="text-sm text-muted-foreground">
+                  Решение: {decisionSubject(line)}
+                </p>
+                <div className="flex gap-2">
+                  {onApprove && (
+                    <Button className="min-h-11 flex-1" onClick={() => onApprove(line.id)}>
+                      <Check className="size-4" />
+                      Согласовать
+                    </Button>
+                  )}
+                  {onReject && (
+                    <Button
+                      variant="outline"
+                      className="min-h-11 flex-1 text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/15"
+                      onClick={() => onReject(line.id)}
+                    >
+                      <X className="size-4" />
+                      Отклонить
+                    </Button>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         )}

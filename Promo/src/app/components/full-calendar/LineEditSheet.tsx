@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Ban, Check, Gift, X } from "lucide-react";
+import { Ban, Eye, Gift, X } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -22,13 +22,13 @@ import {
   formatAvailabilityPct,
   getNomenclatureItem,
   getStoreAvailability,
-  isApprovedCampaign,
   isGiftChoiceType,
   isGiftType,
   type FullCalendarAccess,
   type PromoCampaign,
   type PromoLine,
 } from "../../../lib/promo-mock-data";
+import { isApprovedPosition } from "../../../lib/full-calendar-status";
 
 /**
  * Full-screen «редактировать строку» Sheet (S2 Phase 5, RESPONSIVE §). On phones the
@@ -50,8 +50,7 @@ export function LineEditSheet({
   onGiftPick,
   onRemoveGift,
   onRequestRemoval,
-  onApproveRemoval,
-  onRejectRemoval,
+  onOpenDetails,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -63,11 +62,13 @@ export function LineEditSheet({
   onGiftPick: (lineId: string, slot: number) => void;
   /** Remove a gift option by index (§8). */
   onRemoveGift?: (lineId: string, index: number) => void;
-  /** КМ requests exclusion of this line (§5.3; approved campaigns only). */
+  /** КМ requests exclusion of this line (§5.3; approved positions only, №13 п.2). */
   onRequestRemoval?: (lineId: string) => void;
-  /** КД confirms/rejects a pending exclusion (§5.3). */
-  onApproveRemoval?: (lineId: string) => void;
-  onRejectRemoval?: (lineId: string) => void;
+  /**
+   * Open «Детали изменений» for this line. The КД decides a pending exclusion there,
+   * not in this sheet (№13 п.3 — decisions live only in the details panel).
+   */
+  onOpenDetails?: (lineId: string) => void;
 }) {
   const nom = line ? getNomenclatureItem(line.nomenclatureId) : undefined;
   const gift = campaign ? isGiftType(campaign.type) : false;
@@ -249,7 +250,7 @@ export function LineEditSheet({
             {/* ── Исключение из акции (§5.3) ── */}
             {(line.removed ||
               line.removalPending ||
-              (onRequestRemoval && isApprovedCampaign(campaign))) && (
+              (onRequestRemoval && isApprovedPosition(campaign, line))) && (
               <Section title="Участие в акции">
                 {line.removed ? (
                   <div className="rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/15 p-3 text-sm text-red-700 dark:text-red-300">
@@ -272,28 +273,15 @@ export function LineEditSheet({
                         {line.removalReason}
                       </p>
                     )}
-                    {(onApproveRemoval || onRejectRemoval) && (
-                      <div className="mt-3 flex gap-2">
-                        {onApproveRemoval && (
-                          <Button
-                            className="min-h-11 flex-1"
-                            onClick={() => onApproveRemoval(line.id)}
-                          >
-                            <Check className="size-4" />
-                            Подтвердить
-                          </Button>
-                        )}
-                        {onRejectRemoval && (
-                          <Button
-                            variant="secondary"
-                            className="min-h-11 flex-1"
-                            onClick={() => onRejectRemoval(line.id)}
-                          >
-                            <X className="size-4" />
-                            Отклонить
-                          </Button>
-                        )}
-                      </div>
+                    {onOpenDetails && (
+                      <Button
+                        variant="secondary"
+                        className="mt-3 min-h-11 w-full"
+                        onClick={() => onOpenDetails(line.id)}
+                      >
+                        <Eye className="size-4" />
+                        Детали изменений
+                      </Button>
                     )}
                   </div>
                 ) : (

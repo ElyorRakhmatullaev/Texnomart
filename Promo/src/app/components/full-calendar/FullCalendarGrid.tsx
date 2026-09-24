@@ -8,7 +8,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import {
   Ban,
   CalendarClock,
-  Check,
   Clock,
   Copy,
   Eye,
@@ -46,6 +45,7 @@ import {
   type ColumnGroupKey,
 } from "./gridFields";
 import {
+  isApprovedPosition,
   isRepeatActionPending,
   lineDisplayStatus,
 } from "../../../lib/full-calendar-status";
@@ -491,11 +491,11 @@ interface FullCalendarGridProps {
   onEditPeriod?: (campaignId: string) => void;
   /** Cancel the whole campaign (§5.3; provided only for КД). */
   onCancelCampaign?: (campaignId: string) => void;
-  /** Request exclusion of a line (§5.3; provided only for КМ). */
+  /**
+   * Request exclusion of a line (§5.3; provided only for КМ). The КД's decision on a
+   * pending exclusion lives in the «Детали изменений» panel, not in the row (№13 п.3).
+   */
   onRequestRemoval?: (lineId: string) => void;
-  /** Approve/reject a pending line exclusion (§5.3; provided only for КД). */
-  onApproveRemoval?: (lineId: string) => void;
-  onRejectRemoval?: (lineId: string) => void;
   /** Open the «Детали изменений» panel for a line — иконка-глаз (10-я Блок 1.1). */
   onOpenDetails?: (lineId: string) => void;
   /** Lines with an unread rejection (КМ red indicator, 10-я Блок 6). */
@@ -522,8 +522,6 @@ export function FullCalendarGrid({
   onEditPeriod,
   onCancelCampaign,
   onRequestRemoval,
-  onApproveRemoval,
-  onRejectRemoval,
   onOpenDetails,
   rejectionLineIds,
   selectedIds,
@@ -725,9 +723,19 @@ export function FullCalendarGrid({
                 {/* lines (frozen) */}
                 {lines.map((line) => {
                   const nom = getNomenclatureItem(line.nomenclatureId);
+                  // Неотправленная позиция КМ (№13 п.1) правится и удаляется
+                  // владельцем при любом статусе акции — как черновик. Добавление в
+                  // согласованную акцию, пока его не согласовали (или отклонили),
+                  // владелец тоже может убрать — это отзыв запроса.
+                  const ownDraft = access.canEditOwnLines && Boolean(line.draft);
+                  const ownUnapprovedAddition =
+                    access.canEditOwnLines && line.pending?.action === "addition";
+                  const rowEditable = lineEditable || ownDraft;
+                  const rowDeletable = freshEditable || ownDraft || ownUnapprovedAddition;
                   // Merged height for a «подарок на выбор» line — the main nomenclature
-                  // shows once, centered, spanning all its gift sub-rows (§8).
-                  const h = lineHeightPx(line, choice, lineEditable);
+                  // shows once, centered, spanning all its gift sub-rows (§8). The
+                  // scrolling pane passes the SAME per-line flag (pane alignment).
+                  const h = lineHeightPx(line, choice, rowEditable);
                   // 10-я часть: light-orange ONLY for repeat actions awaiting approval
                   // (Блок 1.3/1.4); cancelled/excluded → gray + strikethrough (Блок 5.5).
                   const status = lineDisplayStatus(campaign, line);
@@ -817,13 +825,11 @@ export function FullCalendarGrid({
                             line={line}
                             campaign={campaign}
                             onRequestRemoval={onRequestRemoval}
-                            onApproveRemoval={onApproveRemoval}
-                            onRejectRemoval={onRejectRemoval}
                           />
                           {/* §3: «Изменить» + «Удалить» — near the row, no scroll.
                               Изменить = the per-line Sheet (fresh draft or approved
                               correction); Удалить = hard delete, drafts only. */}
-                          {lineEditable && !line.removed && onLineTap && (
+                          {rowEditable && !line.removed && onLineTap && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button
@@ -838,7 +844,7 @@ export function FullCalendarGrid({
                               <TooltipContent>Изменить номенклатуру</TooltipContent>
                             </Tooltip>
                           )}
-                          {freshEditable && !line.removed && onDeleteLine && (
+                          {rowDeletable && !line.removed && onDeleteLine && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button
@@ -979,7 +985,13 @@ export function FullCalendarGrid({
                   {/* lines (scroll) */}
                   {lines.map((line) => {
                     const nom = getNomenclatureItem(line.nomenclatureId);
-                    const h = lineHeightPx(line, choice, lineEditable);
+                    // Та же правка черновика, что во frozen pane (№13 п.1): свой
+                    // контекст ячеек и та же высота строки — панели не разъедутся.
+                    const lineCtx: CellCtx =
+                      !ctx.lineEditable && access.canEditOwnLines && line.draft
+                        ? { ...ctx, lineEditable: true }
+                        : ctx;
+                    const h = lineHeightPx(line, choice, lineCtx.lineEditable);
                     // 10-я часть: подсветка строки по состоянию (см. frozen pane).
                     const repeatPending = isRepeatActionPending(line);
                     const isCancelled =
@@ -1004,8 +1016,8 @@ export function FullCalendarGrid({
                               key={col.id}
                               col={col}
                               line={line}
-                              ctx={ctx}
-                              editable={ctx.lineEditable}
+                              ctx={lineCtx}
+                              editable={lineCtx.lineEditable}
                             />
                           ) : (
                             <div
@@ -1025,7 +1037,7 @@ export function FullCalendarGrid({
                                 line={line}
                                 nom={nom}
                                 campaign={campaign}
-                                ctx={ctx}
+                                ctx={lineCtx}
                               />
                             </div>
                           )
@@ -1339,68 +1351,27 @@ function LineMarkers({ line }: { line: PromoLine }) {
 }
 
 /**
- * Trailing per-line removal controls in the frozen pane (§5.3): КМ requests
- * exclusion (hover-revealed, approved campaigns only); КД confirms/rejects a
- * pending exclusion (always visible while pending).
+ * Trailing per-line exclusion control in the frozen pane (§5.3): КМ requests exclusion
+ * of an approved position. A pending exclusion shows nothing here — the КД decides in
+ * the «Детали изменений» panel (eye icon), never in the row (№13 п.3), and a second
+ * request is impossible until that decision (№14 п.1).
  */
 function LineRowActions({
   line,
   campaign,
   onRequestRemoval,
-  onApproveRemoval,
-  onRejectRemoval,
 }: {
   line: PromoLine;
   campaign: PromoCampaign;
   onRequestRemoval?: (lineId: string) => void;
-  onApproveRemoval?: (lineId: string) => void;
-  onRejectRemoval?: (lineId: string) => void;
 }) {
-  if (line.removed) return null;
+  if (line.removed || line.removalPending) return null;
 
-  if (line.removalPending) {
-    if (!onApproveRemoval && !onRejectRemoval) return null;
-    return (
-      <>
-        {onApproveRemoval && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => onApproveRemoval(line.id)}
-                aria-label="Подтвердить исключение"
-                className="inline-flex size-7 items-center justify-center rounded text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/15"
-              >
-                <Check className="size-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Подтвердить исключение</TooltipContent>
-          </Tooltip>
-        )}
-        {onRejectRemoval && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => onRejectRemoval(line.id)}
-                aria-label="Отклонить исключение"
-                className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
-              >
-                <X className="size-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Отклонить исключение — позиция остаётся</TooltipContent>
-          </Tooltip>
-        )}
-      </>
-    );
-  }
-
-  // Active line — КМ may request exclusion of an already-approved campaign's line.
   // 11-я часть (06.08, Блок 3, доп.): иконка видна ПОСТОЯННО у доступных для
   // исключения позиций (была hover-reveal — клиент её не находил); подсказка с
-  // названием действия остаётся при наведении.
-  if (onRequestRemoval && isApprovedCampaign(campaign)) {
+  // названием действия остаётся при наведении. №13 п.2: только у реально
+  // согласованной позиции — черновик удаляют, а не исключают.
+  if (onRequestRemoval && isApprovedPosition(campaign, line)) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>

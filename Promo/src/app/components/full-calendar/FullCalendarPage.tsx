@@ -69,6 +69,16 @@ import {
 } from "@texnomart/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@texnomart/ui/alert";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@texnomart/ui/alert-dialog";
+import {
   CAMPAIGNS,
   CATEGORY_MANAGERS,
   PROMO_LINES,
@@ -107,7 +117,9 @@ import {
 } from "../../../lib/promo-mock-data";
 import {
   STATUS_FILTER_OPTIONS,
+  countsForReport,
   isCampaignDraft,
+  isRepeatActionPending,
   lineDisplayStatus,
   lineHasRejection,
   matchesStatusFilter,
@@ -117,7 +129,11 @@ import {
   getSeenRejections,
   markRejectionSeen,
 } from "../../../lib/full-calendar-rejection-store";
-import { applyLineDecisions } from "../../../lib/line-decision-store";
+import {
+  applyLineDecisions,
+  recordLineDecision,
+  type LineDecision,
+} from "../../../lib/line-decision-store";
 import { LINE_FORMS, POSITION_FORMS, pluralRu } from "../../../lib/plural";
 import { LineDetailsDrawer } from "./LineDetailsDrawer";
 import { useCurrentUser } from "../../current-user-context";
@@ -196,9 +212,11 @@ type LineAction =
   | { type: "recheck1C" }
   | { type: "bulkAdv"; ids: string[]; field: keyof PromoLine; value: boolean }
   // Line cancellation / removal (§5.3): КМ requests, КД approves/rejects.
-  | { type: "requestRemoval"; id: string; reason: string; by: string }
+  | { type: "requestRemoval"; id: string; reason: string; by: string; at: string }
   | { type: "approveRemoval"; id: string }
-  | { type: "rejectRemoval"; id: string }
+  // A reviewer decision on a repeat action (change / addition / exclusion), folded in
+  // with the same pure `applyLineDecisions` the approval card relies on (№13 п.3).
+  | { type: "applyDecision"; decision: LineDecision }
   // 10-я часть R46: an edit on an approved line accumulates as a pending repeat action
   // (the table keeps showing approved data); clearPending merges/discards on re-approval.
   | { type: "setPending"; id: string; pending: LinePendingChange }
@@ -254,6 +272,9 @@ function lineReducer(state: LineMap, action: LineAction): LineMap {
         removalPending: true,
         removalReason: action.reason,
         removalRequestedBy: action.by,
+        // Дата отправки запроса — её показывает «Детали изменений» (№13 п.2);
+        // прежде её несла только посевная строка.
+        removalRequestedAt: action.at,
       });
       return next;
     }
@@ -264,16 +285,14 @@ function lineReducer(state: LineMap, action: LineAction): LineMap {
       next.set(action.id, { ...cur, removed: true, removalPending: false });
       return next;
     }
-    case "rejectRemoval": {
-      const cur = state.get(action.id);
+    case "applyDecision": {
+      const cur = state.get(action.decision.lineId);
       if (!cur) return state;
-      const next = new Map(state);
-      next.set(action.id, {
-        ...cur,
-        removalPending: false,
-        removalReason: undefined,
-        removalRequestedBy: undefined,
+      const [decided] = applyLineDecisions([cur], {
+        [cur.id]: action.decision,
       });
+      const next = new Map(state);
+      next.set(cur.id, decided);
       return next;
     }
     case "setPending": {
@@ -466,7 +485,14 @@ export function FullCalendarPage() {
           startDate: c.startDate,
           endDate: c.endDate,
         };
-      const cs = diffCampaignChanges(c, linesFor(campaignId), baseLines, basePeriod);
+      // Черновики и не согласованные добавления в состав акции ещё не входят —
+      // иначе они уходили бы в новую версию отчёта как «добавлена после согласования».
+      const cs = diffCampaignChanges(
+        c,
+        linesFor(campaignId).filter(countsForReport),
+        baseLines,
+        basePeriod
+      );
       return cs.changes.length === 0 ? null : cs;
     },
     [campaignsById, baseline, baselinePeriods, linesFor]
@@ -655,7 +681,26 @@ export function FullCalendarPage() {
       const isDataFieldEdit = Object.keys(patch).some(
         (k) => k in TRACKED_FIELD_LABEL
       );
-      if (line && c && isApprovedCampaign(c) && isDataFieldEdit) {
+      if (line && c && isApprovedCampaign(c) && !line.draft && isDataFieldEdit) {
+        if (line.pending?.action === "addition") {
+          // Добавленная позиция ещё не согласована — «Было/Стало» к ней неприменимо,
+          // а согласование добавления diff-поля не применяет (они бы потерялись).
+          // Правка ложится в саму строку; правка отклонённого добавления отправляет
+          // его заново — как у изменений.
+          dispatch({
+            type: "edit",
+            id,
+            patch: {
+              ...patch,
+              pending: {
+                ...line.pending,
+                rejected: undefined,
+                at: new Date().toISOString(),
+              },
+            },
+          });
+          return;
+        }
         const pending = mergePendingChange(
           line,
           patch,
@@ -1075,7 +1120,13 @@ export function FullCalendarPage() {
     (reason: string) => {
       const lineId = removalLineId;
       if (!lineId) return;
-      dispatch({ type: "requestRemoval", id: lineId, reason, by: currentRole });
+      dispatch({
+        type: "requestRemoval",
+        id: lineId,
+        reason,
+        by: currentRole,
+        at: new Date().toISOString(),
+      });
       setRemovalLineId(null);
       toast.success(
         "Запрос на исключение позиции отправлен на согласование коммерческому директору."
@@ -1115,10 +1166,76 @@ export function FullCalendarPage() {
     [lines, versionsFor, currentRole, notify, campaignsById]
   );
 
-  const onRejectRemoval = React.useCallback((lineId: string) => {
-    dispatch({ type: "rejectRemoval", id: lineId });
-    toast.success("Запрос на исключение отклонён — позиция остаётся в акции.");
+  // ── Решение по повторному действию — только из «Детали изменений» (№13 п.3) ──
+  // КД согласует или отклоняет изменение, добавление или исключение в панели: в
+  // строке таблицы остаётся просмотр. Решение пишется в тот же `line-decision-store`,
+  // что и в карточке согласования, и сворачивается в строку той же функцией.
+  const canDecideRepeat = canApproveLineRemoval(currentRole);
+  const [approveLineId, setApproveLineId] = React.useState<string | null>(null);
+  const [rejectLineId, setRejectLineId] = React.useState<string | null>(null);
+  const approveLine = approveLineId ? lines.get(approveLineId) : undefined;
+  const rejectLine = rejectLineId ? lines.get(rejectLineId) : undefined;
+
+  // Открываются кнопкой из панели — отложенно (урок про DismissableLayer).
+  const requestApprove = React.useCallback((lineId: string) => {
+    setTimeout(() => setApproveLineId(lineId), 0);
   }, []);
+  const requestReject = React.useCallback((lineId: string) => {
+    setTimeout(() => setRejectLineId(lineId), 0);
+  }, []);
+
+  const decisionFor = React.useCallback(
+    (
+      line: PromoLine,
+      kind: LineDecision["kind"],
+      reason?: string
+    ): LineDecision => ({
+      lineId: line.id,
+      campaignId: line.campaignId,
+      action: line.removalPending ? "removal" : line.pending?.action ?? "change",
+      kind,
+      by: currentRole,
+      at: new Date().toISOString(),
+      reason,
+    }),
+    [currentRole]
+  );
+
+  const confirmApprove = () => {
+    const line = approveLine;
+    setApproveLineId(null);
+    if (!line || !isRepeatActionPending(line)) return;
+    const decision = decisionFor(line, "approved");
+    recordLineDecision(decision);
+    if (line.removalPending) {
+      // Исключение: та же ветка, что и раньше, — версия отчёта + уведомление отделам.
+      onApproveRemoval(line.id);
+      toast.success("Исключение согласовано — позиция исключена из акции.");
+    } else {
+      dispatch({ type: "applyDecision", decision });
+      toast.success(
+        line.pending?.action === "addition"
+          ? "Добавление согласовано — позиция вошла в акцию."
+          : "Изменение согласовано — новые значения стали актуальными."
+      );
+    }
+    setDetailsLineId(null);
+  };
+
+  const confirmReject = (reason: string) => {
+    const line = rejectLine;
+    setRejectLineId(null);
+    if (!line || !isRepeatActionPending(line)) return;
+    const decision = decisionFor(line, "rejected", reason);
+    recordLineDecision(decision);
+    dispatch({ type: "applyDecision", decision });
+    toast.success(
+      line.removalPending
+        ? "Исключение отклонено — позиция остаётся в акции, КМ увидит причину."
+        : "Изменение отклонено — строка возвращена КМ с причиной."
+    );
+    setDetailsLineId(null);
+  };
 
   const onCreateUnplanned = React.useCallback(
     (input: Omit<UnplannedCampaignInput, "kmId">) => {
@@ -1246,9 +1363,35 @@ export function FullCalendarPage() {
   const submitForApproval = () => {
     // Акции, чьи строки реально уходят — только их «первая отправка» закрывается.
     const sentCampaignIds = new Set<string>();
+    const at = new Date().toISOString();
+    let repeatAdditions = 0;
     for (const id of sendScopeIds) {
       const l = lines.get(id);
-      if (l) sentCampaignIds.add(l.campaignId);
+      if (!l) continue;
+      sentCampaignIds.add(l.campaignId);
+      // №13 п.1: отправка снимает пометку «Черновик». В уже согласованной акции
+      // новая позиция — повторное добавление: светло-оранжевая строка и решение КД.
+      if (l.draft) {
+        const c = campaignsById.get(l.campaignId);
+        if (c && isApprovedCampaign(c)) {
+          repeatAdditions++;
+          dispatch({
+            type: "edit",
+            id,
+            patch: {
+              draft: false,
+              pending: {
+                action: "addition",
+                requestType: "Добавлена номенклатура",
+                by: currentRole,
+                at,
+              },
+            },
+          });
+        } else {
+          dispatch({ type: "edit", id, patch: { draft: false } });
+        }
+      }
     }
     // First send locks the тип/период of unplanned campaigns (§10).
     setVisibleCampaigns((prev) =>
@@ -1259,13 +1402,20 @@ export function FullCalendarPage() {
       )
     );
     const n = sendScopeIds.size;
+    const notes: string[] = [];
+    if (repeatAdditions > 0)
+      notes.push(
+        `Добавления в согласованные акции (${repeatAdditions}) ушли на повторное согласование коммерческому директору.`
+      );
+    if (deferredInvalidCount > 0)
+      notes.push(
+        `Не отправлено (не заполнены обязательные поля): ${deferredInvalidCount} ${pluralLines(deferredInvalidCount)}.`
+      );
     toast.success(
-      `Отправлено на согласование старшему КМ: ${n} ${pluralLines(n)}`,
-      deferredInvalidCount > 0
-        ? {
-            description: `Не отправлено (не заполнены обязательные поля): ${deferredInvalidCount} ${pluralLines(deferredInvalidCount)}.`,
-          }
-        : undefined
+      repeatAdditions > 0
+        ? `Отправлено на согласование: ${n} ${pluralLines(n)}`
+        : `Отправлено на согласование старшему КМ: ${n} ${pluralLines(n)}`,
+      notes.length > 0 ? { description: notes.join(" ") } : undefined
     );
     setSelectedIds(new Set());
   };
@@ -1479,12 +1629,6 @@ export function FullCalendarPage() {
             onRequestRemoval={
               canRequestLineRemoval(currentRole) ? onRemovalRequest : undefined
             }
-            onApproveRemoval={
-              canApproveLineRemoval(currentRole) ? onApproveRemoval : undefined
-            }
-            onRejectRemoval={
-              canApproveLineRemoval(currentRole) ? onRejectRemoval : undefined
-            }
             onOpenDetails={handleOpenDetails}
             rejectionLineIds={rejectionLineIds}
             selectedIds={selectedIds}
@@ -1504,6 +1648,51 @@ export function FullCalendarPage() {
         // видят его текстом (трекер стр. 57 п. 2).
         canComment={Boolean(ownKmId && detailsLine && detailsLine.kmId === ownKmId)}
         commentAuthor={currentRole}
+        onApprove={canDecideRepeat ? requestApprove : undefined}
+        onReject={canDecideRepeat ? requestReject : undefined}
+      />
+
+      {/* №13 п.3 — согласование повторного действия из панели, с подтверждением. */}
+      <AlertDialog
+        open={approveLineId !== null}
+        onOpenChange={(o) => {
+          if (!o) setApproveLineId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {approveLine?.removalPending
+                ? "Согласовать исключение позиции?"
+                : approveLine?.pending?.action === "addition"
+                  ? "Согласовать добавление позиции?"
+                  : "Согласовать изменение?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {approveLine?.removalPending
+                ? "Позиция будет исключена из акции, смежные отделы получат новую версию отчёта."
+                : "Новые данные станут актуальными, подсветка изменений будет снята."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmApprove}>Согласовать</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* №13 п.3 — отклонение повторного действия из панели, причина обязательна. */}
+      <ReasonDialog
+        open={rejectLineId !== null}
+        onOpenChange={(open) => !open && setRejectLineId(null)}
+        title={
+          rejectLine?.removalPending ? "Отклонить исключение позиции" : "Отклонить изменение"
+        }
+        description="Строка вернётся КМ на корректировку; причина будет видна ему в «Детали изменений»."
+        destructive
+        reasonLabel="Причина отклонения"
+        confirmLabel="Отклонить"
+        onConfirm={confirmReject}
       />
 
       {/* Add-a-line picker (§8.2.1) — searchable 1С reference, no free-text. */}
@@ -1566,22 +1755,10 @@ export function FullCalendarPage() {
               }
             : undefined
         }
-        onApproveRemoval={
-          canApproveLineRemoval(currentRole)
-            ? (id) => {
-                setEditLineId(null);
-                onApproveRemoval(id);
-              }
-            : undefined
-        }
-        onRejectRemoval={
-          canApproveLineRemoval(currentRole)
-            ? (id) => {
-                setEditLineId(null);
-                onRejectRemoval(id);
-              }
-            : undefined
-        }
+        onOpenDetails={(id) => {
+          setEditLineId(null);
+          handleOpenDetails(id);
+        }}
       />
 
       {/* Version history & changes (§5.1) — 3 views + diff; «Создать корректировку»

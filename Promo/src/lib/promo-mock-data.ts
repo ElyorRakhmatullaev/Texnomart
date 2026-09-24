@@ -949,6 +949,13 @@ export interface PromoLine {
   removalRequestedAt?: string;
   /** Unapproved repeat action (10-я часть, Блоки 2/4) — table still shows approved data. */
   pending?: LinePendingChange;
+  /**
+   * Позиция, которую КМ добавил, но ещё не отправил (проверка прода 14–15.09,
+   * №13 п.1): статус «Черновик» независимо от статуса акции, скрыта от старшего
+   * КМ и КД, правится и удаляется владельцем. Снимается отправкой; в
+   * согласованной акции позиция становится повторным добавлением (`pending`).
+   */
+  draft?: boolean;
 }
 
 /** A single line-history record (§8.2.1 stores {what, which promo, overlap, user, date/time}). */
@@ -1188,6 +1195,8 @@ export function createPromoLine(
     oldMonthly12: roundTo(oldPrice / 12, 1_000),
     advRecommendedKm: false,
     advSelectedMarketing: false,
+    // Новую позицию добавляет КМ — до отправки она черновик (№13 п.1).
+    draft: true,
   };
 }
 
