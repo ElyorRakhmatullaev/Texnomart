@@ -150,14 +150,6 @@ export function resetRoleConfig(): RoleNotificationConfig {
   return fresh;
 }
 
-/** Roles configured to receive a category — drives the «для роли X» tag. */
-export function rolesForType(
-  type: NotificationType,
-  config: RoleNotificationConfig
-): PromoRole[] {
-  return PROMO_ROLES.filter((r) => config[r]?.includes(type));
-}
-
 /**
  * Кто получает КОНКРЕТНОЕ уведомление — с учётом адресата события, а не только
  * типа (см. `roleReceivesNotification`). Администратор — наблюдатель, не адресат.

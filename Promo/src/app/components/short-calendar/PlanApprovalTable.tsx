@@ -35,6 +35,7 @@ import type { PlanRowJournal } from "../../../lib/plan-store";
 import {
   compactDistribution,
   formatSpanDates,
+  weekdayShort,
   type DistributionSpan,
 } from "../../../lib/distribution-store";
 
@@ -399,11 +400,6 @@ function RowActions({
       )}
     </div>
   );
-}
-
-function weekdayShort(d: Date): string {
-  const w = new Intl.DateTimeFormat("ru-RU", { weekday: "short" }).format(d);
-  return w.charAt(0).toUpperCase() + w.slice(1);
 }
 
 /** «Пн» для одной даты, «Пн–Пт · 5 дн.» для периода. */

@@ -117,6 +117,9 @@ function parseFormatted(raw: string): unknown {
 function patchFrom(pending: LinePendingChange): Partial<PromoLine> {
   const patch: Record<string, unknown> = {};
   for (const f of pending.fields ?? []) {
+    // «Участие в акции» — не поле данных: исключают только через запрос на
+    // исключение, согласованная правка данных позицию не убирает никогда.
+    if (f.field === "removed") continue;
     patch[f.field as string] = "value" in f && f.value !== undefined
       ? f.value
       : parseFormatted(f.now);
@@ -149,10 +152,16 @@ export function applyLineDecisions(
       // Rejected exclusion: the position stays in the promo, and the refusal is recorded
       // as a resolved repeat action so the КМ sees «Отклонённые изменения», the red
       // indicator and the reason in «Детали изменений» (Волна 2, Блок 6.2/6.6).
+      // Поля запроса переезжают в `pending` (автор, дата, причина), со строки они
+      // снимаются — иначе «Детали изменений» подставляли причину исключения
+      // комментарием к следующей правке КМ (прежний `rejectRemoval` их очищал).
       return {
         ...line,
         removalPending: false,
         removed: false,
+        removalReason: undefined,
+        removalRequestedBy: undefined,
+        removalRequestedAt: undefined,
         pending: {
           action: "change",
           requestType: "Запрос на исключение из промо",

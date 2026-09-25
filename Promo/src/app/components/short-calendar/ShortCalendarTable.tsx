@@ -12,6 +12,7 @@ import { ReadinessCell } from "./ReadinessCell";
 import {
   compactDistribution,
   formatSpanDates,
+  weekdayShort,
   type DistributionSpan,
 } from "../../../lib/distribution-store";
 import {
@@ -42,12 +43,6 @@ const READINESS_EXPANDED_H = 148; // px — a row whose readiness block is expan
 const SUBROW_H = 32; // px per distribution sub-row (expanded)
 
 const CELL = "border-r border-gray-100 dark:border-border";
-
-/** Capitalised short weekday, e.g. "Пн". */
-function weekdayShort(date: Date): string {
-  const w = new Intl.DateTimeFormat("ru-RU", { weekday: "short" }).format(date);
-  return w.charAt(0).toUpperCase() + w.slice(1);
-}
 
 /** Capitalised full weekday, e.g. "Понедельник". */
 function weekdayFull(date: Date): string {

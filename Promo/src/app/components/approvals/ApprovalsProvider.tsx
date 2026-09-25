@@ -51,7 +51,7 @@ interface RequestNonParticipationAction {
   reason: string;
   at: string;
 }
-/** КД sets «Не участвует» directly (final; КМ cannot override, Старший КМ notified). */
+/** КД sets «Не участвует» directly (final; КМ cannot override; КМ notified — D61). */
 interface SetNonParticipationByKdAction {
   type: "set-non-participation-kd";
   campaignId: string;
@@ -229,7 +229,9 @@ export function ApprovalsProvider({ children }: { children: React.ReactNode }) {
         if (!it) return;
         // Адресаты — по согласованной схеме (D61; проверка прода 14–15.09, №17 п.1).
         // Старший КМ передаёт набор дальше — это НОВОЕ на согласование для КД, и
-        // только для него; решение КД финальное — о нём узнаёт КМ.
+        // только для него (событие этапа — явный `visibleTo`); решение КД финальное —
+        // о нём узнаёт КМ: этот тип адресован КМ по настройке ролей, явный адресат
+        // не нужен и перекрыл бы настройку Администратора.
         if (actor === "Старший КМ") {
           notifyFor(it.campaignId, {
             type: "review-new",
@@ -249,7 +251,6 @@ export function ApprovalsProvider({ children }: { children: React.ReactNode }) {
                 type: "non-participation",
                 description: `Заявка КМ ${kmName(it.kmId)} о неучастии согласована — КМ освобождён от участия в акции.`,
                 href: "/approvals",
-                visibleTo: ["Категорийный менеджер (КМ)"],
               }
             : {
                 type: "kd-approved",
@@ -258,7 +259,6 @@ export function ApprovalsProvider({ children }: { children: React.ReactNode }) {
                     ? `Коммерческий директор согласовал изменения КМ ${kmName(it.kmId)} по согласованной акции.`
                     : `Коммерческий директор согласовал данные КМ ${kmName(it.kmId)}.`,
                 href: "/approvals",
-                visibleTo: ["Категорийный менеджер (КМ)"],
               }
         );
       },
@@ -275,13 +275,11 @@ export function ApprovalsProvider({ children }: { children: React.ReactNode }) {
                 type: "non-participation",
                 description: `Заявка КМ ${kmName(it.kmId)} о неучастии отклонена: ${opts.comment}`,
                 href: "/approvals",
-                visibleTo: ["Категорийный менеджер (КМ)"],
               }
             : {
                 type: "review-returned",
                 description: `Данные КМ ${kmName(it.kmId)} возвращены на корректировку: ${opts.comment}`,
                 href: "/approvals",
-                visibleTo: ["Категорийный менеджер (КМ)"],
               }
         );
       },

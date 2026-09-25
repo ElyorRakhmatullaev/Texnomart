@@ -381,8 +381,11 @@ export function FullCalendarPage() {
   // against it; КД «send» re-baselines (clears the draft). Seeded from the seed
   // lines/periods; per-campaign live version lists override the seed once a
   // correction is sent. Marketing re-approval is tracked per campaign.
-  const [baseline, setBaseline] = React.useState<Map<string, PromoLine>>(() =>
-    seedLineMap()
+  // Базовая линия — только позиции, которые `changeSetFor` засчитывает в отчёт:
+  // черновик или не согласованное добавление, попав в неё, после согласования
+  // уже не дали бы «Добавлено» в следующей версии (сид L-0022 — такое добавление).
+  const [baseline, setBaseline] = React.useState<Map<string, PromoLine>>(
+    () => new Map([...seedLineMap()].filter(([, l]) => countsForReport(l)))
   );
   const [baselinePeriods, setBaselinePeriods] = React.useState<
     Map<string, { startDate: Date; endDate: Date }>
@@ -709,6 +712,9 @@ export function FullCalendarPage() {
           currentRole,
           new Date().toISOString()
         );
+        // Сохранение без реальных изменений (например, форма «Изменить» без правок)
+        // не создаёт пустой запрос на согласование — строка остаётся как была.
+        if (pending.fields?.length === 0) return;
         dispatch({ type: "setPending", id, pending });
         toast.info(
           "Изменение отправлено на повторное согласование — в таблице пока показаны согласованные данные."
@@ -1028,7 +1034,8 @@ export function FullCalendarPage() {
       // so the draft diff clears and the period ✏️/bold resets.
       setBaseline((prev) => {
         const next = new Map(prev);
-        for (const l of linesFor(campaignId)) next.set(l.id, { ...l });
+        for (const l of linesFor(campaignId))
+          if (countsForReport(l)) next.set(l.id, { ...l });
         return next;
       });
       const c = campaignsById.get(campaignId);

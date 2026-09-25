@@ -252,10 +252,12 @@ export function formatPromoNo(id: string): string {
 
 // Review-stage КМ statuses — a clickable cell on these opens the approval workspace;
 // everything else (final / data-entry) opens the campaign in the full calendar (§10).
+// «Переотправлено на корректировку КМ» — не этап согласования: заявки в очереди по
+// нему нет (reviewerForKmStatus → undefined, «Элемент не найден»), набор
+// исправляют в полном календаре.
 const KM_STATUS_REVIEW_STAGE: KmStatus[] = [
   "На согласовании у старшего КМ",
   "На согласовании у коммерческого директора",
-  "Переотправлено на корректировку КМ",
 ];
 
 /**
@@ -287,7 +289,9 @@ export const CAMPAIGNS: PromoCampaign[] = [
     status: "На согласовании у коммерческого директора",
     participatingKmIds: ["km-1", "km-2", "km-3", "km-6"],
     kmStatuses: {
-      "km-1": "Согласовано КД",
+      // КД отклонил позицию КМ (L-0002 «Saund-бар», аудит 25.11) — набор КМ
+      // возвращён, как это делает живое отклонение в «Согласовании».
+      "km-1": "Переотправлено на корректировку КМ",
       "km-2": "На согласовании у коммерческого директора",
       "km-3": "На согласовании у коммерческого директора",
       "km-6": "Не участвует",
@@ -1015,6 +1019,9 @@ const LINE_SEED: LineSeed[] = [
   // Проверка прода 14–15.09, №13 п.4: у КМ роли god-mode (km-1) должна быть своя
   // отклонённая позиция — иначе сценарий «фильтр „на корректировке“ → красная точка
   // → гаснет после деталей» в прототипе не проверить (L-0005 / L-0008 — чужие КМ).
+  // Набор km-1 в этой акции поэтому «Переотправлено на корректировку КМ», а в аудите
+  // 25.11 — отклонение этой позиции КД: раньше «Мои участия» и краткий календарь
+  // показывали «Согласовано КД» рядом с отклонённой позицией.
   { id: "L-0002", campaignId: "PR-2026-001", kmId: "km-1", nomenclatureId: "1C-10003", off: 0.18, forecast: 200, regular: 80, advKm: true, duplicate: true, rejected: true, rejectComment: "Скидка выше согласованного лимита по категории — пересчитайте новую цену." },
   { id: "L-0003", campaignId: "PR-2026-001", kmId: "km-2", nomenclatureId: "1C-10006", off: 0.12, forecast: 60, regular: 18, cash: 3 },
   // missing forecast → invalid until filled (red required marker)
@@ -3390,41 +3397,12 @@ export interface PromoNotification {
   visibleTo?: PromoRole[];
 }
 
-const MARKETING_AUDIENCE: PromoRole[] = [
-  "Сотрудник маркетинга",
-  "Директор маркетинга",
-  "Коммерческий директор",
-  "Администратор",
-];
-
-const ADJ_DEPARTMENTS_AUDIENCE: PromoRole[] = [
-  "Сотрудник маркетинга",
-  "Директор маркетинга",
-  "Сотрудник закупа",
-  "Сотрудник аналитики",
-  "Коммерческий директор",
-  "Операционный директор",
-  "Администратор",
-];
-
-// Волна 5 (5B) — события контура согласования. Участники: КМ (чьи данные),
-// проверяющие и Администратор.
-const REVIEW_AUDIENCE: PromoRole[] = [
-  "Категорийный менеджер (КМ)",
-  "Старший КМ",
-  "Коммерческий директор",
-  "Администратор",
-];
-/** Только проверяющие — событию «поступило на согласование» КМ не адресат. */
-const REVIEWERS_AUDIENCE: PromoRole[] = [
-  "Старший КМ",
-  "Коммерческий директор",
-  "Администратор",
-];
 
 /**
  * E-2 — what an action handler passes to `notify()`. The store fills in
- * id / sentAt / actor / read; audience defaults from `notificationAudienceFor`.
+ * id / sentAt / actor / read. Who receives it is decided by the per-role
+ * config (`roleReceivesNotification`); `visibleTo` only narrows an event whose
+ * addressee depends on the event itself.
  */
 export interface NotificationInput {
   type: NotificationType;
@@ -3434,43 +3412,15 @@ export interface NotificationInput {
   description: string;
   /** In-app quick link; defaults to "/notifications". */
   href?: string;
-  /** Override the type's default audience (§11.3.1). */
+  /**
+   * Addressees of THIS event — only when they depend on the event, not on its
+   * type: a stage («поступило на согласование» старшему КМ или КД) or a text
+   * addressed personally («Вы назначены…»). Omit otherwise: a default audience
+   * here would override the Администратор's /notification-settings.
+   */
   visibleTo?: PromoRole[];
 }
 
-/**
- * Default audience per notification type (§11.3.1) so callers rarely pass
- * `visibleTo`. Both audiences include Коммерческий директор; MARKETING_AUDIENCE
- * includes Сотрудник маркетинга — so the actor of every wired emission is inside
- * the resulting audience and sees their own item. `km-assignment` → undefined
- * (visible to all); it is not emitted live.
- */
-export function notificationAudienceFor(
-  type: NotificationType
-): PromoRole[] | undefined {
-  switch (type) {
-    case "campaign-cancelled":
-    case "line-removed":
-    case "data-changed":
-    case "report-new":
-      return ADJ_DEPARTMENTS_AUDIENCE;
-    case "marketing-reapproval":
-    case "ad-approval":
-      return MARKETING_AUDIENCE;
-    case "review-new":
-    case "review-resubmitted":
-      return REVIEWERS_AUDIENCE;
-    case "review-returned":
-    case "kd-approved":
-    case "non-participation":
-    case "auto-forwarded":
-    case "sla-overdue":
-    case "deadline-today":
-      return REVIEW_AUDIENCE;
-    case "km-assignment":
-      return undefined;
-  }
-}
 
 /**
  * Pure factory for a live-emitted notification. `at` / `seq` are passed in (no
@@ -3494,7 +3444,7 @@ export function createLiveNotification(
     sentAt: at,
     read: false,
     href: input.href ?? "/notifications",
-    visibleTo: input.visibleTo ?? notificationAudienceFor(input.type),
+    visibleTo: input.visibleTo,
   };
 }
 
@@ -3527,7 +3477,6 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: minutesAgo(5),
       read: false,
       href: "/reports",
-      visibleTo: ADJ_DEPARTMENTS_AUDIENCE,
     },
     {
       id: "ntf-02",
@@ -3552,7 +3501,6 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: hoursAgo(1),
       read: false,
       href: "/full-calendar",
-      visibleTo: MARKETING_AUDIENCE,
     },
     {
       id: "ntf-04",
@@ -3564,7 +3512,6 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: hoursAgo(3),
       read: false,
       href: "/full-calendar",
-      visibleTo: ADJ_DEPARTMENTS_AUDIENCE,
     },
     {
       id: "ntf-05",
@@ -3576,7 +3523,6 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: hoursAgo(6),
       read: true,
       href: "/full-calendar",
-      visibleTo: ADJ_DEPARTMENTS_AUDIENCE,
     },
     {
       id: "ntf-06",
@@ -3589,7 +3535,6 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: daysAgo(1),
       read: true,
       href: "/reports",
-      visibleTo: ADJ_DEPARTMENTS_AUDIENCE,
     },
     {
       id: "ntf-07",
@@ -3601,7 +3546,6 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: daysAgo(1),
       read: true,
       href: "/reports",
-      visibleTo: MARKETING_AUDIENCE,
     },
     {
       id: "ntf-08",
@@ -3643,19 +3587,35 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: minutesAgo(50),
       read: false,
       href: "/approvals",
-      visibleTo: REVIEW_AUDIENCE,
     },
     {
       id: "ntf-11",
       type: "review-resubmitted",
       campaignId: "PR-2026-002",
       campaignName: "Рассрочка на технику к Новому году",
-      actor: { name: "Рашидова Дилноза", role: "Категорийный менеджер (КМ)" },
+      actor: { name: "Юсупова Нигора", role: "Категорийный менеджер (КМ)" },
       description: "Данные повторно отправлены на согласование после корректировки.",
       sentAt: hoursAgo(2),
       read: false,
       href: "/approvals",
-      visibleTo: REVIEWERS_AUDIENCE,
+      // Повторная отправка PR-2026-002 (km-2) — на этапе старшего КМ; событие
+      // этапа адресуется этапу, иначе его видел бы и КД (№17 п.1).
+      visibleTo: ["Старший КМ"],
+    },
+    {
+      id: "ntf-19",
+      type: "review-resubmitted",
+      // Та же повторная отправка на этапе КД: PR-2026-001 km-2 (в «Согласовании»
+      // возврат 9 раб. дн. назад, повторная отправка 4 раб. дн. назад) — КД
+      // получает «Повторную отправку» по согласованной схеме D61.
+      campaignId: "PR-2026-001",
+      campaignName: "Чёрная пятница 2026",
+      actor: { name: "Юсупова Нигора", role: "Категорийный менеджер (КМ)" },
+      description: "Данные повторно отправлены коммерческому директору после корректировки.",
+      sentAt: addWorkingDays(ref, -4),
+      read: false,
+      href: "/approvals",
+      visibleTo: ["Коммерческий директор"],
     },
     {
       id: "ntf-12",
@@ -3667,7 +3627,6 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: hoursAgo(4),
       read: false,
       href: "/approvals",
-      visibleTo: REVIEW_AUDIENCE,
     },
     {
       id: "ntf-13",
@@ -3679,7 +3638,6 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: hoursAgo(5),
       read: false,
       href: "/approvals",
-      visibleTo: REVIEW_AUDIENCE,
     },
     {
       id: "ntf-14",
@@ -3705,7 +3663,6 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: daysAgo(1),
       read: true,
       href: "/approvals",
-      visibleTo: REVIEW_AUDIENCE,
     },
     {
       id: "ntf-16",
@@ -3732,7 +3689,6 @@ export function buildNotifications(ref: Date = new Date()): PromoNotification[] 
       sentAt: daysAgo(2),
       read: true,
       href: "/reports",
-      visibleTo: ADJ_DEPARTMENTS_AUDIENCE,
     },
     {
       // Событие этапа КД: старший КМ согласовал набор и передал его дальше (D61,
@@ -4381,12 +4337,13 @@ const AUDIT_EVENTS_SEED: Omit<AuditEvent, "id">[] = [
     user: "Коммерческий директор",
     role: "Коммерческий директор",
     at: new Date(2026, 10, 25, 10, 0),
-    action: "согласование",
-    objectType: "акция",
-    objectLabel: "Чёрная пятница 2026 — КМ Алиев Бекзод",
+    action: "отклонение",
+    objectType: "строка",
+    objectLabel: "Saund-бар Samsung HW-B650",
     campaignId: "PR-2026-001",
     statusFrom: "На согласовании у коммерческого директора",
-    statusTo: "Согласовано КД",
+    statusTo: "Переотправлено на корректировку КМ",
+    comment: "Скидка выше согласованного лимита по категории — пересчитайте новую цену.",
   },
   {
     user: "Исмаилов Жасур",

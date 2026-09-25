@@ -159,6 +159,11 @@ export function isCampaignDraft(campaign: PromoCampaign): boolean {
   }
 }
 
+/** Отклонённый запрос на исключение позиции (см. `applyLineDecisions`). */
+export function isRejectedExclusion(pending: LinePendingChange): boolean {
+  return !!pending.rejected && !!pending.fields?.some((f) => f.field === "removed");
+}
+
 /**
  * Fold an edit patch into a `LinePendingChange` for an approved line (Блок 2/4): the
  * table keeps the approved values, the diff accumulates here. `fmt` renders values as
@@ -172,7 +177,11 @@ export function mergePendingChange(
   actor: string,
   atISO: string
 ): LinePendingChange {
-  const prev = line.pending;
+  // Отклонённый запрос на исключение `applyLineDecisions` хранит как «изменение» с
+  // полем `removed` («Предложена к удалению») — это не правка данных. Новая правка
+  // КМ начинает свой запрос с нуля: иначе поле, тип запроса и причина исключения
+  // переехали бы в неё, и согласование цены исключило бы позицию из акции.
+  const prev = line.pending && isRejectedExclusion(line.pending) ? undefined : line.pending;
   const fields = (prev?.fields ?? []).map((f) => ({ ...f }));
   for (const key of Object.keys(patch) as (keyof PromoLine)[]) {
     const was = fmt(key, line[key]);

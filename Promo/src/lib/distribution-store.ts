@@ -1,3 +1,4 @@
+import { formatDateFull } from "@texnomart/shared/utils/formatters";
 import type { CategoryDistributionEntry, PromoCampaign } from "./promo-mock-data";
 
 /**
@@ -43,17 +44,19 @@ export const PROMO_CATEGORIES: string[] = [
  * категории остались бы у тех, кто уже сохранял форму. Ключ хранилища не
  * меняем: иначе пропали бы и распределения, введённые пользователем.
  */
-const LEGACY_CATEGORY_NAMES: Record<string, string> = {
-  "Телевизоры и аудио": "Аудио и видео техника, геймерские товары",
-  "Холодильники и крупная БТ": "Крупно-бытовая техника для кухни",
-  "Смартфоны и гаджеты": "Персональная электроника",
-  "Мелкая бытовая техника": "Мелко-бытовая техника для кухни",
-  "Ноутбуки и ПК": "Техника для офиса, умный дом, компьютеры и периферия",
-  "Климатическая техника": "Климатическая техника и техника для ухода за домом",
-};
+// Map, а не объект: категорию вводят вручную, и «constructor» / «toString»
+// нашли бы в объекте унаследованную функцию вместо строки.
+const LEGACY_CATEGORY_NAMES = new Map<string, string>([
+  ["Телевизоры и аудио", "Аудио и видео техника, геймерские товары"],
+  ["Холодильники и крупная БТ", "Крупно-бытовая техника для кухни"],
+  ["Смартфоны и гаджеты", "Персональная электроника"],
+  ["Мелкая бытовая техника", "Мелко-бытовая техника для кухни"],
+  ["Ноутбуки и ПК", "Техника для офиса, умный дом, компьютеры и периферия"],
+  ["Климатическая техника", "Климатическая техника и техника для ухода за домом"],
+]);
 
 function currentCategoryName(category: string): string {
-  return LEGACY_CATEGORY_NAMES[category.trim()] ?? category;
+  return LEGACY_CATEGORY_NAMES.get(category.trim()) ?? category;
 }
 
 /** Сериализуемый вид записи: Date → «YYYY-MM-DD». */
@@ -212,16 +215,17 @@ export function compactDistribution(
   );
 }
 
-function ddmmyyyy(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+/** Короткий день недели с заглавной: «Пн». Общий для подписей дат и периодов. */
+export function weekdayShort(date: Date): string {
+  const w = new Intl.DateTimeFormat("ru-RU", { weekday: "short" }).format(date);
+  return w.charAt(0).toUpperCase() + w.slice(1);
 }
 
 /** «01.11.2026» для одной даты, «01.11.2026–05.11.2026» для периода. */
 export function formatSpanDates(span: Pick<DistributionSpan, "from" | "to" | "days">): string {
   return span.days > 1
-    ? `${ddmmyyyy(span.from)}–${ddmmyyyy(span.to)}`
-    : ddmmyyyy(span.from);
+    ? `${formatDateFull(span.from)}–${formatDateFull(span.to)}`
+    : formatDateFull(span.from);
 }
 
 /**
