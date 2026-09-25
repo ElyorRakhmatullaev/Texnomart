@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useNavigate, Link } from "react-router";
+import { useNavigate, useLocation, Link } from "react-router";
 import { User, Lock, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { AuthLayout } from "./AuthLayout";
@@ -17,6 +17,15 @@ import { Alert, AlertDescription } from "@texnomart/ui/alert";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  // Прямая ссылка на экран (например, из чек-листа проверки) ведёт через вход:
+  // `RequireAuth` кладёт запрошенный адрес в `state.from` — после входа
+  // возвращаемся туда же, а не на главную.
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
+  const returnTo =
+    from?.pathname && from.pathname !== "/login"
+      ? `${from.pathname}${from.search ?? ""}`
+      : "/";
   // verify2FA() — единственный вызов из общего контекста, который ставит
   // isAuthenticated=true; 2FA-шаг в Promo убран, поэтому завершаем вход им.
   const { verify2FA } = useAuth();
@@ -84,7 +93,7 @@ export function LoginPage() {
     // Пользователь с временным паролём попадёт на принудительную смену
     // (редирект делает ProtectedLayout, Task 5); остальные — в систему.
     toast.success("Добро пожаловать в систему!");
-    navigate("/");
+    navigate(returnTo, { replace: true });
   };
 
   const isBlocked = blockedUntil !== null;

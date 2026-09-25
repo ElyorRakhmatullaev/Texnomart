@@ -56,9 +56,17 @@ function ProtectedLayout() {
 
 function GuestLayout() {
   const { isAuthenticated } = useAuth();
+  const location = useLocation();
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    // Тот же адрес, что выбирает LoginPage: вход по прямой ссылке возвращает на
+    // запрошенный экран, а не на главную (иначе этот редирект перебил бы её).
+    const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
+    const to =
+      from?.pathname && from.pathname !== "/login"
+        ? `${from.pathname}${from.search ?? ""}`
+        : "/";
+    return <Navigate to={to} replace />;
   }
 
   return <Outlet />;
