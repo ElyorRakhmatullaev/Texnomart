@@ -112,7 +112,7 @@ test.describe('№20 · «Показатели участников»', () => {
     await openTab(app, 'Показатели участников');
     // Отклонение от брифа: оба поля «Период дедлайна» вкладки передают явный
     // `placeholder` («с» / «по»), а не подпись по умолчанию «Выберите дату»
-    // (ParticipantMetricsTab.tsx:106,113; дефолт — DatePickerField.tsx:33 —
+    // (ParticipantMetricsTab.tsx:106 «с», :115 «по»; дефолт — DatePickerField.tsx:33 —
     // применяется только когда `placeholder` не передан). Поля различимы по
     // имени, `.first()` не нужен.
     await app.pickDate(page.getByRole('button', { name: 'с', exact: true }), '01.11.2026');
@@ -125,11 +125,28 @@ test.describe('№20 · «Показатели участников»', () => {
   test('20-3 · клик по числу открывает задачи одной метрики', async ({ app, page }) => {
     await openTab(app, 'Показатели участников');
     const row = bodyRows(page).filter({ hasText: KM.karimov });
-    const onTime = row.getByRole('button').filter({ hasText: /^\d+$/ }).first();
+    // Столбцы строки в DOM-порядке: №, ФИО, «Промо с дедлайном» (due), «Вовремя»
+    // (onTime), «С просрочкой» (overdue), … — только эти три ячейки-числа содержат
+    // кнопку (ParticipantMetricsTab.tsx:271-275, num(r.dueCount,"due") →
+    // num(r.onTime,"onTime") → num(r.overdue,"overdue")). Берём именно 4-ю ячейку
+    // (индекс 3), а не «первую попавшуюся кнопку»: без этого клик по `.first()`
+    // всегда открывал бы «due», и регекс-ИЛИ по всем трём подписям маскировал бы
+    // баг «открылась не та метрика». Для Каримова Шерзода (без фильтров) «Вовремя» = 1
+    // (проверено по факт. DOM: cell "1" → button "1", 3-я числовая ячейка) — кнопка
+    // кликабельна.
+    const onTime = row.getByRole('cell').nth(3).getByRole('button');
     await onTime.click();
     const drawer = page.getByRole('dialog');
     await expect(drawer).toBeVisible();
-    await expect(drawer).toContainText(/Промо с дедлайном|Вовремя|С просрочкой/);
+    // Заголовок — единственный h2 в шторке (SheetTitle → Radix Primitive.h2).
+    const title = drawer.getByRole('heading');
+    // Положительный контроль в ТОМ ЖЕ локаторе `title`, что и обе проверки
+    // отсутствия ниже: подпись метрики «Вовремя» (METRIC_LABEL.onTime,
+    // lib/audit-control.ts:606) обязана присутствовать, а подписи двух других
+    // метрик («Промо с дедлайном» — due, «С просрочкой» — overdue) — отсутствовать.
+    await expect(title).toContainText('Вовремя');
+    await expect(title).not.toContainText('Промо с дедлайном');
+    await expect(title).not.toContainText('С просрочкой');
   });
 
   test('20-4 · КМ видит только себя, ОД — всех КМ без данных', async ({ app, page }) => {
