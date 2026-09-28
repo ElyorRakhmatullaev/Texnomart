@@ -72,8 +72,15 @@ pnpm build:promo    # production build
 ```bash
 corepack pnpm --filter promo test:e2e          # весь набор; сам поднимает Vite на :5183
 npx playwright test e2e/users.spec.ts           # один файл (из Promo/)
+npx playwright test e2e/users.spec.ts --workers 2   # меньше параллельных Chrome (см. ниже)
 npx playwright show-report                      # HTML-отчёт последнего прогона
-BASE_URL=https://elyorrakhmatullaev.github.io/Texnomart/promo/ npx playwright test   # против GitHub Pages
+BASE_URL=https://elyorrakhmatullaev.github.io/Texnomart/promo/ npx playwright test   # против GitHub Pages (bash)
+```
+
+PowerShell (переменная окружения ставится отдельной командой, не префиксом):
+
+```powershell
+$env:BASE_URL='https://elyorrakhmatullaev.github.io/Texnomart/promo/'; npx playwright test
 ```
 
 - Тесты — `Promo/e2e/` (обвязка `fixtures.ts`, сиды `data.ts`, 7 файлов по разделам); спецификация — `docs/superpowers/specs/2026-09-28-promo-e2e-playwright-design.md`.
