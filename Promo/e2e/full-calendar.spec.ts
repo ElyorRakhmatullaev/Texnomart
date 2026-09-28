@@ -113,7 +113,13 @@ test.describe('№13 · черновики, исключение, решения
     await expect(item).toContainText('Подарок (1)');
     await page.keyboard.press('Escape');
     await app.gridRow(LINES.fan).getByRole('checkbox', { name: 'Выбрать строку' }).click();
-    await expect(page.getByRole('button', { name: 'Отправить выбранные (1)' })).toBeDisabled();
+    const submit = page.getByRole('button', { name: 'Отправить выбранные (1)' });
+    await expect(submit).toBeDisabled();
+    // F6: подсказка недоступной кнопки — Radix Tooltip на span-обёртке
+    // (disabled:pointer-events-none у самой кнопки, FullCalendarPage.tsx SubmitButton;
+    // packages/ui/src/button.tsx:8) — наводим на обёртку, не на саму кнопку.
+    await submit.locator('xpath=..').hover();
+    await expect(page.getByRole('tooltip')).toContainText('Среди выбранных не заполнены обязательные поля');
   });
 
   test('13-4 · отправленная позиция видна КД светло-оранжевой', async ({ app, page }) => {
@@ -150,6 +156,15 @@ test.describe('№13 · черновики, исключение, решения
     await app.switchRole(ROLES.KD);
     await expect(app.gridRow(LINES.fan)).toBeVisible();
     await expect(app.gridRow(LINES.fan)).toHaveClass(ORANGE);
+    // F6: статус «Изменения на согласовании» — приведённый в задании локатор
+    // (scroll-pane row) для него не подходит: строка не рендерит текст статуса
+    // напрямую, ни во frozen-, ни в scroll-панели (только оранжевую подсветку и
+    // чипы «Черновик»/«Удалено», FullCalendarGrid.tsx:741,789-802,994-999).
+    // Единственное место, где строка показывает статус текстом — панель «Детали
+    // изменений» (`{status}` в SheetDescription, LineDetailsDrawer.tsx:203-214),
+    // открываемая тем же «Просмотр деталей», что и в остальных тестах файла.
+    const sheet = await openDetails(app, LINES.fan);
+    await expect(sheet).toContainText('Изменения на согласовании');
   });
 
   test('13-5 · черновик удаляется', async ({ app }) => {
@@ -203,7 +218,6 @@ test.describe('№13 · черновики, исключение, решения
   });
 
   test('13-14 · повторное отклонение просмотренной строки снова зажигает точку', async ({ app, page }) => {
-    test.fail(true, 'Дефект: «просмотрено» хранится по id строки (full-calendar-rejection-store.ts:8-12)');
     await openPromo(app, PROMO.p3.id);
     await openDetails(app, LINES.xiaomi);
     await closeDetails(page);
@@ -211,6 +225,9 @@ test.describe('№13 · черновики, исключение, решения
     await app.switchRole(ROLES.KD);
     await kdReject(app, LINES.xiaomi, 'Остатки ещё есть — оставить в акции');
     await app.switchRole(ROLES.KM);
+    // F2: test.fail сразу перед падающей проверкой — вся цепочка КМ → КД → КМ
+    // выше не маскируется под ожидаемый дефект.
+    test.fail(true, 'Дефект: «просмотрено» хранится по id строки (full-calendar-rejection-store.ts:8-12)');
     await expect(
       app.gridRow(LINES.xiaomi).getByRole('button', { name: 'Просмотр деталей' }).locator('span.bg-red-500'),
     ).toHaveCount(1);
@@ -224,15 +241,21 @@ test.describe('№13 · проверяющие', () => {
     await openPromo(app, PROMO.p3.id);
     await expect(exclusionButton(app.gridRow(LINES.delonghi))).toBeVisible();
     await expect(exclusionButton(app.gridRow(LINES.dyson))).toBeVisible();
+    // F13: убедиться, что сами строки видны старшему КМ — иначе отсутствие кнопки
+    // ниже могло быть следствием отсутствующей строки, а не логики isApprovedPosition.
+    await expect(app.gridRow(LINES.lgOled)).toBeVisible();
+    await expect(app.gridRow(LINES.boschBlender)).toBeVisible();
     await expect(exclusionButton(app.gridRow(LINES.lgOled))).toHaveCount(0); // ожидает добавления
     await expect(exclusionButton(app.gridRow(LINES.boschBlender))).toHaveCount(0); // уже на исключении
   });
 
   test('13-13 · позиция, добавленная старшим КМ, видна ему', async ({ app }) => {
-    test.fail(true, 'Дефект: строка старшего КМ — черновик, скрытый от проверяющих, в т.ч. от него (FullCalendarPage.tsx:355-356)');
     await openPromo(app, PROMO.p3.id);
     await addNomenclature(app, LINES.fan);
     await app.toast(`Номенклатура добавлена: ${LINES.fan}`);
+    // F2: test.fail сразу перед падающей проверкой — падение добавления
+    // номенклатуры не маскируется под ожидаемый дефект.
+    test.fail(true, 'Дефект: строка старшего КМ — черновик, скрытый от проверяющих, в т.ч. от него (FullCalendarPage.tsx:355-356)');
     await expect(app.gridRow(LINES.fan)).toBeVisible();
   });
 });
@@ -244,12 +267,46 @@ test.describe('№13–14 · коммерческий директор', () => {
     await openPromo(app, PROMO.p3.id);
     const rows = page.locator('div.group\\/row');
     await expect(rows.first()).toBeVisible();
-    await expect(rows.getByRole('button', { name: /^(Согласовать|Отклонить)$/ })).toHaveCount(0);
+
+    // F1: вместо анкера на конкретные имена — весь набор доступных имён кнопок
+    // в строках КД должен быть подмножеством {«Просмотр деталей»}. Источник:
+    // rowEditable/rowDeletable требуют access.canEditOwnLines
+    // (FullCalendarGrid.tsx:684-734, 832-861); LineRowActions.onRequestRemoval
+    // приходит только КМ/ст. КМ (canRequestLineRemoval, promo-mock-data.ts:2985-
+    // 2987 — FullCalendarPage.tsx:1639-1641); 24.09 убрал построчные
+    // «Согласовать»/«Отклонить» из грида вовсе (FullCalendarGrid.tsx:806-823 —
+    // там остался только «Просмотр деталей»).
+    const buttonNames = await rows.getByRole('button').evaluateAll((els) =>
+      els.map((el) => el.getAttribute('aria-label') ?? el.textContent?.trim() ?? ''),
+    );
+    expect(buttonNames.length).toBeGreaterThan(0); // контроль: список не пуст
+    expect(buttonNames).toContain('Просмотр деталей'); // контроль
+    for (const name of buttonNames) expect(name).toBe('Просмотр деталей');
+    // Прокручиваемая панель для КД в остальном read-only (EditableCell.tsx:145-
+    // 156 — `editable=false` рендерит `<span>`, не `<button>`) — КРОМЕ «Остаток
+    // по складам»: это read-only инфо-попап (не решение и не правка), рендерится
+    // независимо от editable для любой роли (FullCalendarGrid.tsx:313,
+    // WarehousePopover.tsx:20-43). Подтверждено прогоном — без этого допуска
+    // тест находил 5 таких кнопок (по одной на строку акции).
+    const scrollRows = page.locator('div.flex.items-stretch.border-b.text-sm');
+    await expect(scrollRows.first()).toBeVisible();
+    const scrollButtonNames = await scrollRows.getByRole('button').evaluateAll((els) =>
+      els.map((el) => el.getAttribute('aria-label') ?? el.textContent?.trim() ?? ''),
+    );
+    expect(scrollButtonNames.length).toBeGreaterThan(0); // контроль: список не пуст
+    for (const name of scrollButtonNames) expect(name).toBe('Остаток по складам');
     await expect(rows.getByRole('checkbox')).toHaveCount(0);
+
     const sheet = await openDetails(app, LINES.delonghi);
     await expect(sheet.getByText('Решение: изменение данных позиции')).toBeVisible();
     await expect(sheet.getByRole('button', { name: 'Согласовать', exact: true })).toBeVisible();
     await expect(sheet.getByRole('button', { name: 'Отклонить', exact: true })).toBeVisible();
+    await closeDetails(page);
+
+    // F1: контроль тем же локатором `rows.getByRole('checkbox')` — у КМ
+    // (editorMode) чекбоксы есть; переключаться обратно не нужно.
+    await app.switchRole(ROLES.KM);
+    await expect(rows.getByRole('checkbox').first()).toBeVisible();
   });
 
   test('13-9 · отклонение без причины невозможно', async ({ app, page }) => {
@@ -365,13 +422,17 @@ test.describe('№14 · запрос на исключение', () => {
     await app.toast('Исключение отклонено — позиция остаётся в акции, КМ увидит причину.');
     await closeDetails(app.page);
 
+    // F3 (ruling): правка на 22, не на 20 — Xiaomi несёт посевной отклонённый
+    // pending {value: 20} (L-0023, promo-mock-data.ts:1079); правка именно до 20
+    // совпала бы со значением по совпадению и не отличила бы новую правку КМ от
+    // применения устаревшего посевного value.
     await app.switchRole(ROLES.KM);
-    await editDiscount(app, LINES.xiaomi, '14', '20');
+    await editDiscount(app, LINES.xiaomi, '14', '22');
     await app.toast('Изменение отправлено на повторное согласование — в таблице пока показаны согласованные данные.');
     await expect(await app.gridScrollRow(LINES.xiaomi)).toContainText('14%');
     const sheet = await openDetails(app, LINES.xiaomi);
     await expect(sheet).toContainText('Изменение данных позиции');
-    await expect(sheet).toContainText(/Скидка[\s\S]*14%[\s\S]*20%/);
+    await expect(sheet).toContainText(/Скидка[\s\S]*14%[\s\S]*22%/);
     await expect(sheet).toContainText(/Комментарий[\s\S]*—/);
     await expect(sheet).not.toContainText('Модель снята с производства');
     await closeDetails(app.page);
@@ -380,7 +441,18 @@ test.describe('№14 · запрос на исключение', () => {
     await kdApprove(app, LINES.xiaomi, 'Согласовать изменение?');
     await app.toast('Изменение согласовано — новые значения стали актуальными.');
     await expect(app.gridRow(LINES.xiaomi)).toBeVisible();
-    await expect(await app.gridScrollRow(LINES.xiaomi)).toContainText('20%');
+    // F3 (ruling checked empirically): предполагалось, что этот финальный чек
+    // тоже упрётся в дефект ОИ-3 (посевное value 20% вместо новой правки,
+    // line-decision-store.ts:123-124 / full-calendar-status.ts:191) — на деле
+    // проходит. Причина: отклонённый ЗАПРОС НА ИСКЛЮЧЕНИЕ, предшествующий этой
+    // правке, — не ценовое изменение; его `pending.fields` несёт поле «removed»,
+    // а не «discountPct» (full-calendar-status.ts:163-165 isRejectedExclusion).
+    // mergePendingChange (:184) видит `isRejectedExclusion(line.pending)` и
+    // обнуляет `prev` — новый pending строится с нуля, посевное {value: 20} по
+    // discountPct не наследуется. Дефект воспроизводится только там, где перед
+    // правкой НЕТ отклонённого запроса на исключение (см. ОИ-3, где КМ правит
+    // discountPct напрямую на уже несущей посевной pending.value строке).
+    await expect(await app.gridScrollRow(LINES.xiaomi)).toContainText('22%');
   });
 
   test('ОИ-2 · ввод того же значения не создаёт запроса', async ({ app, page }) => {
@@ -390,16 +462,26 @@ test.describe('№14 · запрос на исключение', () => {
     await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
     await expect(app.gridRow(LINES.xiaomi)).not.toHaveClass(ORANGE);
     await editDiscount(app, LINES.xiaomi, '14', '15'); // контроль: реальная правка даёт запрос
+    // F7: доказать, что локатор тоста вообще находит тост для этой же правки —
+    // иначе count(0) выше мог бы пройти и при сломанном локаторе, не только при
+    // отсутствии тоста.
+    await app.toast(/Изменение отправлено на повторное согласование/);
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(1);
     await expect(app.gridRow(LINES.xiaomi)).toHaveClass(ORANGE);
   });
 
-  test('ОИ-3 · согласуется последняя правка, а не первая', async ({ app }) => {
-    test.fail(true, 'Дефект: повторная правка поля с value меняет только now (full-calendar-status.ts:191)');
+  test('ОИ-3 · на строке с посевным запросом согласование применяет устаревшее посевное значение', async ({ app }) => {
     await openPromo(app, PROMO.p3.id);
     await editDiscount(app, LINES.xiaomi, '14', '18');
     await app.toast(/Изменение отправлено на повторное согласование/);
     await app.switchRole(ROLES.KD);
     await kdApprove(app, LINES.xiaomi, 'Согласовать изменение?');
+    // F3 (ruling): на строках с посевным запросом (value, L-0015/L-0023)
+    // согласование применяет устаревшее посевное значение вместо новой правки КМ
+    // (line-decision-store.ts:123-124 предпочитает value, full-calendar-
+    // status.ts:191 обновляет только now); на строках без посевного запроса
+    // правки применяются верно (см. 13-10, где такого запроса нет).
+    test.fail(true, 'Дефект: на строках с посевным запросом (value, L-0015/L-0023) согласование применяет устаревшее посевное значение вместо новой правки КМ (line-decision-store.ts:123-124 предпочитает value, full-calendar-status.ts:191 обновляет только now)');
     await expect(await app.gridScrollRow(LINES.xiaomi)).toContainText('18%');
   });
 });

@@ -145,10 +145,28 @@ test.describe('№17 · администратор и настройки (25.09)
 
   test('17-7 · компактные блоки по ролям', async ({ app, page }) => {
     await app.open('notifications');
-    for (const title of ['КМ', 'Старший КМ', 'Коммерческий директор', 'Смежные отделы', 'Директор маркетинга и операционный директор']) {
-      await expect(page.getByText(title, { exact: true }).first(), title).toBeVisible();
+    // F6: счётчик у каждого блока — Badge рядом с <h2> (NotificationsPage.tsx:
+    // 184-189, ADMIN_BLOCKS + AdminRoleBlock). Скоуп блока — <section>, найденный
+    // по своему заголовку, чтобы не задеть счётчики соседних блоков.
+    const block = (title: string) =>
+      page.locator('section').filter({ has: page.getByRole('heading', { level: 2, name: title, exact: true }) });
+    const counts: [string, number][] = [
+      ['КМ', 4],
+      ['Старший КМ', 4],
+      ['Коммерческий директор', 4],
+      ['Смежные отделы', 3],
+      ['Директор маркетинга и операционный директор', 8],
+    ];
+    for (const [title, count] of counts) {
+      await expect(block(title), title).toBeVisible();
+      await expect(block(title).locator('header').getByText(String(count), { exact: true }), title).toBeVisible();
     }
+    // F6: последний (свёрнутый) блок несёт ровно BLOCK_PREVIEW=5 строк до
+    // раскрытия — восемь событий, видно пять.
+    const lastBlock = block('Директор маркетинга и операционный директор');
+    await expect(lastBlock.locator('li')).toHaveCount(5);
     await page.getByRole('button', { name: 'Показать все (8)' }).click();
+    await expect(lastBlock.locator('li')).toHaveCount(8); // контроль: раскрытие меняет число строк
     // Боковая панель тоже даёт кнопку-тултип «Свернуть» (сворачивание сайдбара) —
     // берём кнопку блока внутри контентной области (<main>, app-shell.tsx:545).
     await expect(page.getByRole('main').getByRole('button', { name: 'Свернуть' })).toBeVisible();

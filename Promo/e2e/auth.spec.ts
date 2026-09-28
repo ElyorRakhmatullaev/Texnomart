@@ -179,6 +179,8 @@ test.describe('№23 · пароли в журнале', () => {
     await app.login(admin.email, admin.password);
     const journal = await app.openJournal('u-4');
     await expect(journal.getByText('Пароль изменён владельцем учётной записи')).toBeVisible();
-    await app.expectPasswordsNotLeaked([NEW_PASSWORD]);
+    // F5: каждый пароль, введённый/показанный в этом тесте — старый (u-4),
+    // неверный текущий и новый — не должен утечь в журнал/аудит.
+    await app.expectPasswordsNotLeaked([user.password, 'Wrong2026!pass', NEW_PASSWORD]);
   });
 });

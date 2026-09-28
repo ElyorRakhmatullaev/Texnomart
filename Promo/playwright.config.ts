@@ -2,7 +2,10 @@ import { defineConfig } from '@playwright/test';
 
 // BASE_URL задан → прогон против уже поднятого сайта (например, GitHub Pages
 // https://elyorrakhmatullaev.github.io/Texnomart/promo/), свой сервер не нужен.
-const BASE_URL = process.env.BASE_URL;
+// Нормализуем на завершающий «/» (F10): `app.open('путь')` конкатенирует
+// относительно baseURL — без слэша на конце «.../promo» + «login» дал бы
+// «.../promlogin».
+const BASE_URL = process.env.BASE_URL?.replace(/\/?$/, '/');
 const LOCAL_URL = 'http://localhost:5183/';
 
 export default defineConfig({

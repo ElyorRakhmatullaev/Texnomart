@@ -32,6 +32,7 @@ test.describe('№18 · «Сроки по плану»', () => {
   test('18-1 · «Период плана» — диапазоны дат по возрастанию', async ({ app, page }) => {
     await openTab(app, 'Сроки по плану');
     await combo(page, 'Все периоды плана').click();
+    await expect(page.getByRole('option').first()).toBeVisible(); // F8: дождаться отрисовки списка
     const options = (await page.getByRole('option').allTextContents()).map((t) => t.trim());
     expect(options[0]).toBe('Все периоды плана');
     const ranges = options.slice(1);
@@ -47,6 +48,7 @@ test.describe('№18 · «Сроки по плану»', () => {
 
   test('18-2 · выбор периода оставляет только его строки', async ({ app, page }) => {
     await openTab(app, 'Сроки по плану');
+    await expect(bodyRows(page).first()).toBeVisible(); // F8: дождаться отрисовки строк
     const total = await bodyRows(page).count();
     await app.select(combo(page, 'Все периоды плана'), /^01\.11\.2026 — 30\.11\.2026/);
     const rows = bodyRows(page);
@@ -64,8 +66,9 @@ test.describe('№19 · автопередача КД', () => {
     await app.select(combo(page, 'Все контрольные точки'), 'Авто-передача КД (просрочка старшего КМ)');
     // ControlDeadlinesFilters.tsx:232 (desktop, `hidden md:flex`) и :241 (mobile,
     // `md:hidden`) рендерят «Показано: N» одновременно — оба в DOM на 1440×900,
-    // виден только первый (desktop); без `.first()` — strict-mode violation.
-    await expect(page.getByText('Показано: 1').first()).toBeVisible();
+    // виден только первый (desktop). `.filter({ visible: true })` (F12) отбирает
+    // по фактической видимости, а не по порядку в DOM.
+    await expect(page.getByText('Показано: 1').filter({ visible: true })).toBeVisible();
     const row = bodyRows(page);
     await expect(row).toHaveCount(1);
     await expect(row).toContainText('26-2');
@@ -188,16 +191,16 @@ test.describe('Аудит-лог', () => {
     await openTab(app, 'Аудит-лог');
     // AuditLogTable.tsx:250-252 (desktop, `hidden md:block`) и :281-283 (mobile,
     // `md:hidden`) рендерят «Записей: N» одновременно — оба в DOM на 1440×900,
-    // виден только первый (desktop); без `.first()` локатор бьёт в двух элементах
-    // (strict-mode violation). Тот же приём уже используется в
+    // виден только первый (desktop). `.filter({ visible: true })` (F12) отбирает
+    // по фактической видимости, а не по порядку в DOM — тот же приём, что в
     // `fixtures.ts:expectPasswordsNotLeaked` (см. комментарий там).
-    await expect(page.getByText('Записей: 20').first()).toBeVisible();
+    await expect(page.getByText('Записей: 20').filter({ visible: true })).toBeVisible();
     await page.getByRole('button', { name: 'Все действия', exact: true }).click();
-    await expect(page.getByText('Записей: 25').first()).toBeVisible();
+    await expect(page.getByText('Записей: 25').filter({ visible: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ключевые действия' })).toBeVisible();
     await app.switchRole(ROLES.KD);
     await openTab(app, 'Аудит-лог');
-    await expect(page.getByText(/Записей: \d+/).first()).toBeVisible(); // контроль
+    await expect(page.getByText(/Записей: \d+/).filter({ visible: true })).toBeVisible(); // контроль
     await expect(page.getByRole('button', { name: 'Ключевые действия' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Все действия', exact: true })).toHaveCount(0);
   });

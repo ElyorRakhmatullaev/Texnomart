@@ -15,7 +15,11 @@ const RU_MONTHS = [
 
 /** CSV прототипа: BOM, «;», строки через \r\n, кавычки удваиваются. */
 export function parseCsv(text: string): string[][] {
-  const src = text.replace(/^﻿/, '');
+  // F4: BOM через String.fromCharCode, а не литеральный символ в исходнике —
+  // иммунно к редактору, который мог бы снять invisible-символ и превратить
+  // проверку в no-op.
+  const BOM = String.fromCharCode(0xfeff);
+  const src = text.startsWith(BOM) ? text.slice(BOM.length) : text;
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = '';
@@ -151,17 +155,21 @@ export function createApp(page: Page, now: Date) {
       const grid = page.getByRole('grid').last();
       await expect(grid).toBeVisible();
       const target = y * 12 + (m - 1);
+      let shown = Number.NaN;
       for (let step = 0; step < 48; step++) {
         const labelId = await grid.getAttribute('aria-labelledby');
         const caption = ((await page.locator(`[id="${labelId}"]`).textContent()) ?? '').trim().toLowerCase();
         const [monthName, yearText] = caption.split(/\s+/);
-        const shown = Number(yearText) * 12 + RU_MONTHS.indexOf(monthName);
+        shown = Number(yearText) * 12 + RU_MONTHS.indexOf(monthName);
         if (shown === target) break;
         await page
           .locator(shown < target ? 'button[name="next-month"]' : 'button[name="previous-month"]')
           .last()
           .click();
       }
+      // F9: без этой проверки промах навигации (например, «ноябрь» не нашёлся в
+      // RU_MONTHS из-за опечатки) тихо кликнул бы по номеру дня в чужом месяце.
+      expect(shown, `pickDate(${ddmmyyyy}): календарь не долистался до нужного месяца`).toBe(target);
       await grid
         .locator('button[name="day"]:not(.day-outside)')
         .filter({ hasText: new RegExp(`^${d}$`) })
@@ -223,8 +231,9 @@ export function createApp(page: Page, now: Date) {
       // AuditLogTable.tsx:251,282 render «Записей: N» twice — a desktop copy
       // (`.hidden md:block`) and a mobile copy (`.md:hidden`) — both present in
       // the DOM at once; only the desktop one is visible at our 1440×900
-      // default viewport, and it comes first, so `.first()` disambiguates.
-      await expect(page.getByText(/Записей: \d+/).first()).toBeVisible();
+      // default viewport. `.filter({ visible: true })` (F12) picks it by actual
+      // visibility rather than DOM order, so it stays correct at any viewport.
+      await expect(page.getByText(/Записей: \d+/).filter({ visible: true })).toBeVisible();
       for (const p of passwords) await expect(page.locator('body')).not.toContainText(p);
     },
 

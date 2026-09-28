@@ -125,7 +125,8 @@ test.describe('№12 · экспорт', () => {
     await app.open('short-calendar');
     const file = await exportCsv(app);
     expect(file.name).toBe('краткий-промо-календарь_2026-09-28.csv');
-    expect(file.text.startsWith('﻿')).toBe(true);
+    const BOM = String.fromCharCode(0xfeff); // F4: не литеральный символ в исходнике
+    expect(file.text.startsWith(BOM)).toBe(true);
     const [header, ...rows] = parseCsv(file.text);
     expect(header).toEqual(CALENDAR_HEADER);
     expect(rows.length).toBeGreaterThan(0);
@@ -197,7 +198,6 @@ test.describe('№12 · экспорт', () => {
     test.use({ session: { user: 'u-2', role: ROLES.OD } });
 
     test('12-6 · в экспорте роль отклонившего — операционный директор', async ({ app, page }) => {
-      test.fail(true, 'Дефект: отклонение ОД при плане «На согл. с КД» пишет роль КД (PlanMode.tsx:667-675)');
       await openPlan(app);
       await page.getByRole('checkbox', { name: 'Выбрать акцию 26-6' }).click();
       await page.getByRole('button', { name: /Отклонить выбранные/ }).click();
@@ -207,6 +207,10 @@ test.describe('№12 · экспорт', () => {
       await app.toast('Отклонено акций: 1. План возвращён директору маркетинга');
       const [header, ...rows] = parseCsv((await exportCsv(app)).text);
       const row = rows.find((r) => r[0] === '="26-6"')!;
+      // F2: test.fail поставлен прямо перед падающей проверкой — так падение
+      // подготовки (клик, диалог, тост, экспорт) не маскируется под «ожидаемый
+      // дефект».
+      test.fail(true, 'Дефект: отклонение ОД при плане «На согл. с КД» пишет роль КД (PlanMode.tsx:667-675)');
       expect(row[header.indexOf('Роль согласующего')]).toBe(ROLES.OD);
     });
   });
@@ -217,6 +221,15 @@ test.describe('№27 · распределение по категориям / �
     await openPlan(app);
     await app.switchRole(ROLES.KD);
     await distributionBlock(page, '26-1', 4).click();
+    // F6: раскрытый блок — <tr>, следующий сразу за строкой плана
+    // (PlanApprovalTable.tsx:732-744, DistributionTable :447-465). Заголовки —
+    // тот же скоуп, что и контроль отсутствия полей ввода ниже.
+    const expanded = planRow(page, '26-1').locator('xpath=following-sibling::tr[1]');
+    await expect(expanded.getByText('Дата / период', { exact: true })).toBeVisible();
+    await expect(expanded.getByText('Категория', { exact: true })).toBeVisible();
+    await expect(expanded.getByText('Ответственный КМ', { exact: true })).toBeVisible();
+    await expect(expanded.getByRole('textbox')).toHaveCount(0);
+    await expect(expanded.getByRole('combobox')).toHaveCount(0);
     await expect(page.getByText('Ответственный КМ').first()).toBeVisible();
     await expect(page.getByText(/Аудио и видео техника, геймерские товары/).first()).toBeVisible();
   });
@@ -391,6 +404,7 @@ test.describe('Доработки 25.09 · категории и «Переот�
       await filtersToggle.click();
     }
     await page.getByRole('combobox').filter({ hasText: 'Все категории' }).click();
+    await expect(page.getByRole('option').first()).toBeVisible(); // F8: дождаться отрисовки списка
     const names = await page.getByRole('option').allTextContents();
     expect(names[0]).toBe('Все категории');
     for (const n of names.slice(1)) expect(CATEGORIES as readonly string[]).toContain(n.trim());

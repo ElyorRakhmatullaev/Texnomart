@@ -123,10 +123,17 @@ test.describe('№15 · отчёт маркетинга', () => {
     // именно вторая.
     await expect(page.getByText('В отчёте пока нет строк.').last()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Экспорт' })).toBeDisabled();
-    await page.getByRole('button', { name: /^Фильтры/ }).click();
+    // F6: бейдж счётчика активных фильтров на кнопке «Фильтры» (ReportsPage.tsx:
+    // 342-346, activeFilterCount) — контроль тем же локатором: сначала показан,
+    // после сброса исчезает.
+    const filtersBtn = page.getByRole('button', { name: /^Фильтры/ });
+    const filtersBadge = filtersBtn.locator('span.bg-primary');
+    await expect(filtersBadge).toHaveText('1');
+    await filtersBtn.click();
     await page.getByRole('button', { name: 'Сбросить фильтры' }).click();
     await expect(shown(page)).toHaveText('Показано: 5 позиций');
     await expect(page.getByRole('button', { name: 'Экспорт' })).toBeEnabled();
+    await expect(filtersBadge).toHaveCount(0);
   });
 
   test('15-9 · выгрузка .xlsx с подарками и рассрочкой', async ({ app, page }) => {

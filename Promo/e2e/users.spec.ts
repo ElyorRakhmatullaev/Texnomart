@@ -35,7 +35,9 @@ async function assignSubstitute(app: App, who: RegExp, from: string, to: string,
 async function slaTexts(app: App) {
   await app.switchRole(ROLES.KD);
   await app.open('approvals');
-  const text = (await app.page.locator('main').textContent()) ?? '';
+  const main = app.page.locator('main');
+  await expect(main.first()).toBeVisible(); // F8: дождаться отрисовки перед чтением textContent
+  const text = (await main.textContent()) ?? '';
   await app.switchRole(ROLES.ADMIN);
   return text.match(/\d+ раб\. дн\. \(до \d{2}\.\d{2}\.\d{4}\)|\+\d+ дн\./g) ?? [];
 }
@@ -139,6 +141,15 @@ test.describe('№22 · учётные записи и роли', () => {
     await expect(page.getByText('Показано: 1')).toBeVisible();
     await expect(app.userRow(USERS['u-5'].name)).toBeVisible(); // контроль
     await expect(app.userRow(USERS['u-4'].name)).toHaveCount(0);
+
+    // F6: сама роль-чип «Старший КМ» не показана в строке u-4 (истекла
+    // 31.05.2026 — RoleChips фильтрует истёкшие временные, UsersTable.tsx:50-55).
+    // Сбрасываем фильтр роли, чтобы строка u-4 вообще была видна.
+    await app.select(page.getByRole('combobox').filter({ hasText: ROLES.SKM }), 'Все роли');
+    const row = app.userRow(USERS['u-4'].name);
+    await expect(row).toBeVisible();
+    await expect(row.getByText(ROLES.KM, { exact: true })).toBeVisible(); // контроль: постоянная роль-чип есть
+    await expect(row.getByText(ROLES.SKM, { exact: true })).toHaveCount(0);
   });
 
   test('22-4 · деактивация и активация', async ({ app }) => {
@@ -190,11 +201,12 @@ test.describe('№22 · учётные записи и роли', () => {
 
     test('22-7 · видит только своё подразделение, не выдаёт глобальные роли', async ({ app, page }) => {
       // Тест делает больше работы, чем соседние (второй полный переход /users в
-      // новой вкладке плюс диалог редактирования с 9 чипами ролей) — под 8
-      // параллельными воркерами изредка упирается в дефолтный тест-таймаут 30s
-      // без какой-либо сломанной проверки (наблюдался целиком корректный DOM на
-      // таймауте). Даём запас, а не ослабляем контроль.
-      test.setTimeout(60_000);
+      // новой вкладке плюс диалог редактирования с 9 чипами ролей) — даже при
+      // капе `workers: 4` (playwright.config.ts) изредка упирается в дефолтный
+      // тест-таймаут 30s без какой-либо сломанной проверки (наблюдался целиком
+      // корректный DOM на таймауте). Даём тесту запас (`test.slow()` — 3×
+      // таймаут), а не ослабляем контроль.
+      test.slow();
       await app.open('users');
       await expect(page.getByText('Вы — администратор подразделения «Маркетинг»: управление ограничено вашим подразделением.')).toBeVisible();
       await expect(page.getByText('Показано: 1')).toBeVisible();
@@ -293,7 +305,8 @@ test.describe('№24 · роли в журнале', () => {
     await expect(journal.getByText('изменение ролей', { exact: true })).toBeVisible();
     await expect(journal).toContainText('(временно 01.10.2026–15.10.2026)');
     await expect(journal).toContainText('Основание: Отпуск старшего КМ');
-    await expect(journal).toContainText('Администратор Системы');
+    // F6: исполнитель действия — «ФИО · роль» одним узлом (UserDetailPage.tsx:646).
+    await expect(journal).toContainText('Администратор Системы · Администратор');
     await expect(journal).toContainText('28.09.2026 12:00');
   });
 
@@ -304,7 +317,6 @@ test.describe('№24 · роли в журнале', () => {
     // setRoleAssignments как есть, не восполняя поля — в отличие от неиспользуемого
     // users-store.ts:274-297 `addTemporaryRole`, который их проставляет, но нигде
     // не вызывается). Из-за этого «назначил(а): …» в «Роли и доступ» не появляется.
-    test.fail(true, 'Дефект: временной роли из формы не проставляются assignedBy/assignedAt (UserFormDialog.tsx:323-339)');
 
     const dialog = await editUser(app, 'u-8');
     await dialog.getByRole('button', { name: /Добавить временную роль/ }).click();
@@ -316,6 +328,9 @@ test.describe('№24 · роли в журнале', () => {
     await app.toast('Пользователь обновлён');
 
     await page.getByRole('tab', { name: 'Роли и доступ' }).click();
+    // F2: test.fail сразу перед падающей проверкой — редактирование выше
+    // (форма, дата, сохранение) не маскируется под ожидаемый дефект.
+    test.fail(true, 'Дефект: временной роли из формы не проставляются assignedBy/assignedAt (UserFormDialog.tsx:323-339)');
     await expect(page.getByText(/назначил\(а\): Администратор Системы/).first()).toBeVisible();
   });
 
@@ -327,9 +342,10 @@ test.describe('№24 · роли в журнале', () => {
     await openAudit(app);
     const roleChange = page.getByRole('row').filter({ hasText: 'изменение ролей' });
     // AuditLogTable.tsx:251,282 — «Записей: N» рендерится дважды (десктоп/мобильная
-    // копии сосуществуют в DOM); на дефолтном 1440×900 видна только десктопная,
-    // она же первая (тот же приём, что в fixtures.ts `expectPasswordsNotLeaked`).
-    await expect(page.getByText(/Записей: \d+/).first()).toBeVisible();
+    // копии сосуществуют в DOM); на дефолтном 1440×900 видна только десктопная.
+    // `.filter({ visible: true })` (F12) отбирает по фактической видимости, а не
+    // по порядку в DOM (тот же приём, что в fixtures.ts `expectPasswordsNotLeaked`).
+    await expect(page.getByText(/Записей: \d+/).filter({ visible: true })).toBeVisible();
     await expect(roleChange).toHaveCount(0);
     await page.getByRole('button', { name: 'Все действия', exact: true }).click();
     await expect(roleChange.first()).toBeVisible();
@@ -462,12 +478,14 @@ test.describe('№25 · временное замещение КД', () => {
   });
 
   test('25-8 · новое замещение при действующем пишет снятие предыдущего', async ({ app, page }) => {
-    test.fail(true, 'Дефект: предыдущее замещение снимается без записи в аудит (kd-substitution-store.ts:128-135, вызывается из KdSubstitutionPanel.tsx:121-141)');
     await app.open('users');
     await assignSubstitute(app, /^Исмаилов Жасур/, '28.09.2026', '10.10.2026', 'Командировка КД');
     await openAudit(app);
     await page.getByRole('button', { name: 'Все действия', exact: true }).click();
     await expect(page.getByRole('row').filter({ hasText: 'назначение замещения' }).first()).toBeVisible(); // контроль
+    // F2: test.fail сразу перед падающей проверкой — назначение выше (форма,
+    // тост, переход в аудит) не маскируется под ожидаемый дефект.
+    test.fail(true, 'Дефект: предыдущее замещение снимается без записи в аудит (kd-substitution-store.ts:128-135, вызывается из KdSubstitutionPanel.tsx:121-141)');
     await expect(page.getByRole('row').filter({ hasText: 'снятие замещения' }).first()).toBeVisible();
   });
 });
