@@ -58,6 +58,8 @@ Internal, role-based B2B workspace for planning and approving **planned & unplan
 
 Ограничения мока (не регрессии): «срок сегодня» у КД не засеян (`workingDaysBetween` через миллисекунду после срока даёт 1 день просрочки); строку «на корректировке» внутри акции у КД КМ не исправит — право правки по статусу акции; базовая линия отчёта живёт в рамках экрана. Для самостоятельной сверки пользователем опубликован чек-лист-артефакт «Сверка прототипа Promo» (№12–27 + доработки 25.09, прямые ссылки на GitHub Pages; отметки — в его базе, коллекция `checks`).
 
+**28.09 — Playwright e2e по пунктам №12–27.** Первый автоматический набор в репозитории: `e2e/` + `playwright.config.ts`, 124 теста в 7 файлах + 5 проверок обвязки (129), по каждому пункту — основной путь, негативные случаи, роли и доступ, сохранение после перезагрузки, граничные случаи. Код приложения не менялся. Шесть расхождений с требованиями — `test.fail` прямо перед проверкой дефекта: 12-6 (отклонение ОД пишет роль КД, `PlanMode.tsx:667-675`), 13-13 (строка старшего КМ скрыта от него самого, `FullCalendarPage.tsx:355-356`), 13-14 (красная точка не загорается при повторном отклонении, `full-calendar-rejection-store.ts:8-12`), ОИ-3 (на строках с посевным `value` согласование применяет устаревшее значение, `line-decision-store.ts:123-124` + `full-calendar-status.ts:191`), 24-1д (у временной роли из формы нет `assignedBy`, `UserFormDialog.tsx:323-339`), 25-8 (новое замещение КД снимает прежнее без записи в аудит, `kd-substitution-store.ts:128-135`). Ещё 10 дефектов вне №12–27 — спецификация §5.2. Известный остаток: изредка (≈2 из 6 полных прогонов под нагрузкой) таймаут в `pickDate` на 25-3. Спецификация и план — `docs/superpowers/{specs,plans}/2026-09-28-promo-e2e-playwright*`.
+
 ## Commands
 
 ```
@@ -95,6 +97,12 @@ $env:BASE_URL='https://elyorrakhmatullaev.github.io/Texnomart/promo/'; npx playw
 Promo/
   index.html
   vite.config.ts                    # aliases: @ → ./src, @texnomart/ui, @texnomart/shared
+  playwright.config.ts              # e2e: Chrome channel, ru-RU / Asia/Tashkent, workers 4, webServer Vite :5183 или BASE_URL (Pages)
+  e2e/                              # Playwright e2e (28.09) — см. «Commands → E2E»
+    fixtures.ts                     # `test`/`expect` + фикстура `app` (вход в sessionStorage, FIXED_NOW, switchRole через меню аватара, pickDate, download/CSV/XLSX, gridRow…)
+    data.ts                         # сиды для тестов: USERS, ROLES, PROMO, LINES, KM, CATEGORIES, LEGACY_CATEGORIES
+    harness.spec.ts                 # самопроверка обвязки (5)
+    auth.spec.ts · short-calendar.spec.ts · full-calendar.spec.ts · reports.spec.ts · notifications.spec.ts · audit.spec.ts · users.spec.ts
   src/
     main.tsx                        # createRoot + styles
     app/
