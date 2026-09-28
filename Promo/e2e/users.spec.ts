@@ -47,6 +47,9 @@ test.describe('№21 / №24 п.1 · таблица по ширине экран
     const [scroll, client] = await tableScroller(page).evaluate((el) => [el.scrollWidth, el.clientWidth]);
     expect(scroll).toBeLessThanOrEqual(client);
     await expect(stickyTrack(page)).toHaveCount(0);
+    // Контроль тем же локатором: на узком экране та же дорожка появляется.
+    await page.setViewportSize({ width: 1000, height: 800 });
+    await expect(stickyTrack(page)).toBeVisible();
   });
 
   test.describe('узкий экран', () => {
@@ -86,6 +89,9 @@ test.describe('№21 / №24 п.1 · таблица по ширине экран
       await app.open('users');
       await expect(page.getByText(/Создал\(а\): /).first()).toBeVisible();
       await expect(page.getByRole('table')).toBeHidden();
+      // Контроль тем же локатором: на широком экране таблица видна.
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(page.getByRole('table')).toBeVisible();
     });
   });
 });
@@ -105,18 +111,26 @@ test.describe('№22 · учётные записи и роли', () => {
   test('22-2 · роли разделены по типам, истёкшая помечена', async ({ app, page }) => {
     await app.open('users/u-4');
     await page.getByRole('tab', { name: 'Роли и доступ' }).click();
-    // u-4 (users-store.ts SEED_USERS) несёт только primary + temporary —
-    // «Дополнительные роли» рендерится лишь когда items.length > 0
-    // (UserDetailPage.tsx:414-420), а у u-4 дополнительных ролей нет. Проверяем
-    // обе группы, которые реально присутствуют, и тем же локатором подтверждаем,
-    // что пустая группа корректно не показывается (план ошибочно ждал все три).
+    // u-4 (users-store.ts SEED_USERS) несёт только primary + temporary — нет
+    // additional-роли, поэтому «Дополнительные роли» не рендерится
+    // (UserDetailPage.tsx:414-420, `items.length === 0` → null) и проверяется
+    // отдельно на u-5 ниже.
     for (const g of ['Основная роль', 'Временные роли']) {
       await expect(page.getByText(g, { exact: true })).toBeVisible();
     }
-    await expect(page.getByText('Дополнительные роли', { exact: true })).toHaveCount(0);
     const temp = page.getByText(/с 01\.05\.2026 по 31\.05\.2026/);
     await expect(temp).toBeVisible();
     await expect(page.getByText('срок истёк').first()).toBeVisible();
+
+    // «Дополнительные роли»: u-5 (users-store.ts:116) несёт
+    // roles=["Старший КМ","Категорийный менеджер (КМ)"] без явного
+    // roleAssignments, поэтому assignmentsOf строит его из плоского списка
+    // (user-roles.ts:65-66) — roles[0] «Старший КМ» становится primary,
+    // «Категорийный менеджер (КМ)» — additional.
+    await app.open('users/u-5');
+    await page.getByRole('tab', { name: 'Роли и доступ' }).click();
+    await expect(page.getByText('Дополнительные роли', { exact: true })).toBeVisible();
+    await expect(page.getByText(ROLES.KM, { exact: true })).toBeVisible();
   });
 
   test('22-3 · истёкшая временная роль не действует', async ({ app, page }) => {
@@ -175,10 +189,20 @@ test.describe('№22 · учётные записи и роли', () => {
     test.use({ session: { user: 'u-6' } });
 
     test('22-7 · видит только своё подразделение, не выдаёт глобальные роли', async ({ app, page }) => {
+      // Тест делает больше работы, чем соседние (второй полный переход /users в
+      // новой вкладке плюс диалог редактирования с 9 чипами ролей) — под 8
+      // параллельными воркерами изредка упирается в дефолтный тест-таймаут 30s
+      // без какой-либо сломанной проверки (наблюдался целиком корректный DOM на
+      // таймауте). Даём запас, а не ослабляем контроль.
+      test.setTimeout(60_000);
       await app.open('users');
       await expect(page.getByText('Вы — администратор подразделения «Маркетинг»: управление ограничено вашим подразделением.')).toBeVisible();
       await expect(page.getByText('Показано: 1')).toBeVisible();
       await expect(page.getByRole('button', { name: 'Создать пользователя' })).toHaveCount(0);
+      // Контроль тем же локатором: у глобального администратора кнопка есть.
+      const admin = await app.newTabAs('u-2');
+      await admin.open('users');
+      await expect(admin.page.getByRole('button', { name: 'Создать пользователя' })).toBeVisible();
       const dialog = await editUser(app, 'u-6');
       for (const role of [ROLES.ADMIN, ROLES.KD]) {
         const chip = dialog.getByRole('button', { name: role, exact: true }).first();
@@ -250,14 +274,6 @@ test.describe('№22 · учётные записи и роли', () => {
 
 test.describe('№24 · роли в журнале', () => {
   test('24-1 · временная роль с периодом и основанием', async ({ app, page }) => {
-    // Дефект: временная роль, добавленная через UserFormDialog, не получает
-    // assignedBy/assignedAt (UserFormDialog.tsx:319-340 создаёт запись только с
-    // role/kind/from/to; UserDetailPage.tsx:249-256 передаёт её в
-    // setRoleAssignments как есть, не восполняя поля — в отличие от неиспользуемого
-    // users-store.ts:274-297 `addTemporaryRole`, который их проставляет, но нигде
-    // не вызывается). Из-за этого «назначил(а): …» в «Роли и доступ» не появляется.
-    test.fail(true, 'Дефект: временная роль без assignedBy/assignedAt — «назначил(а)» не отображается (UserFormDialog.tsx:319-340)');
-
     const dialog = await editUser(app, 'u-8');
     await dialog.getByRole('button', { name: /Добавить временную роль/ }).click();
     // UserFormDialog.tsx:231-398 — временная роль всегда первый комбобокс.
@@ -279,8 +295,26 @@ test.describe('№24 · роли в журнале', () => {
     await expect(journal).toContainText('Основание: Отпуск старшего КМ');
     await expect(journal).toContainText('Администратор Системы');
     await expect(journal).toContainText('28.09.2026 12:00');
+  });
 
-    // Известный дефект (см. test.fail выше) — проверяется последней.
+  test('24-1д · автор назначения временной роли виден в «Роли и доступ»', async ({ app, page }) => {
+    // Дефект: временная роль, добавленная через UserFormDialog, не получает
+    // assignedBy/assignedAt (UserFormDialog.tsx:323-339 создаёт запись только с
+    // role/kind/from/to; UserDetailPage.tsx:249-256 передаёт её в
+    // setRoleAssignments как есть, не восполняя поля — в отличие от неиспользуемого
+    // users-store.ts:274-297 `addTemporaryRole`, который их проставляет, но нигде
+    // не вызывается). Из-за этого «назначил(а): …» в «Роли и доступ» не появляется.
+    test.fail(true, 'Дефект: временной роли из формы не проставляются assignedBy/assignedAt (UserFormDialog.tsx:323-339)');
+
+    const dialog = await editUser(app, 'u-8');
+    await dialog.getByRole('button', { name: /Добавить временную роль/ }).click();
+    await app.select(dialog.getByRole('combobox').first(), ROLES.SKM);
+    await app.pickDate(dialog.getByRole('button', { name: /Выберите дату/ }).first(), '01.10.2026');
+    await app.pickDate(dialog.getByRole('button', { name: /Выберите дату/ }).first(), '15.10.2026');
+    await dialog.getByPlaceholder('Основание (необязательно)').fill('Отпуск старшего КМ');
+    await dialog.getByRole('button', { name: 'Сохранить' }).click();
+    await app.toast('Пользователь обновлён');
+
     await page.getByRole('tab', { name: 'Роли и доступ' }).click();
     await expect(page.getByText(/назначил\(а\): Администратор Системы/).first()).toBeVisible();
   });
@@ -419,11 +453,16 @@ test.describe('№25 · временное замещение КД', () => {
       await expect(page.getByText('Замещение не назначено')).toBeVisible();
       await page.getByRole('button', { name: /История замещений/ }).click();
       await expect(page.getByText('Срок истёк 31.12.2026')).toBeVisible();
+      // Контроль тем же локатором: вернув время к FIXED_NOW (окно замещения
+      // снова покрывает «сегодня»), метка на строке u-8 появляется.
+      await page.clock.setFixedTime(FIXED_NOW);
+      await page.reload();
+      await expect(app.userRow(USERS['u-8'].name)).toContainText('Уполномоченное лицо КД');
     });
   });
 
   test('25-8 · новое замещение при действующем пишет снятие предыдущего', async ({ app, page }) => {
-    test.fail(true, 'Дефект: предыдущее замещение снимается без записи в аудит (KdSubstitutionPanel.tsx:131-154)');
+    test.fail(true, 'Дефект: предыдущее замещение снимается без записи в аудит (kd-substitution-store.ts:128-135, вызывается из KdSubstitutionPanel.tsx:121-141)');
     await app.open('users');
     await assignSubstitute(app, /^Исмаилов Жасур/, '28.09.2026', '10.10.2026', 'Командировка КД');
     await openAudit(app);
