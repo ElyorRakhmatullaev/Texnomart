@@ -220,7 +220,11 @@ export function createApp(page: Page, now: Date) {
       await app.open('audit');
       await page.getByRole('tab', { name: 'Аудит-лог' }).click();
       await page.getByRole('button', { name: 'Все действия', exact: true }).click();
-      await expect(page.getByText(/Записей: \d+/)).toBeVisible();
+      // AuditLogTable.tsx:251,282 render «Записей: N» twice — a desktop copy
+      // (`.hidden md:block`) and a mobile copy (`.md:hidden`) — both present in
+      // the DOM at once; only the desktop one is visible at our 1440×900
+      // default viewport, and it comes first, so `.first()` disambiguates.
+      await expect(page.getByText(/Записей: \d+/).first()).toBeVisible();
       for (const p of passwords) await expect(page.locator('body')).not.toContainText(p);
     },
 
