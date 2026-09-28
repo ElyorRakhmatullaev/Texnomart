@@ -12,3 +12,7 @@ DumpStack.log.tmp
 
 # Subagent-driven-development scratch (ledgers, task briefs/reports, review diffs)
 .superpowers/
+
+# Playwright e2e (Promo)
+test-results/
+playwright-report/
