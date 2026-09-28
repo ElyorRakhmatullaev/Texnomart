@@ -61,6 +61,11 @@ test.describe('№17 · КМ', () => {
     // как role=link с тем же именем «Настройки уведомлений» — берём именно пункт
     // боковой панели (data-sidebar="menu-button", packages/ui/src/sidebar.tsx:517),
     // как в full-calendar.spec.ts:414-417.
+    // Контроль той же формы, что и проверка отсутствия: доказывает, что локатор
+    // по `[data-sidebar="menu-button"]` вообще находит реальные пункты меню.
+    await expect(
+      page.locator('[data-sidebar="menu-button"]').filter({ hasText: 'Уведомления' }),
+    ).toBeVisible(); // контроль
     await expect(
       page.locator('[data-sidebar="menu-button"]').filter({ hasText: 'Настройки уведомлений' }),
     ).toHaveCount(0);
