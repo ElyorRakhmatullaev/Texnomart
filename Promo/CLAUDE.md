@@ -67,6 +67,21 @@ pnpm build:promo    # production build
 
 > pnpm is invoked via `corepack pnpm …` in this environment (pnpm is not on PATH; corepack ships with Node).
 
+### E2E (Playwright)
+
+```bash
+corepack pnpm --filter promo test:e2e          # весь набор; сам поднимает Vite на :5183
+npx playwright test e2e/users.spec.ts           # один файл (из Promo/)
+npx playwright show-report                      # HTML-отчёт последнего прогона
+BASE_URL=https://elyorrakhmatullaev.github.io/Texnomart/promo/ npx playwright test   # против GitHub Pages
+```
+
+- Тесты — `Promo/e2e/` (обвязка `fixtures.ts`, сиды `data.ts`, 7 файлов по разделам); спецификация — `docs/superpowers/specs/2026-09-28-promo-e2e-playwright-design.md`.
+- Браузер — установленный Chrome (`channel: 'chrome'`). Без Chrome: `PW_CHANNEL=chromium` + `npx playwright install chromium`.
+- Время зафиксировано на 28.09.2026 12:00 (Ташкент): сиды считают сроки от «сейчас».
+- Известные дефекты — `test.fail` с описанием; когда дефект исправят, прогон сообщит «expected to fail but passed» — снять пометку.
+- `playwright.config.ts` капает `workers: 4` (по умолчанию Playwright взял бы cpus/2 = 8 на этой машине; 8 реальных Chrome держат CPU на 97–100% весь прогон и изредка роняют 30с таймаут в календарном пикере — не логическая ошибка теста).
+
 ## Project Structure
 
 ```
