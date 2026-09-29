@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@texnomart/ui/popover";
 import { cn } from "@texnomart/ui/utils";
 import { formatDateFull } from "@texnomart/shared/utils/formatters";
 import { CALENDAR_DROPDOWN_PROPS } from "./calendar-dropdown-props";
+import { keepFocusIfMoved } from "./popover-focus";
 
 interface DatePickerFieldProps {
   value: Date | null;
@@ -63,7 +64,11 @@ export function DatePickerField({
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-0">
+      <PopoverContent
+        align="start"
+        className="w-auto p-0"
+        onCloseAutoFocus={keepFocusIfMoved}
+      >
         <Calendar
           mode="single"
           locale={ru}

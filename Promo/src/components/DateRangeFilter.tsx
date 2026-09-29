@@ -9,6 +9,7 @@ import { Calendar } from "@texnomart/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@texnomart/ui/popover";
 import { formatDateFull } from "@texnomart/shared/utils/formatters";
 import { CALENDAR_DROPDOWN_PROPS } from "./calendar-dropdown-props";
+import { keepFocusIfMoved } from "./popover-focus";
 
 interface DateRangeFilterProps {
   value: [Date, Date] | null;
@@ -60,7 +61,11 @@ export function DateRangeFilter({
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-0">
+      <PopoverContent
+        align="start"
+        className="w-auto p-0"
+        onCloseAutoFocus={keepFocusIfMoved}
+      >
         <Calendar
           mode="range"
           numberOfMonths={2}
