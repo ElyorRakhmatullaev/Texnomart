@@ -60,6 +60,17 @@ Internal, role-based B2B workspace for planning and approving **planned & unplan
 
 **28.09 — Playwright e2e по пунктам №12–27.** Первый автоматический набор в репозитории: `e2e/` + `playwright.config.ts`, 124 теста в 7 файлах + 5 проверок обвязки (129), по каждому пункту — основной путь, негативные случаи, роли и доступ, сохранение после перезагрузки, граничные случаи. Код приложения не менялся. Шесть расхождений с требованиями — `test.fail` прямо перед проверкой дефекта: 12-6 (отклонение ОД пишет роль КД, `PlanMode.tsx:667-675`), 13-13 (строка старшего КМ скрыта от него самого, `FullCalendarPage.tsx:355-356`), 13-14 (красная точка не загорается при повторном отклонении, `full-calendar-rejection-store.ts:8-12`), ОИ-3 (на строках с посевным `value` согласование применяет устаревшее значение, `line-decision-store.ts:123-124` + `full-calendar-status.ts:191`), 24-1д (у временной роли из формы нет `assignedBy`, `UserFormDialog.tsx:323-339`), 25-8 (новое замещение КД снимает прежнее без записи в аудит, `kd-substitution-store.ts:128-135`). Ещё 10 дефектов вне №12–27 — спецификация §5.2. Известный остаток: изредка (≈2 из 6 полных прогонов под нагрузкой) таймаут в `pickDate` на 25-3. Спецификация и план — `docs/superpowers/{specs,plans}/2026-09-28-promo-e2e-playwright*`.
 
+**29.09 — шесть дефектов e2e исправлены, `test.fail` в наборе больше нет** (129 passed).
+
+| ID | Файлы | Что было → что стало |
+|---|---|---|
+| 12-6 | `short-calendar/PlanMode.tsx` | `rejectSelected` писал роль из `currentActor` агрегатного статуса (КД при «На согл. с КД») → роль и ФИО того, кто действует, как в `approveSelected` |
+| 13-13 | `lib/promo-mock-data.ts`, `full-calendar/FullCalendarPage.tsx` | у позиции новое `addedBy` (роль, добавившая её в сессии); черновик скрыт от проверяющих, кроме этой роли — старший КМ видит и отправляет свою позицию |
+| 13-14 | `lib/full-calendar-status.ts`, `lib/full-calendar-rejection-store.ts`, `FullCalendarPage.tsx` | «просмотрено» по `rejectionKey` (id строки + дата отказа по повторному действию; у первичного отказа — id строки, как раньше) вместо id строки; `lineHasRejection` удалён |
+| ОИ-3 | `lib/full-calendar-status.ts` | `mergePendingChange` обновляет вместе с `now` и сырое `value`, которое применяет согласование |
+| 24-1д | `users/UserFormDialog.tsx` | новая временная роль получает `assignedBy`/`assignedAt` при сохранении формы (у выданных ранее — не переписываются) |
+| 25-8 | `lib/kd-substitution-store.ts`, `users/KdSubstitutionPanel.tsx` | `assignSubstitution` возвращает `{ created, replaced }`, панель пишет «снятие замещения» с периодом, основанием и новым заместителем; «действующее» — через `getActiveSubstitution` (своя проверка в последний день окна его не видела) |
+
 ## Commands
 
 ```
@@ -88,7 +99,8 @@ $env:BASE_URL='https://elyorrakhmatullaev.github.io/Texnomart/promo/'; npx playw
 - Тесты — `Promo/e2e/` (обвязка `fixtures.ts`, сиды `data.ts`, 7 файлов по разделам); спецификация — `docs/superpowers/specs/2026-09-28-promo-e2e-playwright-design.md`.
 - Браузер — установленный Chrome (`channel: 'chrome'`). Без Chrome: `PW_CHANNEL=chromium` + `npx playwright install chromium`.
 - Время зафиксировано на 28.09.2026 12:00 (Ташкент): сиды считают сроки от «сейчас».
-- Известные дефекты — `test.fail` с описанием; когда дефект исправят, прогон сообщит «expected to fail but passed» — снять пометку.
+- Известные дефекты — `test.fail` с описанием; когда дефект исправят, прогон сообщит «expected to fail but passed» — снять пометку. С 29.09 таких пометок нет.
+- Выбор тестов по нескольким ID в PowerShell: `|` в `-g` ломает `.cmd`-обёртку (`corepack`/`npx`) — запускать CLI напрямую: `node .\node_modules\@playwright\test\cli.js test -g "12-6|13-13"` (из `Promo/`).
 - `playwright.config.ts` капает `workers: 4` (по умолчанию Playwright взял бы cpus/2 = 8 на этой машине; 8 реальных Chrome держат CPU на 97–100% весь прогон и изредка роняют 30с таймаут в календарном пикере — не логическая ошибка теста).
 
 ## Project Structure
