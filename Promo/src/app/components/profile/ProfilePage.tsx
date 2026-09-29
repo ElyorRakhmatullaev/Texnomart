@@ -197,6 +197,7 @@ function SecurityTab({ user, onChanged }: { user: PromoUser; onChanged: () => vo
             description="Укажите текущий пароль и придумайте новый — не менее 10 символов."
             submitLabel="Сменить пароль"
             verifyCurrentPassword={(current) => authenticate(user.email, current) !== null}
+            isCurrentPassword={(candidate) => authenticate(user.email, candidate) !== null}
             onSubmit={handleChangePassword}
           />
         </CardContent>

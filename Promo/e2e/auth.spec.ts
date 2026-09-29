@@ -170,7 +170,7 @@ test.describe('№23 · пароли в журнале', () => {
     await page.locator('#password').fill(NEW_PASSWORD);
     await page.locator('#confirmPassword').fill(NEW_PASSWORD);
     await page.getByRole('button', { name: 'Сменить пароль' }).click();
-    await expect(page.getByText('Текущий пароль неверён')).toBeVisible();
+    await expect(page.getByText('Текущий пароль неверен')).toBeVisible();
     await page.locator('#currentPassword').fill(user.password);
     await page.getByRole('button', { name: 'Сменить пароль' }).click();
     await app.toast('Пароль изменён');
@@ -182,5 +182,50 @@ test.describe('№23 · пароли в журнале', () => {
     // F5: каждый пароль, введённый/показанный в этом тесте — старый (u-4),
     // неверный текущий и новый — не должен утечь в журнал/аудит.
     await app.expectPasswordsNotLeaked([user.password, 'Wrong2026!pass', NEW_PASSWORD]);
+  });
+});
+
+test.describe('§5.2 · смена пароля', () => {
+  const SAME = 'совпадает с текущим';
+
+  test('Д-2 · временный пароль не принимается как новый постоянный', async ({ app, page }) => {
+    const user = USERS['u-7'];
+    await app.login(user.email, user.password);
+    await expect(page).toHaveURL(/\/change-password$/);
+    await page.locator('#password').fill(user.password);
+    await page.locator('#confirmPassword').fill(user.password);
+    await page.getByRole('button', { name: 'Сохранить и войти' }).click();
+    await expect(page.getByText(new RegExp(`Новый пароль ${SAME}`))).toBeVisible();
+    await expect(page).toHaveURL(/\/change-password$/);
+    // Контроль: другой пароль принимается.
+    await page.locator('#password').fill('NewPass2026!x');
+    await page.locator('#confirmPassword').fill('NewPass2026!x');
+    await page.getByRole('button', { name: 'Сохранить и войти' }).click();
+    await app.toast('Пароль изменён. Добро пожаловать!');
+  });
+
+  test('Д-2б · в профиле новый пароль тоже должен отличаться от текущего', async ({ app, page }) => {
+    const user = USERS['u-4'];
+    await app.login(user.email, user.password);
+    await app.openUserMenu();
+    await page.getByRole('menuitem', { name: 'Профиль' }).click();
+    await page.getByRole('tab', { name: 'Безопасность' }).click();
+    await page.locator('#currentPassword').fill(user.password);
+    await page.locator('#password').fill(user.password);
+    await page.locator('#confirmPassword').fill(user.password);
+    await page.getByRole('button', { name: 'Сменить пароль' }).click();
+    await expect(page.getByText(new RegExp(`Новый пароль ${SAME}`))).toBeVisible();
+    await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Пароль изменён' })).toHaveCount(0);
+  });
+
+  test('Д-4 · экран обязательной смены пароля — только при временном пароле', async ({ app, page }) => {
+    await app.login(admin.email, admin.password);
+    await app.open('change-password');
+    await expect(page).toHaveURL(/\/short-calendar$/);
+    await expect(page.getByText('Это первый вход — задайте постоянный пароль, чтобы продолжить.')).toHaveCount(0);
+    // Контроль: с временным паролем экран по-прежнему открывается (23-1).
+    await app.logout();
+    await app.login(USERS['u-7'].email, USERS['u-7'].password);
+    await expect(page.getByText('Это первый вход — задайте постоянный пароль, чтобы продолжить.')).toBeVisible();
   });
 });

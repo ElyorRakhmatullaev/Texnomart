@@ -72,10 +72,17 @@ function GuestLayout() {
   return <Outlet />;
 }
 
-/** Authenticated-only, но БЕЗ shell — для полноэкранной принудительной смены пароля. */
+/**
+ * Authenticated-only, но БЕЗ shell — для полноэкранной принудительной смены пароля.
+ * Экран без поля «Текущий пароль», поэтому открывается только при временном
+ * пароле: иначе любой вошедший (в том числе в чужой открытой сессии) менял бы
+ * пароль, не зная действующего. Добровольная смена — в «Профиле».
+ */
 function RequireAuthBare() {
   const { isAuthenticated } = useAuth();
+  const { currentUser } = useCurrentUser();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!currentUser?.mustChangePassword) return <Navigate to="/" replace />;
   return <Outlet />;
 }
 

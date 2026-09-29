@@ -573,6 +573,11 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
       setDecisions({});
       setRejectedStage(undefined);
       setPlanStatus("На согл. с КД");
+    } else if (planStatus === "На согл. с ОД") {
+      // Этап КД уже закрыт, но у новой строки его решения нет, а пул ОД — только
+      // строки, согласованные КД (R28.1): без возврата на этап КД её не решал бы
+      // никто. Решения по остальным строкам сохраняются, ОД по ним продолжает.
+      setPlanStatus("На согл. с КД");
     }
 
     // Warn about dates the whole plan leaves uncovered (№7). 11-я часть (R30):
@@ -709,7 +714,7 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
     const now = new Date();
     setRowJournal((prev) => {
       const out = { ...prev };
-      for (const id of rejectedIds) out[id] = withCycleClosed(out[id], "return", now);
+      for (const id of rejectedIds) out[id] = withCycleClosed(out[id], id, "return", now);
       return out;
     });
     for (const id of rejectedIds) {
@@ -783,7 +788,7 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
       // Волна 4 — правка отправленной строки закрывает её текущий цикл (R30.1).
       setRowJournal((prev) => ({
         ...prev,
-        [id]: withCycleClosed(prev[id], "edit", new Date()),
+        [id]: withCycleClosed(prev[id], id, "edit", new Date()),
       }));
       logPlan("изменение", patch, "Правка отправленной строки — требуется повторная отправка");
       toast.info(

@@ -520,3 +520,27 @@ test.describe('№15 п.3 · доступ к полному календарю',
     }
   });
 });
+
+test.describe('§5.2 · id новых позиций', () => {
+  test.use({ session: { user: 'u-2', role: ROLES.KM } });
+
+  test('Д-6б · новая позиция не получает комментарий, сохранённый в прошлой сессии', async ({ app, page }) => {
+    // Комментарий к правке хранится в localStorage по id строки, а позиции,
+    // добавленные в сессии, после перезагрузки исчезают. Если id новых позиций
+    // начинаются заново (L-new-1…), позиция новой сессии получала чужой комментарий.
+    await app.open('full-calendar');
+    await app.setStorage('promo:line-edit-comments', {
+      'L-new-1': { comment: 'Комментарий из прошлой сессии', by: ROLES.KM, at: '2026-09-27T10:00:00.000Z' },
+    });
+    await openPromo(app, PROMO.p3.id);
+    await addNomenclature(app, LINES.fan);
+    await app.dismissToasts();
+    await completeDraft(app, LINES.fan);
+    await app.gridRow(LINES.fan).getByRole('checkbox', { name: 'Выбрать строку' }).click();
+    await page.getByRole('button', { name: 'Отправить выбранные (1)' }).click();
+    await app.toast('Отправлено на согласование: 1 строка');
+    const sheet = await openDetails(app, LINES.fan);
+    await expect(sheet.getByText('Комментарий КМ к правке')).toBeVisible(); // контроль: поле на месте
+    await expect(sheet).not.toContainText('Комментарий из прошлой сессии');
+  });
+});

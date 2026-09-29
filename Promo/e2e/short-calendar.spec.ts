@@ -439,3 +439,73 @@ test.describe('Доработки 25.09 · категории и «Переот�
     await expect(page.getByText('Элемент согласования не найден')).toHaveCount(0);
   });
 });
+
+test.describe('§5.2 · план акций', () => {
+  test.use({ session: { user: 'u-2', role: ROLES.DM } });
+
+  /** Строка плана с типом (без типа отправить нельзя) → «Черновик». */
+  async function createPlanRow(app: App, name: string, from: string, to: string) {
+    const page = app.page;
+    await page.getByRole('button', { name: 'Создать строку плана' }).click();
+    const dialog = page.getByRole('dialog', { name: /Создать строку плана/ });
+    await app.select(dialog.getByRole('combobox'), 'Скидка');
+    await dialog.getByLabel('Название акции').fill(name);
+    await app.pickDate(dialog.getByLabel('Дата начала'), from);
+    await app.pickDate(dialog.getByLabel('Дата окончания'), to);
+    await dialog.getByRole('button', { name: 'Создать' }).click();
+    await app.toast(`Черновик «${name}» добавлен`);
+  }
+
+  async function sendPlanRow(app: App, promoNo: string) {
+    await app.page.getByRole('checkbox', { name: `Выбрать акцию ${promoNo}` }).click();
+    await app.page.getByRole('button', { name: /^Отправить на согласование/ }).click();
+    await app.toast(/Отправлено на согласование/);
+  }
+
+  async function kdApproveRow(app: App, promoNo: string) {
+    await app.page.getByRole('checkbox', { name: `Выбрать акцию ${promoNo}` }).click();
+    await app.page.getByRole('button', { name: 'Согласовать выбранные' }).click();
+  }
+
+  test('Д-7 · строка, отправленная при плане «На согл. с ОД», возвращает план на этап КД', async ({ app, page }) => {
+    await openPlan(app);
+    // Посев: этап КД закрыт по всем отправленным строкам, у 26-6 ждёт ОД. Первая
+    // новая строка, согласованная КД, переводит план «На согл. с ОД».
+    await createPlanRow(app, 'E2E строка A', '01.12.2026', '05.12.2026');
+    await sendPlanRow(app, '26-17');
+    await app.switchRole(ROLES.KD);
+    await kdApproveRow(app, '26-17');
+    await app.toast('План согласован КД и передан операционному директору');
+
+    await app.switchRole(ROLES.DM);
+    await createPlanRow(app, 'E2E строка B', '06.12.2026', '10.12.2026');
+    await sendPlanRow(app, '26-18');
+
+    // Новую строку решает КД: ОД берёт только строки, уже согласованные КД.
+    await app.switchRole(ROLES.KD);
+    await expect(page.getByRole('checkbox', { name: 'Выбрать акцию 26-18' })).toBeVisible();
+    await kdApproveRow(app, '26-18');
+    await app.toast('План согласован КД и передан операционному директору');
+    // ОД по-прежнему решает строки, согласованные КД (R28.1).
+    await app.switchRole(ROLES.OD);
+    await expect(page.getByRole('checkbox', { name: 'Выбрать акцию 26-18' })).toBeVisible();
+  });
+
+  test('Д-8 · отредактированная согласованная посевная строка удаляется как черновик', async ({ app, page }) => {
+    await openPlan(app);
+    await planRow(page, '26-1').getByRole('button', { name: 'Изменить' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Изменить строку плана' });
+    await dialog.getByLabel('Название акции').fill('Чёрная пятница 2026 (перенос)');
+    await dialog.getByRole('button', { name: 'Сохранить' }).click();
+    await app.toast('Строка возвращена в черновик — требуется повторная отправка на согласование');
+
+    await planRow(page, '26-1').getByRole('button', { name: 'Удалить' }).click();
+    await app.toast('Черновик удалён');
+    await expect(planRow(page, '26-1')).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Запросить удаление строки плана' })).toHaveCount(0);
+
+    // Контроль: согласованная строка без правки по-прежнему удаляется только через запрос.
+    await planRow(page, '26-2').getByRole('button', { name: 'Удалить' }).click();
+    await expect(page.getByRole('dialog', { name: 'Запросить удаление строки плана' })).toBeVisible();
+  });
+});

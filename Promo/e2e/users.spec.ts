@@ -549,3 +549,51 @@ test.describe('№26 · журнал действий по пользовате�
     await expect(journal).toContainText('28.09.2026 12:01');
   });
 });
+
+test.describe('§5.2 · учётные записи', () => {
+  test('Д-1 · email, занятый другим пользователем, не принимается', async ({ app, page }) => {
+    await app.open('users');
+    await page.getByRole('button', { name: 'Создать пользователя' }).click();
+    const form = page.getByRole('dialog', { name: 'Новый пользователь' });
+    await form.getByLabel('ФИО').fill('Дубль Администратора');
+    const email = form.getByLabel('Email (логин)');
+    const create = form.getByRole('button', { name: 'Создать' });
+    await email.fill('ADMIN@texnomart.uz'); // регистр не важен — вход тоже без учёта регистра
+    await expect(form.getByText('Пользователь с таким email уже существует')).toBeVisible();
+    await expect(create).toBeDisabled();
+    await email.fill('dubl@texnomart.uz'); // контроль: свободный email проходит
+    await expect(form.getByText('Пользователь с таким email уже существует')).toHaveCount(0);
+    await expect(create).toBeEnabled();
+
+    // Правка: чужой email — нельзя, свой — можно (сохранение без изменений).
+    await page.keyboard.press('Escape');
+    const edit = await editUser(app, 'u-4');
+    await edit.getByLabel('Email (логин)').fill(USERS['u-5'].email);
+    await expect(edit.getByText('Пользователь с таким email уже существует')).toBeVisible();
+    await expect(edit.getByRole('button', { name: 'Сохранить' })).toBeDisabled();
+    await edit.getByLabel('Email (логин)').fill(USERS['u-4'].email);
+    await expect(edit.getByRole('button', { name: 'Сохранить' })).toBeEnabled();
+  });
+
+  test.describe('не-администратор', () => {
+    test.use({ session: { user: 'u-4' } });
+
+    test('Д-3 · карточка пользователя закрыта для не-администратора', async ({ app, page }) => {
+      await app.open('users/u-2');
+      await expect(page.getByText('Доступ только для администраторов')).toBeVisible();
+      await expect(page.getByText(USERS['u-2'].email)).toHaveCount(0);
+    });
+  });
+
+  test.describe('администратор подразделения', () => {
+    test.use({ session: { user: 'u-6' } });
+
+    test('Д-3б · администратор подразделения видит только своё подразделение', async ({ app, page }) => {
+      await app.open('users/u-6'); // контроль: своё подразделение открывается
+      await expect(page.getByText(USERS['u-6'].email).first()).toBeVisible();
+      await app.open('users/u-4'); // «Категорийный менеджмент» — не его область
+      await expect(page.getByText('Пользователь вне вашей области администрирования')).toBeVisible();
+      await expect(page.getByText(USERS['u-4'].email)).toHaveCount(0);
+    });
+  });
+});

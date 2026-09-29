@@ -162,6 +162,17 @@ export function getUserById(id: string): PromoUser | undefined {
   return read().find((u) => u.id === id);
 }
 
+/**
+ * Занят ли email другой учётной записью. Сравнение — как во входе (`authenticate`):
+ * без учёта регистра и крайних пробелов; вход находит первое совпадение, поэтому
+ * дубль сделал бы вторую учётку недоступной. `exceptId` — сама редактируемая учётка.
+ */
+export function isEmailTaken(email: string, exceptId?: string): boolean {
+  const key = email.trim().toLowerCase();
+  if (!key) return false;
+  return read().some((u) => u.id !== exceptId && u.email.trim().toLowerCase() === key);
+}
+
 export function authenticate(email: string, password: string): PromoUser | null {
   const user = read().find(
     (u) => u.email.toLowerCase() === email.trim().toLowerCase()

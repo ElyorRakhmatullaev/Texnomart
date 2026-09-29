@@ -24,7 +24,7 @@ import {
 import { cn } from "@texnomart/ui/utils";
 import { PROMO_ROLES, type PromoRole } from "../../role-context";
 import { useCurrentUser } from "../../current-user-context";
-import { DEPARTMENTS, type PromoUser } from "../../../lib/users-store";
+import { DEPARTMENTS, isEmailTaken, type PromoUser } from "../../../lib/users-store";
 import {
   assignmentsOf,
   permanentRolesOf,
@@ -112,6 +112,9 @@ export function UserFormDialog({
   }, [initial, open, mode]);
 
   const emailValid = /\S+@\S+\.\S+/.test(email);
+  // Вход ищет учётку по email — дубль сделал бы одну из учёток недоступной.
+  const emailTaken =
+    emailValid && isEmailTaken(email, mode === "edit" ? initial?.id : undefined);
   const nameValid = fullName.trim().length >= 2;
   const rolesValid = roles.length > 0;
 
@@ -125,7 +128,8 @@ export function UserFormDialog({
     return null;
   }, [temporary, roles]);
 
-  const isValid = nameValid && emailValid && rolesValid && !temporaryError;
+  const isValid =
+    nameValid && emailValid && !emailTaken && rolesValid && !temporaryError;
 
   const toggleRole = (r: PromoRole) => {
     if (lockedRoles.includes(r)) return;
@@ -193,6 +197,11 @@ export function UserFormDialog({
             />
             {email && !emailValid && (
               <p className="text-xs text-red-600 dark:text-red-400">Введите корректный email.</p>
+            )}
+            {emailTaken && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                Пользователь с таким email уже существует.
+              </p>
             )}
           </div>
 

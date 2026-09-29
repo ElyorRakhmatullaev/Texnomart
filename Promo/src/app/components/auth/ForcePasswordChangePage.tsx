@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { AuthLayout } from "./AuthLayout";
 import { NewPasswordForm } from "./NewPasswordForm";
 import { useCurrentUser } from "../../current-user-context";
-import { updatePassword } from "../../../lib/users-store";
+import { authenticate, updatePassword } from "../../../lib/users-store";
 import { appendAuditEvent } from "../../../lib/audit-store";
 
 export function ForcePasswordChangePage() {
@@ -41,6 +41,10 @@ export function ForcePasswordChangePage() {
         description="Это первый вход — задайте постоянный пароль, чтобы продолжить."
         submitLabel="Сохранить и войти"
         onSubmit={handleSubmit}
+        // Временный пароль не должен стать постоянным.
+        isCurrentPassword={(candidate) =>
+          !!currentUser && authenticate(currentUser.email, candidate) !== null
+        }
       />
     </AuthLayout>
   );

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect, readXlsx } from './fixtures';
-import { KM, LINES, PROMO, ROLES } from './data';
+import { KM, LINES, PROMO, ROLES, USERS } from './data';
 
 const GIFT_COLUMNS = [
   'Подарок (1)', 'Подарок (1): наличие, %', 'Подарок (1): остаток',
@@ -228,5 +228,24 @@ test.describe('№16 · добавленные и исключённые поз�
       await app.switchRole(role);
       await expect(who, role).toHaveCount(0);
     }
+  });
+});
+
+test.describe('§5.2 · кто ознакомился', () => {
+  test.use({ session: { user: 'u-6', role: ROLES.MKT } });
+
+  test('Д-9 · ознакомление реального пользователя видно в «Кто ознакомился»', async ({ app, page }) => {
+    await app.open(`reports?promo=${PROMO.p3.id}`);
+    await page.getByRole('button', { name: /Ознакомиться со всеми изменениями \(2\)/ }).click();
+    await app.toast('Изменения отмечены как прочитанные. Статус акции не изменён.');
+
+    await app.switchRole(ROLES.ADMIN);
+    await page.getByRole('button', { name: 'Кто ознакомился' }).click();
+    const drawer = page.getByRole('dialog', { name: 'Кто ознакомился с изменениями' });
+    await expect(drawer).toContainText('Изменённых позиций: 2'); // контроль: тот же отчёт
+    const alieva = drawer.getByRole('listitem').filter({ hasText: USERS['u-6'].name });
+    await expect(alieva).toHaveCount(2); // по строке на каждую изменённую позицию
+    for (const item of await alieva.all()) await expect(item).toContainText('Ознакомлен');
+    await expect(drawer).toContainText('Пользователей: 4'); // 3 из реестра отдела + Алиева
   });
 });

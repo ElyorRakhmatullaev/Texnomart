@@ -91,6 +91,12 @@ export function ApprovalDetailPage() {
   const [detailsId, setDetailsId] = React.useState<string | null>(null);
   // Bumped after every line decision so the rows re-derive from the store (§16).
   const [decisionTick, setDecisionTick] = React.useState(0);
+  // 11-я часть (Блок 4): согласование строки из панели идёт через подтверждение.
+  // Все хуки — до раннего return «Заявка не найдена»: иначе переход между
+  // заявкой и несуществующим id внутри одной страницы меняет их число и роняет её.
+  const [confirmApproveId, setConfirmApproveId] = React.useState<string | null>(
+    null
+  );
 
   // Reset the selection whenever we move to a different item.
   React.useEffect(() => {
@@ -147,10 +153,6 @@ export function ApprovalDetailPage() {
   const detailsRow = detailsId
     ? rows.find((r) => r.line.id === detailsId)
     : undefined;
-  // 11-я часть (Блок 4): согласование строки из панели идёт через подтверждение.
-  const [confirmApproveId, setConfirmApproveId] = React.useState<string | null>(
-    null
-  );
   // Отклонение первичного потока — показываем его и в панели деталей.
   const detailsFb = detailsRow ? item?.lineFeedback[detailsRow.line.id] : undefined;
   const detailsPrimaryRejected = Boolean(

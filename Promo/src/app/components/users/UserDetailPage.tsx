@@ -8,6 +8,7 @@ import {
   History,
   KeyRound,
   Pencil,
+  ShieldAlert,
   ShieldCheck,
   User,
   UserCheck,
@@ -195,6 +196,38 @@ export function UserDetailPage() {
   const scope = effectiveAdminScope(currentUser) ?? (currentRole === "Администратор" ? "global" : null);
   const isGlobalAdmin = scope === "global";
   const canManage = scope === "global" ? true : scope ? canManageUser(currentUser, user) : false;
+
+  // Карточка — в той же области, что и список `/users`: не-администратору она
+  // закрыта целиком, администратору подразделения — вне его подразделения.
+  // Раньше экран проверял права только на действия, а профиль и журнал
+  // открывались любому вошедшему по прямой ссылке (e2e, спецификация §5.2).
+  if (!canManage) {
+    return (
+      <div className="space-y-4">
+        <Link
+          to="/users"
+          className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+        >
+          ← Пользователи
+        </Link>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-gray-200 dark:border-border bg-white dark:bg-card py-16 text-center">
+          <ShieldAlert className="size-12 text-gray-300 dark:text-gray-500" />
+          <div>
+            <p className="font-medium text-gray-900 dark:text-gray-100">
+              {scope === null
+                ? "Доступ только для администраторов"
+                : "Пользователь вне вашей области администрирования"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {scope === null
+                ? "Переключитесь на роль «Администратор», чтобы управлять учётными записями."
+                : `Вы — администратор подразделения «${scope !== "global" ? scope.department : ""}»: доступны только его сотрудники.`}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const adminCount = usableAdminCount(allUsers);
   const deactivateBlocked = user.status !== "blocked" && !canDeactivate(user.id);
   const managerName = allUsers.find((u) => u.id === user.managerId)?.fullName ?? "—";

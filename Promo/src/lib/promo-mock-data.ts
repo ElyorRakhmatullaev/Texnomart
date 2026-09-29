@@ -2,6 +2,11 @@
 // Later screens (S1–S8) reuse these seeds. Types are co-located here.
 
 import type { PromoRole } from "../app/role-context";
+import {
+  applyLineDecisions,
+  getLineDecisions,
+  type LineDecision,
+} from "./line-decision-store";
 
 // ── Status taxonomy (Appendix A) ──────────────────────────────────────────────
 
@@ -1189,6 +1194,14 @@ export function getCampaignsWithLines(): PromoCampaign[] {
 // ── Nomenclature entry (§8.2.1) — new lines + duplicate detection ────────────────
 
 let newLineCounter = 0;
+/**
+ * Метка сессии в id новых позиций. Сами позиции живут в состоянии страницы и после
+ * перезагрузки пропадают, а часть фактов о них хранится в localStorage по id
+ * (комментарий КМ к правке). Без метки счётчик начинался заново с `L-new-1`, и
+ * позиция новой сессии получала чужой комментарий. Случайная, а не от времени:
+ * часы в e2e заморожены, и метка от `Date.now()` совпала бы между перезагрузками.
+ */
+const NEW_LINE_SESSION = Math.random().toString(36).slice(2, 8);
 
 /**
  * Build a fresh line from a 1С nomenclature pick (§8.2.1 — no free-text entry).
@@ -1205,7 +1218,7 @@ export function createPromoLine(
   const oldPrice = nom?.oldRetailPrice ?? 0;
   newLineCounter += 1;
   return {
-    id: `L-new-${newLineCounter}`,
+    id: `L-new-${NEW_LINE_SESSION}-${newLineCounter}`,
     campaignId,
     kmId,
     nomenclatureId,
@@ -2195,33 +2208,82 @@ export function repeatActionAt(line: PromoLine): string | undefined {
  */
 function buildRepeatReviewItems(existing: ReviewItem[]): ReviewItem[] {
   const taken = new Set(existing.map((it) => it.id));
+  // Решения по повторным действиям живут в `line-decision-store` и переживают
+  // перезагрузку, а посев — нет. Без их учёта решённая заявка после перезагрузки
+  // снова вставала на решение КД со «Строк с решением: 0» (e2e, спецификация §5.2).
+  const decisions = getLineDecisions();
+  const current = new Map(
+    applyLineDecisions(PROMO_LINES, decisions).map((l) => [l.id, l])
+  );
   const out: ReviewItem[] = [];
   for (const c of CAMPAIGNS) {
     if (!isApprovedCampaign(c)) continue;
-    const byKm = new Map<string, string[]>(); // kmId → repeat-send ISO moments
+    // kmId → моменты отправки (все и ещё открытые) + решения по закрытым строкам.
+    const byKm = new Map<
+      string,
+      { all: string[]; open: string[]; decided: LineDecision[] }
+    >();
     for (const line of PROMO_LINES) {
       if (line.campaignId !== c.id) continue;
       if (!lineNeedsRepeatDecision(line)) continue;
       const at = repeatActionAt(line);
       if (!at) continue;
-      const list = byKm.get(line.kmId) ?? [];
-      list.push(at);
-      byKm.set(line.kmId, list);
+      const g = byKm.get(line.kmId) ?? { all: [], open: [], decided: [] };
+      g.all.push(at);
+      if (lineNeedsRepeatDecision(current.get(line.id) ?? line)) g.open.push(at);
+      else if (decisions[line.id]) g.decided.push(decisions[line.id]);
+      byKm.set(line.kmId, g);
     }
-    for (const [kmId, moments] of byKm) {
+    for (const [kmId, g] of byKm) {
       const id = reviewItemId(c.id, kmId);
       if (taken.has(id)) continue; // a live data/non-participation item wins
-      const submittedAt = moments.sort().at(-1)!;
+      if (g.open.length > 0) {
+        out.push({
+          id,
+          campaignId: c.id,
+          kmId,
+          kind: "repeat",
+          kmStatus: "На согласовании у коммерческого директора",
+          submittedAt: g.open.sort().at(-1)!,
+          escalatedToKD: false,
+          comments: [],
+          lineFeedback: {},
+        });
+        continue;
+      }
+      // Все строки решены — заявка в том же итоговом статусе, что и в сессии,
+      // где решение принималось: отказ хотя бы по одной строке возвращает набор КМ.
+      const rejected = g.decided.filter((d) => d.kind === "rejected");
+      const last = [...g.decided].sort((a, b) => a.at.localeCompare(b.at)).at(-1);
+      if (!last) continue;
       out.push({
         id,
         campaignId: c.id,
         kmId,
         kind: "repeat",
-        kmStatus: "На согласовании у коммерческого директора",
-        submittedAt,
+        kmStatus:
+          rejected.length > 0
+            ? REJECTED_KM_STATUS
+            : approvedKmStatusFor(last.by as PromoRole, "repeat"),
+        submittedAt: g.all.sort().at(-1)!,
         escalatedToKD: false,
-        comments: [],
-        lineFeedback: {},
+        comments: [
+          {
+            author: last.by as PromoRole,
+            at: last.at,
+            text:
+              rejected.length > 0
+                ? `Отклонены повторные изменения. Причина: ${rejected[0].reason ?? "не указана"}`
+                : "Набор согласован.",
+            lineIds: rejected.length > 0 ? rejected.map((d) => d.lineId) : undefined,
+          },
+        ],
+        lineFeedback: Object.fromEntries(
+          rejected.map((d) => [
+            d.lineId,
+            { rejected: true, comment: d.reason, at: d.at, by: d.by as PromoRole },
+          ])
+        ),
       });
     }
   }

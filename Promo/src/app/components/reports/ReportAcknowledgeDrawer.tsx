@@ -18,11 +18,13 @@ import {
   getNomenclatureItem,
   getReportChangeSet,
   getReportRoster,
+  type ReportRosterUser,
   type PromoCampaign,
   type PromoLine,
   type ReportDepartment,
 } from "../../../lib/promo-mock-data";
 import { getAckRecords } from "../../../lib/report-ack-store";
+import { getUserById } from "../../../lib/users-store";
 
 interface ReportAcknowledgeDrawerProps {
   open: boolean;
@@ -56,7 +58,28 @@ export function ReportAcknowledgeDrawer({
   lines,
 }: ReportAcknowledgeDrawerProps) {
   const changeSet = getReportChangeSet(campaign.id);
-  const roster = getReportRoster(department);
+  // Отметки читаются при каждом открытии (стор синхронный, подписки нет).
+  const records = React.useMemo(
+    () => getAckRecords({ campaignId: campaign.id, department, version }),
+    [campaign.id, department, version, open]
+  );
+  // Реестр отдела из посева + все, кто реально ознакомился: отметки живых
+  // пользователей хранятся под их id из users-store, и в посевном реестре их нет —
+  // раньше такие ознакомления в панели не появлялись вовсе (e2e, спецификация §5.2).
+  const roster = React.useMemo(() => {
+    const base = getReportRoster(department);
+    const known = new Set(base.map((u) => u.id));
+    const extra: ReportRosterUser[] = [];
+    for (const r of records) {
+      if (known.has(r.userId)) continue;
+      known.add(r.userId);
+      extra.push({
+        id: r.userId,
+        name: getUserById(r.userId)?.fullName ?? "Пользователь без учётной записи",
+      });
+    }
+    return [...base, ...extra];
+  }, [department, records]);
   const lineById = React.useMemo(
     () => new Map(lines.map((l) => [l.id, l])),
     [lines]
@@ -75,14 +98,12 @@ export function ReportAcknowledgeDrawer({
   // lineId → (userId → acknowledgement timestamp).
   const ackByLine = React.useMemo(() => {
     const map = new Map<string, Map<string, string>>();
-    for (const r of getAckRecords({ campaignId: campaign.id, department, version })) {
+    for (const r of records) {
       if (!map.has(r.lineId)) map.set(r.lineId, new Map());
       map.get(r.lineId)!.set(r.userId, r.at);
     }
     return map;
-    // ackTick isn't available here; the drawer re-reads on each open (key not needed
-    // because the store read is synchronous in render).
-  }, [campaign.id, department, version, open]);
+  }, [records]);
 
   const nomName = (lineId: string) => {
     const line = lineById.get(lineId);

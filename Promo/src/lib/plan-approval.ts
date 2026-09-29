@@ -460,10 +460,19 @@ export function withDecision(
  */
 export function withCycleClosed(
   j: PlanRowJournal | undefined,
+  rowId: string,
   reason: "return" | "edit",
   at: Date
 ): PlanRowJournal {
-  const next = cloneJournal(j);
+  // Посевная строка без журнала: её цикл №1 существует только в сиде. Сначала
+  // материализуем его (с сид-решениями) — иначе закрывать нечего, и
+  // `approvedStages` продолжал бы читать сид: отредактированная строка-черновик
+  // требовала бы согласования удаления (e2e, спецификация §5.2).
+  const base =
+    !j?.cycles.length && getPlanApproval(rowId)
+      ? ensureOpenCycle(j, rowId, at, "Директор маркетинга")
+      : j;
+  const next = cloneJournal(base);
   const idx = next.cycles.length - 1;
   const cyc = next.cycles[idx];
   if (!cyc || cyc.closedAt) return next;

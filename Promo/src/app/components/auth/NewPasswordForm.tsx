@@ -20,6 +20,12 @@ interface NewPasswordFormProps {
    */
   verifyCurrentPassword?: (current: string) => boolean;
   currentPasswordLabel?: string;
+  /**
+   * true — кандидат совпадает с действующим паролем учётки. Такой пароль не
+   * принимается ни при первом входе (временный пароль не становится постоянным),
+   * ни в профиле. Проверка на отправке, как и у текущего пароля.
+   */
+  isCurrentPassword?: (candidate: string) => boolean;
 }
 
 export function NewPasswordForm({
@@ -29,10 +35,12 @@ export function NewPasswordForm({
   onSubmit,
   verifyCurrentPassword,
   currentPasswordLabel = "Текущий пароль",
+  isCurrentPassword,
 }: NewPasswordFormProps) {
   const [currentPassword, setCurrentPassword] = React.useState("");
   const [showCurrentPassword, setShowCurrentPassword] = React.useState(false);
   const [currentError, setCurrentError] = React.useState(false);
+  const [sameAsCurrent, setSameAsCurrent] = React.useState(false);
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
@@ -66,6 +74,10 @@ export function NewPasswordForm({
     if (!isValid) return;
     if (verifyCurrentPassword && !verifyCurrentPassword(currentPassword)) {
       setCurrentError(true);
+      return;
+    }
+    if (isCurrentPassword?.(password)) {
+      setSameAsCurrent(true);
       return;
     }
     setLoading(true);
@@ -108,7 +120,7 @@ export function NewPasswordForm({
               </button>
             </div>
             {currentError && (
-              <p className="text-sm text-red-600 dark:text-red-400">Текущий пароль неверён</p>
+              <p className="text-sm text-red-600 dark:text-red-400">Текущий пароль неверен</p>
             )}
           </div>
         )}
@@ -122,7 +134,10 @@ export function NewPasswordForm({
               type={showPassword ? "text" : "password"}
               placeholder="••••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setSameAsCurrent(false);
+              }}
               disabled={loading}
               className="pl-10 pr-10"
               required
@@ -199,6 +214,12 @@ export function NewPasswordForm({
             </div>
           )}
         </div>
+
+        {sameAsCurrent && (
+          <p className="text-sm text-red-600 dark:text-red-400">
+            Новый пароль совпадает с текущим — придумайте другой.
+          </p>
+        )}
 
         <Button type="submit" className="w-full" disabled={!isValid || loading}>
           {loading ? "Сохранение..." : submitLabel}
