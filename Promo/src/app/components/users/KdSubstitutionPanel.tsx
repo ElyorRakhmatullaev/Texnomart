@@ -121,13 +121,23 @@ export function KdSubstitutionPanel() {
   const handleAssign = () => {
     if (!isValid) return;
     const substitute = candidates.find((u) => u.id === substituteId);
-    assignSubstitution({
+    const { replaced } = assignSubstitution({
       substituteUserId: substituteId,
       from,
       to,
       reason,
       assignedBy: currentUser?.fullName ?? "Администратор",
     });
+    // №25 п.2: новое замещение снимает действующее — это снятие фиксируется так же,
+    // как досрочное (какое замещение, период, основание), плюс чем оно вызвано.
+    if (replaced) {
+      audit(
+        "снятие замещения",
+        replaced.substituteUserId,
+        substituteName(replaced),
+        `Замещение КД, назначенное c ${formatDateFull(parseDateOnly(replaced.from))} по ${formatDateFull(parseDateOnly(replaced.to))} (основание назначения: ${replaced.reason.trim().replace(/\.$/, "")}), снято: назначено новое замещение — ${substitute?.fullName ?? "—"} c ${formatDateFull(parseDateOnly(from))} по ${formatDateFull(parseDateOnly(to))}`
+      );
+    }
     audit(
       "назначение замещения",
       substituteId,

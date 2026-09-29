@@ -121,9 +121,9 @@ import {
   isCampaignDraft,
   isRepeatActionPending,
   lineDisplayStatus,
-  lineHasRejection,
   matchesStatusFilter,
   mergePendingChange,
+  rejectionKey,
 } from "../../../lib/full-calendar-status";
 import {
   getSeenRejections,
@@ -453,9 +453,15 @@ export function FullCalendarPage() {
       // §7: a plain КМ only sees their own nomenclature within a shared campaign.
       if (ownKmId) out = out.filter((l) => l.kmId === ownKmId);
       const c = campaignsById.get(campaignId);
-      // 11-я часть (Блок 3): черновиковые позиции скрыты от КД / старшего КМ.
+      // 11-я часть (Блок 3): черновиковые позиции скрыты от КД / старшего КМ —
+      // кроме позиции, которую добавила сама эта роль (старший КМ тоже заполняет
+      // строки: свой черновик он должен видеть, чтобы дозаполнить и отправить).
       if (hideDraftsFromReviewer && c)
-        out = out.filter((l) => lineDisplayStatus(c, l) !== "Черновик");
+        out = out.filter(
+          (l) =>
+            lineDisplayStatus(c, l) !== "Черновик" ||
+            (l.draft === true && l.addedBy === currentRole)
+        );
       // 10-я часть R46/Блок 7: single «Все статусы» filter, applied PER LINE.
       if (c && values.status !== ALL)
         out = out.filter((l) =>
@@ -468,6 +474,7 @@ export function FullCalendarPage() {
       hideCancelled,
       ownKmId,
       hideDraftsFromReviewer,
+      currentRole,
       campaignsById,
       values.status,
     ]
@@ -740,16 +747,20 @@ export function FullCalendarPage() {
   const rejectionLineIds = React.useMemo(() => {
     if (!isKm) return new Set<string>();
     const out = new Set<string>();
-    for (const line of lines.values())
-      if (lineHasRejection(line) && !seenRejections.has(line.id)) out.add(line.id);
+    for (const line of lines.values()) {
+      // Отметка «просмотрено» — по конкретному отказу, а не по строке (№13 п.4).
+      const key = rejectionKey(line);
+      if (key && !seenRejections.has(key)) out.add(line.id);
+    }
     return out;
   }, [isKm, lines, seenRejections]);
 
   const handleOpenDetails = React.useCallback(
     (lineId: string) => {
       const line = lines.get(lineId);
-      if (isKm && line && lineHasRejection(line)) {
-        markRejectionSeen(currentUser?.id ?? null, lineId);
+      const key = line ? rejectionKey(line) : null;
+      if (isKm && key) {
+        markRejectionSeen(currentUser?.id ?? null, key);
         setSeenTick((t) => t + 1);
       }
       // Defer past the opening click (Radix DismissableLayer — see tasks/lessons.md).
@@ -823,7 +834,7 @@ export function FullCalendarPage() {
   const commitAdd = React.useCallback(
     (campaignId: string, nomenclatureId: string, hit: DuplicateHit | null) => {
       const kmId = kmForCampaign(campaignId);
-      const line = createPromoLine(campaignId, kmId, nomenclatureId);
+      const line = createPromoLine(campaignId, kmId, nomenclatureId, currentRole);
       if (hit) {
         line.duplicate = true;
         line.duplicateInfo = hit;
@@ -941,7 +952,7 @@ export function FullCalendarPage() {
   const onImport = React.useCallback(
     (cid: string, rows: ParsedImportRow[]) => {
       const kmId = kmForCampaign(cid);
-      const created = rows.map((r) => createImportedLine(cid, kmId, r));
+      const created = rows.map((r) => createImportedLine(cid, kmId, r, currentRole));
       dispatch({ type: "addMany", lines: created });
       const dupCount = created.filter((l) => l.duplicate).length;
       toast.success(
@@ -950,7 +961,7 @@ export function FullCalendarPage() {
           ". Ожидают проверки 1С."
       );
     },
-    [kmForCampaign]
+    [kmForCampaign, currentRole]
   );
 
   const recheck1C = () => {

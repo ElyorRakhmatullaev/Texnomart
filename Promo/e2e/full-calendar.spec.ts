@@ -68,6 +68,31 @@ async function editDiscount(app: App, line: string, from: string, to: string) {
 const exclusionButton = (row: Locator) => row.getByRole('button', { name: 'Исключить позицию из акции' });
 
 /**
+ * Заполнить обязательные поля черновика в акции «1+1» (прогноз + подарок) через
+ * «Редактировать строку», чтобы его можно было отправить.
+ */
+async function completeDraft(app: App, line: string) {
+  const page = app.page;
+  await app.gridRow(line).getByRole('button', { name: 'Изменить строку' }).click();
+  const edit = page.getByRole('dialog', { name: 'Редактировать строку' });
+  // Field ярлыки в этой панели не связаны с полем (см. editField ниже) — getByLabel
+  // не находит инпут; правим кликом по кнопке EditableCell, затем по инпуту.
+  const forecast = editField(edit, 'Прогноз продаж');
+  await forecast.getByRole('button').click();
+  await forecast.locator('input').fill('10');
+  await forecast.locator('input').press('Enter');
+  await edit.getByRole('button', { name: 'Выбрать подарок' }).first().click();
+  const gifts = page.getByRole('dialog', { name: 'Выбор подарочной номенклатуры' });
+  await gifts.getByRole('option').first().click();
+  await app.toast(/Подарок выбран: /);
+  // Escape закрывает не эту панель, а ещё анимирующийся (уже логически закрытый)
+  // диалог выбора подарка — кнопка «Готово» в футере надёжнее гонки анимаций.
+  await edit.getByRole('button', { name: 'Готово' }).click();
+  await expect(edit).toBeHidden();
+  await app.dismissToasts();
+}
+
+/**
  * Поле в «Редактировать строку» (LineEditSheet.tsx): `<Label>` — обычный `<label>`
  * без `htmlFor`, соседний `<div>` несёт `EditableCell` (кнопка → инпут по клику,
  * EditableCell.tsx:167-201). `getByLabel` тут не работает — нет aria-связи ни
@@ -130,23 +155,7 @@ test.describe('№13 · черновики, исключение, решения
     // фоном тосты перекрывают друг друга (см. `switchRole` → `dismissToasts`,
     // fixtures.ts:101-107), поэтому гасим их по одному, а не ждём одной волной в конце.
     await app.dismissToasts();
-    await app.gridRow(LINES.fan).getByRole('button', { name: 'Изменить строку' }).click();
-    const edit = page.getByRole('dialog', { name: 'Редактировать строку' });
-    // Field ярлыки в этой панели не связаны с полем (см. editField выше) — getByLabel
-    // не находит инпут; правим кликом по кнопке EditableCell, затем по инпуту.
-    const forecast = editField(edit, 'Прогноз продаж');
-    await forecast.getByRole('button').click();
-    await forecast.locator('input').fill('10');
-    await forecast.locator('input').press('Enter');
-    await edit.getByRole('button', { name: 'Выбрать подарок' }).first().click();
-    const gifts = page.getByRole('dialog', { name: 'Выбор подарочной номенклатуры' });
-    await gifts.getByRole('option').first().click();
-    await app.toast(/Подарок выбран: /);
-    // Escape закрывает не эту панель, а ещё анимирующийся (уже логически закрытый)
-    // диалог выбора подарка — кнопка «Готово» в футере надёжнее гонки анимаций.
-    await edit.getByRole('button', { name: 'Готово' }).click();
-    await expect(edit).toBeHidden();
-    await app.dismissToasts();
+    await completeDraft(app, LINES.fan);
 
     await app.gridRow(LINES.fan).getByRole('checkbox', { name: 'Выбрать строку' }).click();
     await page.getByRole('button', { name: 'Отправить выбранные (1)' }).click();
@@ -225,9 +234,8 @@ test.describe('№13 · черновики, исключение, решения
     await app.switchRole(ROLES.KD);
     await kdReject(app, LINES.xiaomi, 'Остатки ещё есть — оставить в акции');
     await app.switchRole(ROLES.KM);
-    // F2: test.fail сразу перед падающей проверкой — вся цепочка КМ → КД → КМ
-    // выше не маскируется под ожидаемый дефект.
-    test.fail(true, 'Дефект: «просмотрено» хранится по id строки (full-calendar-rejection-store.ts:8-12)');
+    // «Просмотрено» относится к конкретному отказу (id строки + дата отказа), а не
+    // к строке: новый отказ КД по уже просмотренной строке снова зажигает точку.
     await expect(
       app.gridRow(LINES.xiaomi).getByRole('button', { name: 'Просмотр деталей' }).locator('span.bg-red-500'),
     ).toHaveCount(1);
@@ -249,14 +257,30 @@ test.describe('№13 · проверяющие', () => {
     await expect(exclusionButton(app.gridRow(LINES.boschBlender))).toHaveCount(0); // уже на исключении
   });
 
-  test('13-13 · позиция, добавленная старшим КМ, видна ему', async ({ app }) => {
+  test('13-13 · позиция, добавленная старшим КМ, видна ему и отправляется', async ({ app, page }) => {
     await openPromo(app, PROMO.p3.id);
     await addNomenclature(app, LINES.fan);
     await app.toast(`Номенклатура добавлена: ${LINES.fan}`);
-    // F2: test.fail сразу перед падающей проверкой — падение добавления
-    // номенклатуры не маскируется под ожидаемый дефект.
-    test.fail(true, 'Дефект: строка старшего КМ — черновик, скрытый от проверяющих, в т.ч. от него (FullCalendarPage.tsx:355-356)');
+    // Черновик позиции скрыт от проверяющих, кроме добавившей его роли — иначе
+    // старший КМ не мог бы ни увидеть, ни отправить собственную позицию.
     await expect(app.gridRow(LINES.fan)).toBeVisible();
+    await expect(app.gridRow(LINES.fan).getByText('Черновик', { exact: true })).toBeVisible();
+
+    // До отправки это по-прежнему черновик для остальных проверяющих.
+    await app.switchRole(ROLES.KD);
+    await expect(app.gridRow(LINES.delonghi)).toBeVisible(); // контроль
+    await expect(app.gridRow(LINES.fan)).toHaveCount(0);
+
+    await app.switchRole(ROLES.SKM);
+    await completeDraft(app, LINES.fan);
+    await app.gridRow(LINES.fan).getByRole('checkbox', { name: 'Выбрать строку' }).click();
+    await page.getByRole('button', { name: 'Отправить выбранные (1)' }).click();
+    await app.toast('Отправлено на согласование: 1 строка');
+    await expect(app.gridRow(LINES.fan).getByText('Черновик', { exact: true })).toHaveCount(0);
+
+    await app.switchRole(ROLES.KD);
+    await expect(app.gridRow(LINES.fan)).toBeVisible();
+    await expect(app.gridRow(LINES.fan)).toHaveClass(ORANGE);
   });
 });
 
@@ -441,17 +465,9 @@ test.describe('№14 · запрос на исключение', () => {
     await kdApprove(app, LINES.xiaomi, 'Согласовать изменение?');
     await app.toast('Изменение согласовано — новые значения стали актуальными.');
     await expect(app.gridRow(LINES.xiaomi)).toBeVisible();
-    // F3 (ruling checked empirically): предполагалось, что этот финальный чек
-    // тоже упрётся в дефект ОИ-3 (посевное value 20% вместо новой правки,
-    // line-decision-store.ts:123-124 / full-calendar-status.ts:191) — на деле
-    // проходит. Причина: отклонённый ЗАПРОС НА ИСКЛЮЧЕНИЕ, предшествующий этой
-    // правке, — не ценовое изменение; его `pending.fields` несёт поле «removed»,
-    // а не «discountPct» (full-calendar-status.ts:163-165 isRejectedExclusion).
-    // mergePendingChange (:184) видит `isRejectedExclusion(line.pending)` и
-    // обнуляет `prev` — новый pending строится с нуля, посевное {value: 20} по
-    // discountPct не наследуется. Дефект воспроизводится только там, где перед
-    // правкой НЕТ отклонённого запроса на исключение (см. ОИ-3, где КМ правит
-    // discountPct напрямую на уже несущей посевной pending.value строке).
+    // Правка после отклонённого исключения строит запрос с нуля
+    // (`isRejectedExclusion` в mergePendingChange) — посевное {value: 20} сюда не
+    // доходит. Правка поверх посевного запроса без исключения — ОИ-3.
     await expect(await app.gridScrollRow(LINES.xiaomi)).toContainText('22%');
   });
 
@@ -470,18 +486,15 @@ test.describe('№14 · запрос на исключение', () => {
     await expect(app.gridRow(LINES.xiaomi)).toHaveClass(ORANGE);
   });
 
-  test('ОИ-3 · на строке с посевным запросом согласование применяет устаревшее посевное значение', async ({ app }) => {
+  test('ОИ-3 · на строке с посевным запросом согласование применяет новую правку КМ', async ({ app }) => {
     await openPromo(app, PROMO.p3.id);
     await editDiscount(app, LINES.xiaomi, '14', '18');
     await app.toast(/Изменение отправлено на повторное согласование/);
     await app.switchRole(ROLES.KD);
     await kdApprove(app, LINES.xiaomi, 'Согласовать изменение?');
-    // F3 (ruling): на строках с посевным запросом (value, L-0015/L-0023)
-    // согласование применяет устаревшее посевное значение вместо новой правки КМ
-    // (line-decision-store.ts:123-124 предпочитает value, full-calendar-
-    // status.ts:191 обновляет только now); на строках без посевного запроса
-    // правки применяются верно (см. 13-10, где такого запроса нет).
-    test.fail(true, 'Дефект: на строках с посевным запросом (value, L-0015/L-0023) согласование применяет устаревшее посевное значение вместо новой правки КМ (line-decision-store.ts:123-124 предпочитает value, full-calendar-status.ts:191 обновляет только now)');
+    // Xiaomi (L-0023) несёт посевной отклонённый запрос {value: 20}: правка КМ
+    // обязана заменить и подпись «Стало», и сырое значение, которое применяет
+    // согласование (`patchFrom` предпочитает `value`), — иначе встало бы 20%.
     await expect(await app.gridScrollRow(LINES.xiaomi)).toContainText('18%');
   });
 });

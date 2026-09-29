@@ -311,13 +311,8 @@ test.describe('№24 · роли в журнале', () => {
   });
 
   test('24-1д · автор назначения временной роли виден в «Роли и доступ»', async ({ app, page }) => {
-    // Дефект: временная роль, добавленная через UserFormDialog, не получает
-    // assignedBy/assignedAt (UserFormDialog.tsx:323-339 создаёт запись только с
-    // role/kind/from/to; UserDetailPage.tsx:249-256 передаёт её в
-    // setRoleAssignments как есть, не восполняя поля — в отличие от неиспользуемого
-    // users-store.ts:274-297 `addTemporaryRole`, который их проставляет, но нигде
-    // не вызывается). Из-за этого «назначил(а): …» в «Роли и доступ» не появляется.
-
+    // Новая временная роль из формы получает assignedBy/assignedAt при сохранении
+    // (UserFormDialog `submit`) — отсюда «назначил(а): …» в «Роли и доступ».
     const dialog = await editUser(app, 'u-8');
     await dialog.getByRole('button', { name: /Добавить временную роль/ }).click();
     await app.select(dialog.getByRole('combobox').first(), ROLES.SKM);
@@ -328,9 +323,6 @@ test.describe('№24 · роли в журнале', () => {
     await app.toast('Пользователь обновлён');
 
     await page.getByRole('tab', { name: 'Роли и доступ' }).click();
-    // F2: test.fail сразу перед падающей проверкой — редактирование выше
-    // (форма, дата, сохранение) не маскируется под ожидаемый дефект.
-    test.fail(true, 'Дефект: временной роли из формы не проставляются assignedBy/assignedAt (UserFormDialog.tsx:323-339)');
     await expect(page.getByText(/назначил\(а\): Администратор Системы/).first()).toBeVisible();
   });
 
@@ -483,10 +475,12 @@ test.describe('№25 · временное замещение КД', () => {
     await openAudit(app);
     await page.getByRole('button', { name: 'Все действия', exact: true }).click();
     await expect(page.getByRole('row').filter({ hasText: 'назначение замещения' }).first()).toBeVisible(); // контроль
-    // F2: test.fail сразу перед падающей проверкой — назначение выше (форма,
-    // тост, переход в аудит) не маскируется под ожидаемый дефект.
-    test.fail(true, 'Дефект: предыдущее замещение снимается без записи в аудит (kd-substitution-store.ts:128-135, вызывается из KdSubstitutionPanel.tsx:121-141)');
-    await expect(page.getByRole('row').filter({ hasText: 'снятие замещения' }).first()).toBeVisible();
+    // Запись называет снятое замещение (посевное sub-1 на u-8) и причину снятия.
+    const revoked = page.getByRole('row').filter({ hasText: 'снятие замещения' }).first();
+    await expect(revoked).toBeVisible();
+    await expect(revoked).toContainText(USERS['u-8'].name);
+    await expect(revoked).toContainText('c 15.06.2026 по 31.12.2026');
+    await expect(revoked).toContainText('назначено новое замещение');
   });
 });
 

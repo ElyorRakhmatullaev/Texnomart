@@ -127,9 +127,18 @@ export function countsForReport(line: PromoLine): boolean {
   return !line.draft && line.pending?.action !== "addition";
 }
 
-/** Whether a negative decision exists (drives the КМ red indicator, Блок 6). */
-export function lineHasRejection(line: PromoLine): boolean {
-  return Boolean(line.rejected || line.pending?.rejected);
+/**
+ * Ключ ТЕКУЩЕГО отказа по строке (null — отказа нет); под ним КМ отмечает отказ
+ * просмотренным — красный индикатор, Блоки 6.2/6.4. Отказ по повторному действию
+ * несёт дату решения, поэтому новый отказ по уже просмотренной строке получает
+ * новый ключ и снова зажигает точку.
+ * Первичный отказ (`line.rejected`) даты не имеет — его ключ остаётся id строки,
+ * как было до введения ключа (сохранённые отметки не теряются).
+ */
+export function rejectionKey(line: PromoLine): string | null {
+  if (line.pending?.rejected) return `${line.id}@${line.pending.rejected.at}`;
+  if (line.rejected) return line.id;
+  return null;
 }
 
 /** Compact «Черновик» chip condition (Блок 3.1). */
@@ -187,9 +196,14 @@ export function mergePendingChange(
     const was = fmt(key, line[key]);
     const now = fmt(key, patch[key]);
     if (was === now) continue;
+    // `value` — сырое значение, которое применит согласование (`patchFrom`
+    // предпочитает его подписи `now`). Обновляется вместе с `now`: иначе правка
+    // поверх посевного запроса со своим `value` согласовывала бы старое значение.
     const existing = fields.find((f) => f.field === key);
-    if (existing) existing.now = now;
-    else fields.push({ field: key, label: labelOf(key), was, now });
+    if (existing) {
+      existing.now = now;
+      existing.value = patch[key];
+    } else fields.push({ field: key, label: labelOf(key), was, now, value: patch[key] });
   }
   return {
     action: prev?.action ?? "change",

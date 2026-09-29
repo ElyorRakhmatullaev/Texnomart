@@ -663,15 +663,18 @@ export function PlanMode({ campaigns, onDistributionSaved }: PlanModeProps) {
 
     // Волна 4 — record WHO rejected, the role, when, and the comment IN THE JOURNAL
     // (§9 legacy `rejectionLog` is read-only now; no double-write).
+    // Роль — того, кто действует (как в `approveSelected`), а не `currentActor`
+    // агрегатного статуса: при «На согл. с КД» ОД решает параллельно (R28.1), и
+    // отклонение ОД записывалось в журнал и экспорт ролью КД.
     const now = new Date();
-    const by = currentUser?.fullName ?? currentActor ?? currentRole;
+    const by = currentUser?.fullName ?? currentRole;
     setRowJournal((prev) => {
       const out = { ...prev };
       for (const id of ids)
         out[id] = withDecision(out[id], id, reviewerStage, "rejected", {
           at: now,
           by,
-          role: currentActor ?? currentRole,
+          role: currentRole,
           comment: reason,
         });
       return out;

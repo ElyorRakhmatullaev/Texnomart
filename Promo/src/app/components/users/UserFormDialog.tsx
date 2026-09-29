@@ -23,6 +23,7 @@ import {
 } from "@texnomart/ui/select";
 import { cn } from "@texnomart/ui/utils";
 import { PROMO_ROLES, type PromoRole } from "../../role-context";
+import { useCurrentUser } from "../../current-user-context";
 import { DEPARTMENTS, type PromoUser } from "../../../lib/users-store";
 import {
   assignmentsOf,
@@ -75,6 +76,7 @@ export function UserFormDialog({
   onSubmit,
   lockedRoles = [],
 }: UserFormDialogProps) {
+  const { currentUser } = useCurrentUser();
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [roles, setRoles] = React.useState<PromoRole[]>([DEFAULT_ROLE]);
@@ -137,11 +139,16 @@ export function UserFormDialog({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid) return;
+    // Новая временная роль (ещё без `assignedAt`) получает автора и дату
+    // назначения — «назначил(а): …» в «Роли и доступ» (№24). У ранее выданных
+    // они сохраняются, повторное сохранение формы их не переписывает.
+    const assignedAt = new Date().toISOString();
+    const assignedBy = currentUser?.fullName ?? "Администратор";
     const assignments: RoleAssignment[] = [
       ...roles.map(
         (role, i): RoleAssignment => ({ role, kind: i === 0 ? "primary" : "additional" })
       ),
-      ...temporary,
+      ...temporary.map((a) => (a.assignedAt ? a : { ...a, assignedBy, assignedAt })),
     ];
     onSubmit({
       fullName: fullName.trim(),

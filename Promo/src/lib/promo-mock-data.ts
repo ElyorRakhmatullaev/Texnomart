@@ -958,10 +958,19 @@ export interface PromoLine {
   /**
    * Позиция, которую КМ добавил, но ещё не отправил (проверка прода 14–15.09,
    * №13 п.1): статус «Черновик» независимо от статуса акции, скрыта от старшего
-   * КМ и КД, правится и удаляется владельцем. Снимается отправкой; в
-   * согласованной акции позиция становится повторным добавлением (`pending`).
+   * КМ и КД (кроме роли из `addedBy`), правится и удаляется владельцем. Снимается
+   * отправкой; в согласованной акции позиция становится повторным добавлением
+   * (`pending`).
    */
   draft?: boolean;
+  /**
+   * Роль, добавившая позицию в сессии (посевные позиции его не несут). Черновик
+   * виден добавившей роли, даже если это проверяющий: старший КМ тоже заполняет
+   * строки и должен видеть и отправлять свою позицию. Роль, а не пользователь, —
+   * в моке роль переключается под одним входом, и по пользователю КД видел бы
+   * черновик, добавленный под ролью КМ.
+   */
+  addedBy?: PromoRole;
 }
 
 /** A single line-history record (§8.2.1 stores {what, which promo, overlap, user, date/time}). */
@@ -1189,7 +1198,8 @@ let newLineCounter = 0;
 export function createPromoLine(
   campaignId: string,
   kmId: string,
-  nomenclatureId: string
+  nomenclatureId: string,
+  addedBy?: PromoRole
 ): PromoLine {
   const nom = NOMENCLATURE.find((n) => n.id === nomenclatureId);
   const oldPrice = nom?.oldRetailPrice ?? 0;
@@ -1209,6 +1219,7 @@ export function createPromoLine(
     advSelectedMarketing: false,
     // Новую позицию добавляет КМ — до отправки она черновик (№13 п.1).
     draft: true,
+    addedBy,
   };
 }
 
@@ -1441,9 +1452,10 @@ export function parseImportCsv(
 export function createImportedLine(
   campaignId: string,
   kmId: string,
-  row: ParsedImportRow
+  row: ParsedImportRow,
+  addedBy?: PromoRole
 ): PromoLine {
-  const line = createPromoLine(campaignId, kmId, row.nomenclatureId);
+  const line = createPromoLine(campaignId, kmId, row.nomenclatureId, addedBy);
   if (row.salesForecast != null) line.salesForecast = row.salesForecast;
   if (row.newPrice != null) line.newPrice = row.newPrice;
   if (row.discountPct != null) line.discountPct = row.discountPct;

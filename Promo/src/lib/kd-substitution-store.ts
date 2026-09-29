@@ -117,19 +117,24 @@ export function getSubstitutionHistory(): KdSubstitution[] {
   return [...read()].sort((a, b) => b.assignedAt.localeCompare(a.assignedAt));
 }
 
+/**
+ * Назначить замещение. Действующее замещение (если есть) снимается — активно
+ * ноль или одно окно — и возвращается в `replaced`, чтобы вызывающий записал его
+ * снятие в аудит (№25 п.2: молчаливого снятия быть не должно).
+ */
 export function assignSubstitution(input: {
   substituteUserId: string;
   from: string;
   to: string;
   reason: string;
   assignedBy: string;
-}): KdSubstitution {
+}): { created: KdSubstitution; replaced: KdSubstitution | null } {
   const list = read();
-  // Одно активное окно: закрываем текущее активное, если пересекается.
   const now = new Date();
-  const active = list.find(
-    (s) => !s.revokedAt && localMidnight(s.from) <= now.getTime() && now.getTime() <= localMidnight(s.to)
-  );
+  // То же правило «действующего», что у `getActiveSubstitution` (окно по дням,
+  // включительно). Прежняя своя проверка сравнивала момент с полуночью дня `to`
+  // и в последний день окна действующее не находила — оставалось два активных.
+  const active = getActiveSubstitution(now);
   const next = list.map((s) =>
     active && s.id === active.id ? { ...s, revokedAt: now.toISOString() } : s
   );
@@ -143,7 +148,7 @@ export function assignSubstitution(input: {
     assignedAt: now.toISOString(),
   };
   write([...next, created]);
-  return created;
+  return { created, replaced: active };
 }
 
 export function revokeSubstitution(id: string): void {
