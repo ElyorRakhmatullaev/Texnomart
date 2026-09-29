@@ -72,7 +72,7 @@ Texnomart/
 │   ├── package.json
 │   ├── vite.config.ts
 │   ├── playwright.config.ts
-│   ├── e2e/                    # Playwright e2e (fixtures, data, 8 spec files)
+│   ├── e2e/                    # Playwright e2e (fixtures, data, 8 section specs + harness self-check)
 │   └── src/                    # app/ (shell, routes, role-context), components/ (primitives), lib/ (mock data)
 ├── Broker/                     # Client Broker app (операторский скоринг, ветка Alif)
 │   ├── CLAUDE.md               # Broker-specific context (routes, попап оформления, mock conventions)
