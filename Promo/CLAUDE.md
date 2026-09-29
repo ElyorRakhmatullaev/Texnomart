@@ -118,7 +118,7 @@ $env:BASE_URL='https://elyorrakhmatullaev.github.io/Texnomart/promo/'; npx playw
 - Время зафиксировано на 28.09.2026 12:00 (Ташкент): сиды считают сроки от «сейчас».
 - Известные дефекты — `test.fail` с описанием; когда дефект исправят, прогон сообщит «expected to fail but passed» — снять пометку. С 29.09 таких пометок нет.
 - Выбор тестов по нескольким ID в PowerShell: `|` в `-g` ломает `.cmd`-обёртку (`corepack`/`npx`) — запускать CLI напрямую: `node .\node_modules\@playwright\test\cli.js test -g "12-6|13-13"` (из `Promo/`).
-- `playwright.config.ts` капает `workers: 4` (по умолчанию Playwright взял бы cpus/2 = 8 на этой машине; 8 реальных Chrome держат CPU на 97–100% весь прогон и изредка роняют 30с таймаут в календарном пикере — не логическая ошибка теста).
+- `playwright.config.ts` капает `workers: 4` (по умолчанию Playwright взял бы cpus/2 = 8 на этой машине; 8 реальных Chrome держат CPU на 97–100% весь прогон). Редкий 30с таймаут в календарном пикере, который 28.09 приписали нагрузке, оказался гонкой фокуса в приложении и устранён 29.09 (`src/components/popover-focus.ts`).
 
 ## Project Structure
 
