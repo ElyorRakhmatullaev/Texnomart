@@ -113,6 +113,12 @@ const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
 export const router = createBrowserRouter([
   {
+    // Моушн-фильм для внешнего показа (src/film/, спецификация 2026-09-30).
+    // Вне защищённой части: вложенные экраны фильма входят сами, в режиме кадра.
+    path: "/embed/film",
+    lazy: async () => ({ Component: (await import("../film/FilmPage")).FilmPage }),
+  },
+  {
     path: "/login",
     Component: GuestLayout,
     children: [

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /** «Сейчас» режима кадра — FILM_NOW в src/film/frame-mode.ts (= FIXED_NOW e2e). */
 const FILM_NOW = Date.parse('2026-09-28T12:00:00+05:00');
@@ -56,5 +56,71 @@ test.describe('режим кадра', () => {
     expect(drift).toBeLessThan(60_000);
     const submit = page.getByRole('button', { name: 'Войти' });
     expect(await submit.evaluate((el) => getComputedStyle(el).transitionDuration)).not.toBe('0s');
+  });
+});
+
+type Capture = {
+  duration: number;
+  chapters: { key: string; at: number; end: number }[];
+  seek(t: number): Promise<void>;
+};
+declare global {
+  interface Window {
+    __capture?: Capture;
+  }
+}
+
+async function openFilm(page: Page, query = '') {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto(`embed/film?capture=1${query}`);
+  await page.waitForFunction(() => !!window.__capture);
+}
+const seek = (page: Page, t: number) => page.evaluate((t) => window.__capture!.seek(t), t);
+const chapters = (page: Page) => page.evaluate(() => window.__capture!.chapters);
+async function shotAt(page: Page, t: number) {
+  await seek(page, t);
+  return page.screenshot();
+}
+const same = (a: Buffer, b: Buffer) => Buffer.compare(a, b) === 0;
+
+test.describe('фильм: запись', () => {
+  test('__capture: главы подряд от «hook», длительность — конец последней', async ({ page }) => {
+    await openFilm(page);
+    const cap = await page.evaluate(() => ({
+      duration: window.__capture!.duration,
+      chapters: window.__capture!.chapters,
+    }));
+    expect(cap.chapters[0]).toMatchObject({ key: 'hook', at: 0 });
+    for (let i = 1; i < cap.chapters.length; i++) {
+      expect(cap.chapters[i].at).toBe(cap.chapters[i - 1].end);
+    }
+    expect(cap.chapters.at(-1)!.end).toBe(cap.duration);
+  });
+
+  test('кадр фрагмента не зависит от пути перемотки', async ({ page }) => {
+    await openFilm(page);
+    const a = await shotAt(page, 1.2);
+    await seek(page, 4);
+    await seek(page, 0.2);
+    const b = await shotAt(page, 1.2);
+    expect(same(a, b)).toBe(true);
+    const c = await shotAt(page, 1.5);
+    expect(same(a, c)).toBe(false); // контроль: кадр меняется во времени
+  });
+
+  test('фильм всегда светлый, даже при тёмной теме вкладки', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('promo:pref-theme', 'dark'));
+    await page.goto('login');
+    await expect(page.locator('html')).toHaveClass(/\bdark\b/); // контроль: тема вкладки тёмная
+    await openFilm(page);
+    await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+  });
+
+  test('без capture фильм играет сам и не отдаёт __capture', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('embed/film');
+    await expect(page.getByText('9 ролей.')).toBeVisible();
+    expect(await page.evaluate(() => window.__capture)).toBeUndefined();
+    await expect(page.getByText('Сотни позиций.')).toBeVisible({ timeout: 5_000 });
   });
 });

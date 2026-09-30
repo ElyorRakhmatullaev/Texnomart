@@ -15,7 +15,7 @@ import type { PromoRole } from "./role-context";
 import { countApprovalsAwaiting, formatPromoNo } from "../lib/promo-mock-data";
 import { rolesWithAreaAccess } from "../lib/permissions";
 
-const TexnomartLogoFull = (
+export const TexnomartLogoFull = (
   <svg width="180" height="38" viewBox="0 0 180 38" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-6 w-auto shrink-0">
     <g clipPath="url(#clip0_30_5793)">
       <path d="M2.67517 24.5973V17.175H0.714844V13.3515H2.67517V9.37793H7.30156V13.3515H11.1438V17.175H7.30156V23.8476C7.30156 24.8972 7.77204 25.347 8.79141 25.347C9.65395 25.347 10.4381 25.1221 11.0654 24.8222V28.4209C10.1244 28.9457 8.94823 29.3206 7.37997 29.3206C4.55709 29.3206 2.67517 28.2709 2.67517 24.5973Z" fill="currentColor"/>
@@ -37,7 +37,7 @@ const TexnomartLogoFull = (
   </svg>
 );
 
-const TexnomartLogoIcon = (
+export const TexnomartLogoIcon = (
   <svg width="32" height="32" viewBox="160 0 20 38" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
     <path d="M179.653 12.0021L177.301 15.8257L172.596 13.2016V18.4497H167.891V13.2016L163.186 15.8257L160.834 12.0021L165.617 9.37804L160.912 6.75401L163.186 2.93043L167.891 5.55446V0.306396H172.596V5.55446L177.301 2.93043L179.575 6.75401L174.87 9.37804L179.653 12.0021Z" fill="currentColor"/>
   </svg>
