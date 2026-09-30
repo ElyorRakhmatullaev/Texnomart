@@ -148,4 +148,39 @@ test.describe('фильм: сцены-экраны', () => {
     const inner = page.frames().find((f) => f.url().includes('film-frame=1'))!;
     expect(await inner.evaluate(() => sessionStorage.getItem('auth'))).toBe('true');
   });
+
+  test('fullcal: панорама прокручивает таблицу, кадр детерминирован', async ({ page }) => {
+    await openFilm(page);
+    const fc = (await chapters(page)).find((c) => c.key === 'fullcal')!;
+    const a = await shotAt(page, fc.at + 3);
+    await seek(page, fc.at + 5);
+    await seek(page, fc.at + 1.5);
+    const b = await shotAt(page, fc.at + 3);
+    expect(same(a, b)).toBe(true);
+    const frame = page.frames().find((f) => f.url().includes('/full-calendar?'))!;
+    const maxScroll = () =>
+      frame.evaluate(() =>
+        Math.max(...[...document.querySelectorAll('div.overflow-x-auto')].map((el) => el.scrollLeft)),
+      );
+    expect(await maxScroll()).toBeGreaterThan(0);
+    await seek(page, fc.at + 0.5); // до начала прокрутки — таблица в начале
+    expect(await maxScroll()).toBe(0);
+  });
+
+  test('audit: вкладка и тема переключаются кликами, перемотка назад отменяет тему', async ({ page }) => {
+    await openFilm(page);
+    const au = (await chapters(page)).find((c) => c.key === 'audit')!;
+    const frame = () => page.frames().find((f) => f.url().includes('/audit?'))!;
+    const isDark = () => frame().evaluate(() => document.documentElement.classList.contains('dark'));
+    const activeTab = () =>
+      frame().evaluate(() => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim());
+    const a = await shotAt(page, au.at + 3);
+    expect(await isDark()).toBe(true);
+    expect(await activeTab()).toBe('Сроки по промо и отчётам');
+    await seek(page, au.at + 1); // до клика по теме — окно перезагружается
+    expect(await isDark()).toBe(false);
+    expect(await activeTab()).toBe('Сроки по промо и отчётам');
+    const b = await shotAt(page, au.at + 3);
+    expect(same(a, b)).toBe(true);
+  });
 });

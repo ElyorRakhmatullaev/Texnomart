@@ -31,3 +31,79 @@ export const PLAN_SCREEN: ScreenSpec = {
     { at: 5.4, value: { ...WHOLE, cx: 906, cy: 600, zoom: 1.8 }, ease: easeInOutCubic },
   ],
 };
+
+/**
+ * Прокручиваемая часть таблицы полного календаря (Pattern F: две синхронные
+ * панели). Среди горизонтальных скроллеров со строками (`.min-w-max` прямым
+ * потомком) — самый высокий: это тело таблицы, его onScroll синхронизирует шапку
+ * и нижнюю полосу.
+ */
+const tableScroller: TargetFn = (doc) =>
+  [...doc.querySelectorAll<HTMLElement>("div.overflow-x-auto")]
+    .filter((el) => el.scrollWidth > el.clientWidth && el.querySelector(":scope > .min-w-max"))
+    .sort((a, b) => b.clientHeight - a.clientHeight)[0] ?? null;
+
+/**
+ * «Каждая позиция: цена, подарки, рассрочка»: полный календарь под КД (8 акций,
+ * 22 позиции — у КМ всего 5). Окно въезжает справа, камера подходит к таблице,
+ * таблица панорамируется на всю ширину колонок.
+ */
+export const FULLCAL_SCREEN: ScreenSpec = {
+  path: "full-calendar",
+  role: "Коммерческий директор",
+  user: "u-1",
+  theme: "light",
+  ready: h1("Полный промо-календарь"),
+  home: { x: 720, y: 450 },
+  cues: [
+    {
+      kind: "scroll",
+      at: 0.8,
+      until: 5.4,
+      label: "прокрутка таблицы",
+      target: tableScroller,
+      left: (p, el) => easeInOutCubic(p) * (el.scrollWidth - el.clientWidth),
+    },
+  ],
+  camera: [
+    { at: 0, value: { ...WHOLE, cx: -320, ry: -8 } },
+    { at: 0.7, value: WHOLE, ease: easeOutExpo },
+    { at: 1.4, value: { ...WHOLE, cx: 760, cy: 560, zoom: 1.3 }, ease: easeInOutCubic },
+  ],
+};
+
+const tab = (name: string): { label: string; target: TargetFn } => ({
+  label: `вкладка «${name}»`,
+  target: (doc) =>
+    [...doc.querySelectorAll('[role="tab"]')].find((el) => el.textContent?.trim() === name) ?? null,
+});
+
+/**
+ * «Сроки под контролем»: аудит, вкладка сроков по промо (чипы «В срок» /
+ * «Просрочено»). На сильной доле (2 с) курсор кликает переключатель темы —
+ * экран уходит в тёмную тему, камера подходит к колонке результатов.
+ */
+export const AUDIT_SCREEN: ScreenSpec = {
+  path: "audit",
+  role: "Коммерческий директор",
+  user: "u-1",
+  theme: "light",
+  ready: h1("Аудит-лог и контроль сроков"),
+  home: { x: 980, y: 420 },
+  cues: [
+    { kind: "click", at: 0, ...tab("Сроки по промо и отчётам") },
+    {
+      kind: "click",
+      at: 2,
+      cursor: true,
+      label: "переключатель темы",
+      target: (doc) => doc.querySelector('button[aria-label="Переключить тему"]'),
+    },
+  ],
+  camera: [
+    { at: 0, value: { ...WHOLE, zoom: 1.3, opacity: 0 } },
+    { at: 0.4, value: WHOLE, ease: easeOutExpo },
+    { at: 2.4, value: WHOLE },
+    { at: 4, value: { ...WHOLE, cx: 800, cy: 560, zoom: 1.5 }, ease: easeInOutCubic },
+  ],
+};
