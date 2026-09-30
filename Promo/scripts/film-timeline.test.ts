@@ -8,6 +8,7 @@ import {
   easeInOutCubic,
   easeOutBack,
   easeOutExpo,
+  gridSteps,
   keyframes,
   lerp,
   linear,
@@ -93,4 +94,50 @@ test("keyframes: без ключей и не по порядку — ошибк�
     () => keyframes(0, [{ at: 2, value: { x: 0 } }, { at: 1, value: { x: 1 } }]),
     /не по порядку/,
   );
+});
+
+test("gridSteps: from начала сцены (local = 0)", () => {
+  assert.deepEqual(gridSteps(null, 0, 4, 60), [0]);
+});
+
+test("gridSteps: to точно на такте — без лишнего шага", () => {
+  const steps = gridSteps(null, 1, 4, 60);
+  assert.equal(steps.length, 61); // 0, 1/60, …, 60/60 = 1
+  assert.equal(steps[0], 0);
+  assert.equal(steps[steps.length - 1], 1);
+});
+
+test("gridSteps: to не на такте — сетка плюс сам to последним шагом", () => {
+  const steps = gridSteps(null, 1.505, 4, 60);
+  assert.equal(steps[steps.length - 1], 1.505); // не на сетке — добавлен как есть
+  assert.ok(steps[steps.length - 2] < 1.505); // предыдущий шаг — такт сетки
+});
+
+test("gridSteps: продолжение с lastLocal — без повтора, без пропуска", () => {
+  const first = gridSteps(null, 0.5, 4, 60);
+  const rest = gridSteps(0.5, 1, 4, 60);
+  assert.equal(first[first.length - 1], 0.5);
+  assert.equal(rest[0], 0.5 + 1 / 60);
+});
+
+test("gridSteps: to у самого конца сцены — такты не заходят в конец (репро обвала)", () => {
+  // Повтор боевого случая: fc.at=19, duration=4, to=22.999999999999993 → local
+  // почти 4, но строго меньше — такты должны остановиться раньше духа конца.
+  const to = 22.999999999999993 - 19;
+  const steps = gridSteps(3.9, to, 4, 60);
+  for (const s of steps) assert.ok(s < 4, `шаг ${s} не должен достигать конца сцены (4)`);
+  assert.equal(steps[steps.length - 1], to); // итог — ровно запрошенный момент
+});
+
+test("gridSteps: to у самого конца сцены без истории (fresh entry) — тоже не заходит в конец", () => {
+  const to = 18.999999999999993 - 16; // повтор прямого захода: plan.at=16, duration=3
+  const steps = gridSteps(null, to, 3, 60);
+  for (const s of steps) assert.ok(s < 3, `шаг ${s} не должен достигать конца сцены (3)`);
+  assert.equal(steps[steps.length - 1], to);
+});
+
+test("gridSteps: другой fps — сетка 1/fps", () => {
+  const steps = gridSteps(null, 1, 4, 30);
+  assert.equal(steps.length, 31); // 0, 1/30, …, 30/30 = 1
+  assert.equal(steps[1], 1 / 30);
 });

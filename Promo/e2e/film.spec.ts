@@ -81,9 +81,68 @@ async function shotAt(page: Page, t: number) {
   await seek(page, t);
   return page.screenshot();
 }
-const same = (a: Buffer, b: Buffer) => Buffer.compare(a, b) === 0;
-
 const at = async (page: Page, key: string) => (await chapters(page)).find((c) => c.key === key)!;
+
+/**
+ * Сравнение двух PNG с допуском спецификации («Уточнено при реализации
+ * 30.09», docs/superpowers/specs/2026-09-30-promo-motion-film-v2-design.md
+ * §«done when» №3): «до пикселя» недостижимо для живых вложенных экранов —
+ * Chrome растрирует их по-разному в зависимости от истории отрисовки
+ * страницы (FilmPage.tsx, комментарий у seekTo). Декодирует оба PNG прямо в
+ * браузере (data-URL → Image → canvas.getImageData) — без новых npm-пакетов.
+ */
+async function frameDiff(
+  page: Page,
+  a: Buffer,
+  b: Buffer,
+): Promise<{ maxDelta: number; diffPixels: number }> {
+  return page.evaluate(
+    async ({ aB64, bB64 }) => {
+      const load = (b64: string) =>
+        new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = `data:image/png;base64,${b64}`;
+        });
+      const [imgA, imgB] = await Promise.all([load(aB64), load(bB64)]);
+      const w = imgA.width;
+      const h = imgA.height;
+      const toPixels = (img: HTMLImageElement) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        return ctx.getImageData(0, 0, w, h).data;
+      };
+      const da = toPixels(imgA);
+      const db = toPixels(imgB);
+      let maxDelta = 0;
+      let diffPixels = 0;
+      for (let i = 0; i < da.length; i += 4) {
+        const d = Math.max(
+          Math.abs(da[i] - db[i]),
+          Math.abs(da[i + 1] - db[i + 1]),
+          Math.abs(da[i + 2] - db[i + 2]),
+          Math.abs(da[i + 3] - db[i + 3]),
+        );
+        if (d > 0) {
+          diffPixels++;
+          if (d > maxDelta) maxDelta = d;
+        }
+      }
+      return { maxDelta, diffPixels };
+    },
+    { aB64: a.toString('base64'), bB64: b.toString('base64') },
+  );
+}
+
+/** Канал ≤ 2 уровня из 255, отличающихся пикселей ≤ 0,1 % кадра (≤ 2 073 при 1920×1080). */
+function expectSameFrame(diff: { maxDelta: number; diffPixels: number }) {
+  expect(diff.maxDelta).toBeLessThanOrEqual(2);
+  expect(diff.diffPixels).toBeLessThanOrEqual(2073);
+}
 
 test.describe('фильм: запись', () => {
   test('__capture: главы подряд от «before-files», длительность — конец последней', async ({ page }) => {
@@ -105,9 +164,10 @@ test.describe('фильм: запись', () => {
     await seek(page, 4);
     await seek(page, 0.2);
     const b = await shotAt(page, 1.2);
-    expect(same(a, b)).toBe(true);
+    expectSameFrame(await frameDiff(page, a, b));
     const c = await shotAt(page, 1.5);
-    expect(same(a, c)).toBe(false); // контроль: кадр меняется во времени
+    const diffAC = await frameDiff(page, a, c);
+    expect(diffAC.maxDelta > 2 || diffAC.diffPixels > 2073).toBe(true); // контроль: кадр меняется во времени
   });
 
   test('фильм всегда светлый, даже при тёмной теме вкладки', async ({ page }) => {
@@ -210,7 +270,7 @@ test.describe('фильм: сценарий', () => {
     const a = await shotAt(page, depts.at + 2);
     await seek(page, recap.at + 2);
     const b = await shotAt(page, depts.at + 2);
-    expect(same(a, b)).toBe(true);
+    expectSameFrame(await frameDiff(page, a, b));
   });
 
   test('узбекская версия: переводятся титры, интерфейс и иллюстрации — русские', async ({ page }) => {
@@ -234,9 +294,10 @@ test.describe('фильм: сцены-экраны', () => {
     await seek(page, plan.at + 2.9);
     await seek(page, plan.at + 0.5);
     const b = await shotAt(page, plan.at + 2.5);
-    expect(same(a, b)).toBe(true);
+    expectSameFrame(await frameDiff(page, a, b));
     const c = await shotAt(page, plan.at + 1.5);
-    expect(same(a, c)).toBe(false); // контроль: камера движется
+    const diffAC = await frameDiff(page, a, c);
+    expect(diffAC.maxDelta > 2 || diffAC.diffPixels > 2073).toBe(true); // контроль: камера движется
     await expect(
       page.frameLocator('iframe[title="plan"]').getByRole('heading', { name: 'Краткий промо-календарь' }),
     ).toBeVisible();
@@ -255,7 +316,7 @@ test.describe('фильм: сцены-экраны', () => {
     await seek(page, fc.at + 3.8);
     await seek(page, fc.at + 1.5);
     const b = await shotAt(page, fc.at + 3);
-    expect(same(a, b)).toBe(true);
+    expectSameFrame(await frameDiff(page, a, b));
     await expect(page.frameLocator('iframe[title="fullcal"]').getByText(/Показано: 1 промо/)).toBeVisible();
     // Сцена-экран с прокруткой перематывается назад пересборкой окна (канонический
     // повтор пути записи, FilmPage.tsx) — берём текущий <iframe> заново на каждое
@@ -275,14 +336,37 @@ test.describe('фильм: сцены-экраны', () => {
   test('fullcal: прыжок воспроизводит путь настоящей покадровой записи', async ({ page }) => {
     await openFilm(page);
     const fc = await at(page, 'fullcal');
-    let a: Buffer | undefined;
-    for (let i = 0; i <= 180; i++) {
-      await seek(page, fc.at + i / 60); // как запись: такт за тактом от начала сцены
-      if (i === 180) a = await page.screenshot();
+    // Такт за тактом, как настоящая запись: из «плана» (за секунду до конца
+    // fullcal) в fullcal — вход в сцену-экран из другой сцены-экрана тем же
+    // механизмом (смена sceneKey → новый заход), что и назад внутри сцены.
+    let atStart: Buffer | undefined;
+    let atHalf: Buffer | undefined;
+    let atThree: Buffer | undefined;
+    const startI = Math.round((fc.at - 1) * 60);
+    const endI = Math.round((fc.at + 3) * 60);
+    for (let i = startI; i <= endI; i++) {
+      await seek(page, i / 60);
+      if (i === Math.round(fc.at * 60)) atStart = await page.screenshot();
+      if (i === Math.round((fc.at + 0.5) * 60)) atHalf = await page.screenshot();
+      if (i === endI) atThree = await page.screenshot();
     }
     await seek(page, fc.at + 3.8);
     await seek(page, fc.at + 1.5);
-    const b = await shotAt(page, fc.at + 3); // прыжок назад-вперёд к тому же моменту
-    expect(same(a!, b)).toBe(true);
+    const backAndForth = await shotAt(page, fc.at + 3); // прыжок назад-вперёд к тому же моменту
+
+    // Прямые снимки — каждый со своего свежего захода (сцена-фрагмент между
+    // ними закрывает предыдущий, см. «ушли со сцены-экрана» в seekTo).
+    const freshAt = (await at(page, 'before-files')).at;
+    await seek(page, freshAt);
+    const directStart = await shotAt(page, fc.at);
+    await seek(page, freshAt);
+    const directHalf = await shotAt(page, fc.at + 0.5);
+    await seek(page, freshAt);
+    const directThree = await shotAt(page, fc.at + 3);
+
+    expectSameFrame(await frameDiff(page, atStart!, directStart));
+    expectSameFrame(await frameDiff(page, atHalf!, directHalf));
+    expectSameFrame(await frameDiff(page, atThree!, directThree));
+    expectSameFrame(await frameDiff(page, backAndForth, directThree));
   });
 });

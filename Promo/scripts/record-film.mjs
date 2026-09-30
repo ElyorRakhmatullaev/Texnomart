@@ -221,7 +221,9 @@ await page("Emulation.setEmulatedMedia", {
 // Даты в кадре не зависят от машины: часовой пояс — как в e2e.
 await page("Emulation.setTimezoneOverride", { timezoneId: "Asia/Tashkent" });
 
-const query = new URLSearchParams({ capture: "1", lang: opt.lang, aspect: opt.aspect });
+// fps — в адресе: сцена-экран повторяет путь записи тактами 1/fps (FilmPage.tsx),
+// а не всегда 1/60 — иначе --fps ниже 60 писал бы кадры чаще, чем повтор сцены.
+const query = new URLSearchParams({ capture: "1", lang: opt.lang, aspect: opt.aspect, fps: String(fps) });
 const url = `${opt.base.replace(/\/+$/, "")}/embed/film?${query}`;
 const nav = await page("Page.navigate", { url });
 if (nav.errorText) {

@@ -67,6 +67,34 @@ export function sceneAt(tl: Timeline, t: number): SceneAt {
   return { index: last, local: chapters[last].end - chapters[last].at };
 }
 
+/** Допуск на погрешность плавающей точки при сравнении с тактом записи. */
+export const GRID_EPS = 1e-6;
+
+/**
+ * Такты записи (1/fps с, спецификация §3.3) от `from` (не включая) до `to`
+ * (включая); `from === null` — от начала сцены (сетка от 0). Такты не
+ * заходят внутрь следующей сцены: `g/fps` должно остаться СТРОГО меньше
+ * `duration` (с допуском) — иначе на `to`, лежащем в пределах допуска ниже
+ * конца сцены (частый случай плавающей точки: 22.999999999999993 вместо 23),
+ * последний такт попал бы РОВНО на конец сцены, `setT` сделал бы текущей
+ * следующую сцену, и её узел сцены-экрана ещё не смонтирован — сцена-экран
+ * обрывалась бы ошибкой «не смонтирована». Последним добавляется само `to`,
+ * если оно не легло на такт, — сцена-экран в записи всегда доигрывается ровно
+ * до запрошенного момента (он всегда строго меньше duration — гарантия sceneAt).
+ */
+export function gridSteps(from: number | null, to: number, duration: number, fps: number): number[] {
+  const steps: number[] = [];
+  for (
+    let g = from === null ? 0 : Math.floor(from * fps + GRID_EPS) + 1;
+    g / fps <= to + GRID_EPS && g / fps < duration - GRID_EPS;
+    g++
+  ) {
+    steps.push(g / fps);
+  }
+  if (steps.length === 0 || Math.abs(to - steps[steps.length - 1]) > GRID_EPS) steps.push(to);
+  return steps;
+}
+
 export type Ease = (x: number) => number;
 
 export const linear: Ease = (x) => x;

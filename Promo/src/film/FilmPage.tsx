@@ -9,7 +9,7 @@ import { PainTracker } from "./PainTracker";
 import { SCENES } from "./scenes";
 import { ScreenScene, type ScreenHandle } from "./ScreenScene";
 import { painStrikes, trackerOpacity, type PainKey } from "./story";
-import { buildTimeline, sceneAt } from "./timeline";
+import { buildTimeline, GRID_EPS, gridSteps, sceneAt } from "./timeline";
 import { STAGE, type Aspect, type FilmScene, type Lang } from "./types";
 
 /** Какую боль закрывает сцена и над какими сценами висит список болей — из сценария. */
@@ -17,24 +17,6 @@ const SOLVES: Record<string, PainKey> = Object.fromEntries(
   SCENES.flatMap((s) => (s.solves ? [[s.key, s.solves] as const] : [])),
 );
 const TRACKER_KEYS = SCENES.filter((s) => s.tracker).map((s) => s.key);
-
-/** Допуск на погрешность плавающей точки при сравнении с тактом записи (1/60 с). */
-const GRID_EPS = 1e-6;
-
-/**
- * Такты записи (1/60 с, спецификация §3.3 «60 к/с») от `from` (не включая) до
- * `to` (включая); `from === null` — от начала сцены (сетка от 0). Последним
- * добавляется само `to`, если оно не легло на такт, — сцена-экран в записи
- * всегда доигрывается ровно до запрошенного момента, а не до ближайшего такта.
- */
-function gridSteps(from: number | null, to: number): number[] {
-  const steps: number[] = [];
-  for (let g = from === null ? 0 : Math.floor(from * 60 + GRID_EPS) + 1; g / 60 <= to + GRID_EPS; g++) {
-    steps.push(g / 60);
-  }
-  if (steps.length === 0 || Math.abs(to - steps[steps.length - 1]) > GRID_EPS) steps.push(to);
-  return steps;
-}
 
 /** Холст вписывается в окно (просмотр) или совпадает с ним (запись). */
 function useFit(stage: { w: number; h: number }, capture: boolean) {
@@ -66,6 +48,10 @@ export function FilmPage() {
   const params = React.useMemo(() => new URLSearchParams(window.location.search), []);
   const capture = params.get("capture") === "1";
   const lang: Lang = params.get("lang") === "uz" ? "uz" : "ru";
+  // Записывающий передаёт свой --fps в адресе (record-film.mjs) — повтор пути
+  // записи (см. seekTo ниже) идёт тактами 1/fps, а не всегда 1/60.
+  const parsedFps = Number(params.get("fps"));
+  const fps = parsedFps > 0 ? parsedFps : 60;
   // Раскладки сцен пока только под 16:9: ?aspect=9x16 — второй этап (спецификация §6).
   const aspect: Aspect = "16x9";
   const stage = STAGE[aspect];
@@ -93,24 +79,29 @@ export function FilmPage() {
     if (!capture) return;
     let queue: Promise<void> = Promise.resolve();
     /**
-     * Кадр записи — точная функция от t, но только если у сцены-экрана всегда
-     * одна и та же история рендера: собственную запись фильм и делает — идёт
-     * по сцене тактами записи (1/60 с) от начала (или там, где остановился
-     * прошлый заход) до запрошенного t, тем самым **всегда воспроизводя путь
-     * настоящей покадровой записи**, каким бы способом ни попросили этот
-     * момент — прыжком, перемоткой назад-вперёд или почти-тактом с плавающей
-     * погрешностью. Раньше здесь просто прыгали на t и один раз звали
-     * settle(local) — тот же итоговый DOM, но другая история рендера: Chrome
-     * иначе растрирует текст прокрученной таблицы и трансформированный слой
-     * окна, если до этого они уже стояли на другой позе/прокрутке — даже когда
-     * итоговые DOM и transform побайтово совпадают (не помогали ни перезагрузка
-     * document.location.reload(), ни нецелые сдвиги позы, ни повтор попытки —
-     * помогает только пройти те же кадры, что прошла бы запись). Пересборка
-     * (новый generation, «заход» с начала сцены) — только когда сцена сменилась
-     * или перемотка ушла назад внутри той же сцены; продолжение вперёд —
-     * обычные такты без пересборки, поэтому настоящая покадровая запись (i/60,
-     * i = 0, 1, 2, …) не платит за это ничего — каждый её кадр делает ровно
-     * один шаг цикла ниже.
+     * Сцена-экран в записи повторяет тот же путь, что прошла бы настоящая
+     * запись внутри этой сцены: такты 1/fps от её начала (или там, где
+     * остановился прошлый заход) до запрошенного t — а не прыжок на t с
+     * одним settle(local), как было раньше. У прыжка тот же итоговый DOM, но
+     * другая история отрисовки: Chrome растрирует текст прокрученной таблицы
+     * и трансформированный слой окна чуть иначе, если до этого они уже стояли
+     * на другой позе/прокрутке (до правки — 23 уровня из 255 на 5 638
+     * пикселях, видимо на глаз). Повтор пути убирает это конкретное
+     * расхождение.
+     *
+     * Он НЕ делает кадр чистой функцией t целиком: раскладка ДО входа в эту
+     * сцену (какие сцены шли раньше, в каком порядке шла перемотка) остаётся
+     * частью истории растра страницы — измеренный остаточный шум ≤ 1–2
+     * уровней на единицах-десятках пикселей, на глаз не виден. Поэтому
+     * film.spec.ts сравнивает такие кадры с допуском спецификации
+     * («Уточнено при реализации 30.09»: канал ≤ 2 уровня, отличающихся
+     * пикселей ≤ 0,1 % кадра), а не побайтово.
+     *
+     * Пересборка (новый generation, заход с начала сцены) — только когда
+     * сцена сменилась или перемотка ушла назад внутри той же сцены;
+     * продолжение вперёд — обычные такты без пересборки, поэтому настоящая
+     * покадровая запись (i/fps, i = 0, 1, 2, …) не платит за это ничего —
+     * каждый её кадр делает ровно один шаг цикла ниже.
      */
     const seekTo = async (to: number) => {
       const atInfo = sceneAt(timeline, to);
@@ -126,18 +117,26 @@ export function FilmPage() {
       const occ = occupancy.current;
       const needsFreshEntry = !occ || occ.sceneKey !== targetScene.key || atInfo.local < occ.lastLocal - GRID_EPS;
       const generation = needsFreshEntry ? (occ ? occ.generation + 1 : 0) : occ!.generation;
-      const steps = gridSteps(needsFreshEntry ? null : occ!.lastLocal, atInfo.local);
-      for (let i = 0; i < steps.length; i++) {
-        const screenLocal = steps[i];
-        flushSync(() => {
-          if (i === 0 && needsFreshEntry) setScreenGen(generation);
-          setT(chapterAt + screenLocal);
-        });
-        const handle = screens.current.get(targetScene.key);
-        if (!handle) throw new Error(`[film] сцена «${targetScene.key}» не смонтирована`);
-        await handle.settle(screenLocal);
-        await document.fonts.ready;
-        await nextFrames(window, 2);
+      const steps = gridSteps(needsFreshEntry ? null : occ!.lastLocal, atInfo.local, targetScene.duration, fps);
+      try {
+        for (let i = 0; i < steps.length; i++) {
+          const screenLocal = steps[i];
+          flushSync(() => {
+            if (i === 0 && needsFreshEntry) setScreenGen(generation);
+            setT(chapterAt + screenLocal);
+          });
+          const handle = screens.current.get(targetScene.key);
+          if (!handle) throw new Error(`[film] сцена «${targetScene.key}» не смонтирована`);
+          await handle.settle(screenLocal);
+          await document.fonts.ready;
+          await nextFrames(window, 2);
+        }
+      } catch (e) {
+        // Незавершённый заход — не начало для следующей попытки (у записи есть
+        // повтор при ошибке, record-film.mjs): его lastLocal не про реальную
+        // историю рендера, продолжать от него нельзя.
+        occupancy.current = null;
+        throw e;
       }
       occupancy.current = { sceneKey: targetScene.key, generation, lastLocal: atInfo.local };
     };
