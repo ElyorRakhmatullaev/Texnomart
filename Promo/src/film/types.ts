@@ -1,4 +1,7 @@
 import type { ComponentType } from "react";
+import type { PromoRole } from "../app/role-context";
+import type { Cue, Point, TargetFn } from "./cues";
+import type { Key } from "./timeline";
 
 export type Lang = "ru" | "uz";
 export type Aspect = "16x9" | "9x16";
@@ -29,7 +32,40 @@ export interface FragmentScene extends SceneBase {
   Component: ComponentType<SceneProps>;
 }
 
-export type FilmScene = FragmentScene;
+/**
+ * Поза камеры: какая точка окна (cx, cy — пиксели экрана 1440×900) стоит в
+ * центре холста, масштаб, наклон в градусах, прозрачность.
+ */
+export type CameraPose = {
+  cx: number;
+  cy: number;
+  zoom: number;
+  rx: number;
+  ry: number;
+  opacity: number;
+};
+
+export interface ScreenSpec {
+  /** Маршрут приложения без базового пути и без «/», например "short-calendar". */
+  path: string;
+  role: PromoRole;
+  /** id пользователя из users-store: u-1 — КД, u-2 — Администратор. */
+  user: string;
+  theme: "light" | "dark";
+  /** По какому элементу понять, что экран отрисован. */
+  ready: { label: string; target: TargetFn };
+  camera: Key<CameraPose>[];
+  cues: Cue[];
+  /** Откуда курсор выезжает к первому клику (координаты окна). */
+  home: Point;
+}
+
+export interface ScreenSceneDef extends SceneBase {
+  kind: "screen";
+  screen: ScreenSpec;
+}
+
+export type FilmScene = FragmentScene | ScreenSceneDef;
 
 /** Контракт записи — тот же, что в образце record-tour.mjs. */
 export interface CaptureApi {

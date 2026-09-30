@@ -6,8 +6,9 @@ import { Caption } from "./Caption";
 import { nextFrames } from "./frames";
 import { FILM } from "./palette";
 import { SCENES } from "./scenes";
+import { ScreenScene, type ScreenHandle } from "./ScreenScene";
 import { buildTimeline, sceneAt } from "./timeline";
-import { STAGE, type Aspect, type Lang } from "./types";
+import { STAGE, type Aspect, type FilmScene, type Lang } from "./types";
 
 /** Холст вписывается в окно (просмотр) или совпадает с ним (запись). */
 function useFit(stage: { w: number; h: number }, capture: boolean) {
@@ -32,6 +33,7 @@ function useFit(stage: { w: number; h: number }, capture: boolean) {
 /**
  * Страница-фильм /embed/film (спецификация §3.4). Кадр — чистая функция от t.
  * ?capture=1 — запись: отдаёт window.__capture; иначе фильм играет в цикле.
+ * Смонтированы текущая сцена и следующая сцена-экран (скрыто — предзагрузка).
  */
 export function FilmPage() {
   const params = React.useMemo(() => new URLSearchParams(window.location.search), []);
@@ -41,6 +43,7 @@ export function FilmPage() {
   const stage = STAGE[aspect];
   const timeline = React.useMemo(() => buildTimeline(SCENES), []);
   const [t, setT] = React.useState(0);
+  const screens = React.useRef(new Map<string, ScreenHandle>());
   const fit = useFit(stage, capture);
 
   // Фильм показывает приложение светлым: класс .dark на <html> перекрасил бы
@@ -55,6 +58,13 @@ export function FilmPage() {
     let queue: Promise<void> = Promise.resolve();
     const seekTo = async (to: number) => {
       flushSync(() => setT(to));
+      const at = sceneAt(timeline, to);
+      const scene = SCENES[at.index];
+      if (scene.kind === "screen") {
+        const handle = screens.current.get(scene.key);
+        if (!handle) throw new Error(`[film] сцена «${scene.key}» не смонтирована`);
+        await handle.settle(at.local);
+      }
       await document.fonts.ready;
       await nextFrames(window, 2);
     };
@@ -75,18 +85,39 @@ export function FilmPage() {
   React.useEffect(() => {
     if (capture) return;
     let raf = 0;
-    const start = performance.now();
-    const tick = (now: number) => {
-      setT(((now - start) / 1000) % timeline.duration);
+    let stopped = false;
+    // Часы стартуют, когда предзагруженные экраны отрисованы: окно грузит
+    // приложение в том же потоке, что и фильм, и иначе съело бы начало хука.
+    const preload = [...screens.current.values()].map((s) => s.settle(0));
+    void Promise.allSettled(preload).then(() => {
+      if (stopped) return;
+      const start = performance.now();
+      const tick = (now: number) => {
+        setT(((now - start) / 1000) % timeline.duration);
+        raf = requestAnimationFrame(tick);
+      };
       raf = requestAnimationFrame(tick);
+    });
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(raf);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
   }, [capture, timeline]);
 
   const { index, local } = sceneAt(timeline, t);
   const current = SCENES[index];
-  const SceneView = current.Component;
+
+  // В просмотре сигналы экрана выполняются по ходу, без ожидания.
+  React.useEffect(() => {
+    if (capture || current.kind !== "screen") return;
+    screens.current
+      .get(current.key)
+      ?.settle(local)
+      .catch((e) => console.error(e));
+  }, [capture, current, local]);
+
+  const nextScreen = SCENES.slice(index + 1).find((s) => s.kind === "screen");
+  const mounted: FilmScene[] = nextScreen ? [current, nextScreen] : [current];
 
   return (
     <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: FILM.stage }}>
@@ -103,7 +134,28 @@ export function FilmPage() {
           background: FILM.stage,
         }}
       >
-        <SceneView key={current.key} t={local} duration={current.duration} aspect={aspect} lang={lang} />
+        {mounted.map((scene) => {
+          const isCurrent = scene === current;
+          if (scene.kind === "screen") {
+            return (
+              <ScreenScene
+                key={scene.key}
+                ref={(h) => {
+                  if (h) screens.current.set(scene.key, h);
+                  else screens.current.delete(scene.key);
+                }}
+                scene={scene}
+                t={isCurrent ? local : 0}
+                stage={stage}
+                hidden={!isCurrent}
+              />
+            );
+          }
+          const SceneView = scene.Component;
+          return (
+            <SceneView key={scene.key} t={local} duration={scene.duration} aspect={aspect} lang={lang} />
+          );
+        })}
         {current.caption && <Caption text={current.caption[lang]} t={local} duration={current.duration} />}
       </div>
     </div>

@@ -124,3 +124,28 @@ test.describe('фильм: запись', () => {
     await expect(page.getByText('Сотни позиций.')).toBeVisible({ timeout: 5_000 });
   });
 });
+
+test.describe('фильм: сцены-экраны', () => {
+  test.setTimeout(120_000);
+
+  test('plan: живой экран, кадр детерминирован, хранилища вкладки чистые', async ({ page }) => {
+    await openFilm(page);
+    const plan = (await chapters(page)).find((c) => c.key === 'plan')!;
+    const a = await shotAt(page, plan.at + 4);
+    await seek(page, plan.at + 5.5);
+    await seek(page, plan.at + 1);
+    const b = await shotAt(page, plan.at + 4);
+    expect(same(a, b)).toBe(true);
+    const c = await shotAt(page, plan.at + 4.5);
+    expect(same(a, c)).toBe(false); // контроль: камера движется
+    await expect(
+      page.frameLocator('iframe[title="plan"]').getByRole('heading', { name: 'Краткий промо-календарь' }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(() => [sessionStorage.getItem('auth'), sessionStorage.getItem('promo:current-role')]),
+    ).toEqual([null, null]);
+    // Контроль: внутри кадра вход есть — в его памяти.
+    const inner = page.frames().find((f) => f.url().includes('film-frame=1'))!;
+    expect(await inner.evaluate(() => sessionStorage.getItem('auth'))).toBe('true');
+  });
+});
