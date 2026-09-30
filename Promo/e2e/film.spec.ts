@@ -184,3 +184,43 @@ test.describe('фильм: сцены-экраны', () => {
     expect(same(a, b)).toBe(true);
   });
 });
+
+test.describe('фильм: сценарий', () => {
+  test.setTimeout(120_000);
+
+  test('32 с, восемь глав по порядку', async ({ page }) => {
+    await openFilm(page);
+    const cap = await page.evaluate(() => ({
+      duration: window.__capture!.duration,
+      keys: window.__capture!.chapters.map((c) => c.key),
+    }));
+    expect(cap).toEqual({
+      duration: 32,
+      keys: ['hook', 'logo', 'plan', 'grid', 'fullcal', 'change', 'audit', 'final'],
+    });
+  });
+
+  test('фрагменты «сетка» и «было → стало» детерминированы и показывают посев', async ({ page }) => {
+    await openFilm(page);
+    const list = await chapters(page);
+    const grid = list.find((c) => c.key === 'grid')!;
+    const change = list.find((c) => c.key === 'change')!;
+    const a = await shotAt(page, grid.at + 1);
+    await seek(page, change.at + 3);
+    const b = await shotAt(page, grid.at + 1);
+    expect(same(a, b)).toBe(true);
+    await expect(page.getByText('Чёрная пятница 2026')).toBeVisible();
+    await seek(page, change.at + 3);
+    await expect(page.getByText("Кофемашина De'Longhi Magnifica")).toBeVisible();
+    await expect(page.getByText('Согласовано КД')).toBeVisible();
+  });
+
+  test('узбекская версия: переводятся титры, интерфейс остаётся русским', async ({ page }) => {
+    await openFilm(page, '&lang=uz');
+    const list = await chapters(page);
+    await seek(page, list.find((c) => c.key === 'plan')!.at + 2);
+    await expect(page.getByText('Yillik aksiyalar rejasi — bitta oynada')).toBeVisible();
+    await seek(page, list.find((c) => c.key === 'change')!.at + 3);
+    await expect(page.getByText('Цена по акции')).toBeVisible();
+  });
+});
