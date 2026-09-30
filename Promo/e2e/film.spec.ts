@@ -414,4 +414,20 @@ test.describe('фильм: сцены-экраны', () => {
     expectSameFrame(await frameDiff(page, atThree!, directThree));
     expectSameFrame(await frameDiff(page, backAndForth, directThree));
   });
+
+  test('plan: страница прокручивается к таблице, рамка — на строке 26-3', async ({ page }) => {
+    await openFilm(page);
+    const plan = await at(page, 'plan');
+    const frame = () => page.frames().find((f) => f.url().includes('/short-calendar?'))!;
+    const scrollTop = () => frame().evaluate(() => document.querySelector('main')!.scrollTop);
+    const highlight = page.locator('[data-film="highlight"]');
+    await seek(page, plan.at + 0.5);
+    expect(await scrollTop()).toBe(0);
+    await expect(highlight).toHaveCount(0);
+    await seek(page, plan.at + 2.6);
+    expect(await scrollTop()).toBeCloseTo(300, 0);
+    await expect(highlight).toHaveCount(1);
+    const box = (await highlight.boundingBox())!;
+    expect(box.width).toBeGreaterThan(1500); // строка — во всю ширину таблицы (1151 px окна × 1,55)
+  });
 });

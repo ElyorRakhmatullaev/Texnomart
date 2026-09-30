@@ -1,4 +1,4 @@
-import type { TargetFn } from "./cues";
+import type { Rect, TargetFn } from "./cues";
 import { HERO } from "./hero";
 import { easeInOutCubic, easeOutExpo } from "./timeline";
 import type { CameraPose, ScreenSpec } from "./types";
@@ -25,10 +25,33 @@ export const byText = (root: ParentNode, text: string): Element | null =>
 /** Окно целиком в кадре: 1440×900 × 1,12 ≈ 1613×1008 на холсте 1920×1080. */
 export const WHOLE: CameraPose = { cx: 720, cy: 450, zoom: 1.12, rx: 0, ry: 0, opacity: 1 };
 
+/** Прямоугольник элемента в координатах окна. */
+export const rectOf = (el: Element): Rect => {
+  const b = el.getBoundingClientRect();
+  return { x: b.left, y: b.top, w: b.width, h: b.height };
+};
+
+/** Страница прокручивается в <main> общей оболочки AppShell. */
+export const pageScroller: TargetFn = (doc) => doc.querySelector("main");
+
+/**
+ * Строка акции-героя в кратком календаре (Pattern F): кнопка строки лежит в
+ * замороженной панели, рамка — на ширину обеих панелей (их общий контейнер).
+ */
+const planHeroRow = (doc: Document): Rect | null => {
+  const button = byText(doc, HERO.promoNo)?.closest("button");
+  const panes = button?.parentElement?.parentElement;
+  if (!button || !panes) return null;
+  const b = button.getBoundingClientRect();
+  const p = panes.getBoundingClientRect();
+  return { x: p.left, y: b.top, w: p.width, h: b.height };
+};
+
 /**
  * «Один план. Одна версия.»: краткий календарь под КД; акция-герой 26-3 —
- * третья строка. Окно влетает с 3D-наклоном и выравнивается, камера наезжает
- * на таблицу. Прокрутка и рамка на строке — Task 4.
+ * третья строка. Окно влетает с 3D-наклоном и выравнивается; пока камера
+ * наезжает, страница прокручивается на 300 px — строка 26-3 встаёт на 432–512 px
+ * окна, в середину кадра, выше подписи; на ней загорается рамка.
  */
 export const PLAN_SCREEN: ScreenSpec = {
   path: "short-calendar",
@@ -37,11 +60,23 @@ export const PLAN_SCREEN: ScreenSpec = {
   theme: "light",
   ready: h1("Краткий промо-календарь"),
   home: { x: 720, y: 450 },
-  cues: [],
+  cues: [
+    {
+      kind: "scroll",
+      axis: "y",
+      at: 0.9,
+      until: 2.2,
+      label: "прокрутка страницы к таблице",
+      target: pageScroller,
+      to: (p) => easeInOutCubic(p) * 300,
+    },
+    { kind: "highlight", at: 1.6, until: 3, label: `строка ${HERO.promoNo}`, area: planHeroRow },
+  ],
   camera: [
     { at: 0, value: { ...WHOLE, zoom: 0.9, rx: 14, ry: -22, opacity: 0 } },
     { at: 0.7, value: WHOLE, ease: easeOutExpo },
-    { at: 2.2, value: { ...WHOLE, cx: 820, cy: 570.3, zoom: 1.55 }, ease: easeInOutCubic },
+    // tx = −311 (целый), ty = −111,465 — нецелый.
+    { at: 2.2, value: { ...WHOLE, cx: 820, cy: 420.3, zoom: 1.55 }, ease: easeInOutCubic },
   ],
 };
 

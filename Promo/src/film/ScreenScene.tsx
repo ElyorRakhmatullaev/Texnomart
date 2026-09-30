@@ -5,11 +5,16 @@ import { flushSync } from "react-dom";
 import {
   CURSOR_LEAD,
   cursorPath,
+  highlightLook,
   planSettle,
+  resolveArea,
   resolveTarget,
   type ClickCue,
   type CursorPath,
+  type HighlightCue,
   type Point,
+  type Rect,
+  type ScrollCue,
 } from "./cues";
 import { nextFrames } from "./frames";
 import { FILM } from "./palette";
@@ -20,6 +25,8 @@ import type { ScreenSceneDef } from "./types";
 export const FRAME_W = 1440;
 export const FRAME_H = 900;
 const READY_TIMEOUT_MS = 15_000;
+/** Панель и диалог в экранах открываются через setTimeout: цель следующего сигнала — не в том же кадре. */
+const TARGET_WAIT_MS = 1_000;
 
 export interface ScreenHandle {
   /** Привести экран к локальному моменту сцены; выполняется, когда кадр готов. */
@@ -79,6 +86,24 @@ function viewOf(doc: Document, sceneKey: string): Window & typeof globalThis {
   if (!win) throw new Error(`[film] сцена «${sceneKey}»: документ окна отсоединён — действие некуда выполнить`);
   return win;
 }
+
+/** Ищет покадрово до TARGET_WAIT_MS; не нашлось — `fail` бросает понятную ошибку. */
+async function waitFor<T>(doc: Document, sceneKey: string, find: () => T | null, fail: () => T): Promise<T> {
+  const win = viewOf(doc, sceneKey);
+  const deadline = performance.now() + TARGET_WAIT_MS;
+  for (;;) {
+    const found = find();
+    if (found) return found;
+    if (performance.now() > deadline) return fail();
+    await nextFrames(win, 1);
+  }
+}
+
+const waitTarget = (doc: Document, cue: ClickCue | ScrollCue, sceneKey: string): Promise<Element> =>
+  waitFor(doc, sceneKey, () => cue.target(doc), () => resolveTarget(doc, cue, sceneKey));
+
+const waitArea = (doc: Document, cue: HighlightCue, sceneKey: string): Promise<Rect> =>
+  waitFor(doc, sceneKey, () => cue.area(doc), () => resolveArea(doc, cue, sceneKey));
 
 /** Полная последовательность указателя: вкладки Radix срабатывают по mousedown, меню — по pointerdown. */
 function pointerClick(el: Element, sceneKey: string): void {
@@ -174,6 +199,12 @@ export const ScreenScene = React.forwardRef<ScreenHandle, ScreenSceneProps>(func
   /** Центры целей курсора по `at` клика: замер один раз, сброс — с документом окна. */
   const centers = React.useRef(new Map<number, Point>());
   const [points, setPoints] = React.useState<(Point & { at: number })[]>([]);
+  /** Рамки, активные в момент последнего перехода: индекс в `highlights` и область в координатах окна. */
+  const [boxes, setBoxes] = React.useState<{ i: number; rect: Rect }[]>([]);
+  const highlights = React.useMemo(
+    () => cues.filter((c): c is HighlightCue => c.kind === "highlight"),
+    [cues],
+  );
   const cursorClicks = React.useMemo(
     () =>
       cues
@@ -208,11 +239,11 @@ export const ScreenScene = React.forwardRef<ScreenHandle, ScreenSceneProps>(func
       }
       // Центр цели курсора замеряется один раз: по раскладке после кликов, сделанных
       // до начала подъезда (at − CURSOR_LEAD), — до клика `before` и до своего клика.
-      const measure = (before: number) => {
+      const measure = async (before: number) => {
         for (const c of cursorClicks) {
           const start = c.at - CURSOR_LEAD;
           if (start > local || start >= before || centers.current.has(c.at)) continue;
-          const r = resolveTarget(doc, c, scene.key).getBoundingClientRect();
+          const r = (await waitTarget(doc, c, scene.key)).getBoundingClientRect();
           centers.current.set(c.at, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
         }
       };
@@ -220,26 +251,36 @@ export const ScreenScene = React.forwardRef<ScreenHandle, ScreenSceneProps>(func
       // в микрозадаче, и цель следующего (строка после вкладки, пункт после меню)
       // появляется только после отрисовки.
       for (const cue of plan.clicks) {
-        measure(cue.at);
-        pointerClick(resolveTarget(doc, cue, scene.key), scene.key);
+        await measure(cue.at);
+        pointerClick(await waitTarget(doc, cue, scene.key), scene.key);
         await nextFrames(viewOf(doc, scene.key), 1);
       }
       for (const { cue, p } of plan.scrolls) {
-        const el = resolveTarget(doc, cue, scene.key);
+        const el = await waitTarget(doc, cue, scene.key);
         if (cue.axis === "y") el.scrollTop = cue.to(p, el);
         else el.scrollLeft = cue.to(p, el);
       }
-      measure(Number.POSITIVE_INFINITY);
+      await measure(Number.POSITIVE_INFINITY);
+      // Рамки — после кликов и прокруток: положение области зависит от них.
+      const measuredBoxes: { i: number; rect: Rect }[] = [];
+      for (let i = 0; i < highlights.length; i++) {
+        const h = highlights[i];
+        if (local < h.at || local > h.until) continue;
+        measuredBoxes.push({ i, rect: await waitArea(doc, h, scene.key) });
+      }
       applied.current = local;
       // Курсор — только у кликов, чьё окно уже началось; центры — из замеров.
       const measured = cursorClicks
         .filter((c) => local >= c.at - CURSOR_LEAD)
         .map((c) => ({ at: c.at, ...centers.current.get(c.at)! }));
-      flushSync(() => setPoints(measured));
+      flushSync(() => {
+        setPoints(measured);
+        setBoxes(measuredBoxes);
+      });
       await doc.fonts.ready;
       await nextFrames(viewOf(doc, scene.key), 2);
     },
-    [cues, cursorClicks, scene, src],
+    [cues, cursorClicks, highlights, scene, src],
   );
 
   // Запросы склеиваются: пока идёт переход, новый момент ждёт, промежуточные отбрасываются.
@@ -309,6 +350,32 @@ export const ScreenScene = React.forwardRef<ScreenHandle, ScreenSceneProps>(func
           tabIndex={-1}
           style={{ display: "block", border: 0, pointerEvents: "none" }}
         />
+        {boxes.map(({ i, rect }) => {
+          const cue = highlights[i];
+          const look = cue ? highlightLook(t, cue) : null;
+          if (!cue || !look) return null;
+          const pad = cue.pad ?? 6;
+          return (
+            <div
+              key={i}
+              data-film="highlight"
+              style={{
+                position: "absolute",
+                left: rect.x - pad,
+                top: rect.y - pad,
+                width: rect.w + pad * 2,
+                height: rect.h + pad * 2,
+                boxSizing: "border-box",
+                // 3 px на холсте при любом наезде камеры.
+                border: `${3 / pose.zoom}px solid ${FILM.accent}`,
+                borderRadius: 10,
+                opacity: look.opacity,
+                transform: `scale(${look.scale})`,
+                pointerEvents: "none",
+              }}
+            />
+          );
+        })}
         {cursor && <FilmCursor path={cursor} zoom={pose.zoom} />}
       </div>
     </div>
