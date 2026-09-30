@@ -42,7 +42,7 @@ import {
 import { PromoNoFilter } from "../short-calendar/PromoNoFilter";
 import { useRole } from "../../role-context";
 import { useNotifications } from "../notifications/NotificationsProvider";
-import { FullCalendarGrid } from "./FullCalendarGrid";
+import { FullCalendarGrid, lineRowAccess } from "./FullCalendarGrid";
 import { ColumnGroupToggle } from "./ColumnGroupToggle";
 import { AddNomenclatureDialog } from "./AddNomenclatureDialog";
 import { ExcelImportDialog } from "./ExcelImportDialog";
@@ -1470,7 +1470,9 @@ export function FullCalendarPage() {
               </span>
             }
             actions={
-              <div className="flex items-center gap-2">
+              // flex-wrap только ниже lg: на телефоне три кнопки шире экрана; на
+              // десктопе раскладка шапки прежняя (переносится заголовок, не кнопки).
+              <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
                 <Button variant="secondary" onClick={onExport}>
                   <Download className="size-4" />
                   Экспорт
@@ -1780,6 +1782,20 @@ export function FullCalendarPage() {
           setEditLineId(null);
           handleOpenDetails(id);
         }}
+        detailsDot={editLine ? rejectionLineIds.has(editLine.id) : false}
+        // Удаление строки — те же правила, что у корзины в строке (lineRowAccess);
+        // на телефоне корзины в строке нет, действие живёт здесь.
+        onDelete={
+          editLine &&
+          editLineCampaign &&
+          !editLine.removed &&
+          lineRowAccess(access, editLineCampaign, editLine).deletable
+            ? () => {
+                setEditLineId(null);
+                onDeleteLine(editLine.id);
+              }
+            : undefined
+        }
       />
 
       {/* Version history & changes (§5.1) — 3 views + diff; «Создать корректировку»

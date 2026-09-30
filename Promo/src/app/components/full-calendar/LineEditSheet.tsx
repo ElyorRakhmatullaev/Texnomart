@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Ban, Eye, Gift, X } from "lucide-react";
+import { Ban, Eye, Gift, Trash2, X } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -51,6 +51,8 @@ export function LineEditSheet({
   onRemoveGift,
   onRequestRemoval,
   onOpenDetails,
+  detailsDot = false,
+  onDelete,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -69,6 +71,14 @@ export function LineEditSheet({
    * not in this sheet (№13 п.3 — decisions live only in the details panel).
    */
   onOpenDetails?: (lineId: string) => void;
+  /** Непросмотренный отказ по строке — красная точка на «Детали изменений» (Блок 6). */
+  detailsDot?: boolean;
+  /**
+   * Жёсткое удаление строки (черновик / неотправленное добавление). Передаётся
+   * только для удаляемой строки (`lineRowAccess().deletable`) — на телефоне корзины
+   * в строке нет, удаление доступно отсюда.
+   */
+  onDelete?: () => void;
 }) {
   const nom = line ? getNomenclatureItem(line.nomenclatureId) : undefined;
   const gift = campaign ? isGiftType(campaign.type) : false;
@@ -117,6 +127,28 @@ export function LineEditSheet({
                 {nom ? <Money value={nom.oldRetailPrice} /> : "—"}
               </Info>
             </dl>
+
+            {/* «Детали изменений» (Поле/Было/Стало · запрос · отклонение): ниже lg
+                (телефон и планшет — порог узкой сетки, `useNarrowGrid`) строка
+                открывает этот лист, иконки-глаза в строке нет (на десктопе глаз в
+                строке — кнопка скрыта). Для строки с запросом на исключение кнопка —
+                в разделе «Участие в акции». */}
+            {onOpenDetails && !line.removalPending && (
+              <Button
+                variant="secondary"
+                className="relative min-h-11 w-full lg:hidden"
+                onClick={() => onOpenDetails(line.id)}
+              >
+                <Eye className="size-4" />
+                Детали изменений
+                {detailsDot && (
+                  <span
+                    aria-hidden
+                    className="absolute right-3 top-1/2 size-2 -translate-y-1/2 rounded-full bg-red-500"
+                  />
+                )}
+              </Button>
+            )}
 
             {/* ── Товар ── */}
             <Section title="Товар">
@@ -250,6 +282,7 @@ export function LineEditSheet({
             {/* ── Исключение из акции (§5.3) ── */}
             {(line.removed ||
               line.removalPending ||
+              onDelete ||
               (onRequestRemoval && isApprovedPosition(campaign, line))) && (
               <Section title="Участие в акции">
                 {line.removed ? (
@@ -286,19 +319,35 @@ export function LineEditSheet({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      Исключение требует повторного согласования коммерческим
-                      директором; после согласования смежные отделы уведомляются
-                      инкрементально (§5.3).
-                    </p>
-                    <Button
-                      variant="secondary"
-                      className="min-h-11 w-full text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                      onClick={() => onRequestRemoval!(line.id)}
-                    >
-                      <Ban className="size-4" />
-                      Исключить позицию из акции
-                    </Button>
+                    {onRequestRemoval && isApprovedPosition(campaign, line) && (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          Исключение требует повторного согласования коммерческим
+                          директором; после согласования смежные отделы уведомляются
+                          инкрементально (§5.3).
+                        </p>
+                        <Button
+                          variant="secondary"
+                          className="min-h-11 w-full text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                          onClick={() => onRequestRemoval(line.id)}
+                        >
+                          <Ban className="size-4" />
+                          Исключить позицию из акции
+                        </Button>
+                      </>
+                    )}
+                    {/* Черновик / неотправленное добавление удаляется сразу, без
+                        согласования — то же действие, что корзина в строке. */}
+                    {onDelete && (
+                      <Button
+                        variant="outline"
+                        className="min-h-11 w-full text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                        onClick={onDelete}
+                      >
+                        <Trash2 className="size-4" />
+                        Удалить номенклатуру
+                      </Button>
+                    )}
                   </div>
                 )}
               </Section>

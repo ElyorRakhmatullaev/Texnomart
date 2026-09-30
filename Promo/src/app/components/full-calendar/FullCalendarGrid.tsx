@@ -4,20 +4,30 @@ import * as React from "react";
 import { cn } from "@texnomart/ui/utils";
 import { Card } from "@texnomart/ui/card";
 import { Checkbox } from "@texnomart/ui/checkbox";
+import { buttonVariants } from "@texnomart/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@texnomart/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@texnomart/ui/tooltip";
 import {
   Ban,
   CalendarClock,
+  ChevronRight,
   Clock,
   Copy,
   Eye,
   Gift,
   History,
   Lock,
+  MoreHorizontal,
   Pencil,
   Plus,
   Trash2,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { Money } from "../../../components/Money";
 import { RuDate } from "../../../components/RuDate";
@@ -99,31 +109,89 @@ const NAME_LINE_H = 17; // text-sm leading-tight
 // правка) − возможные чипы. Берём с запасом ВНИЗ: недооценка ширины даёт лишнюю
 // высоту строки (безопасно), переоценка — клиппинг (нельзя).
 const NAME_MEASURE_W = 170;
-let nameCtx: CanvasRenderingContext2D | null = null;
-function nameLineCount(name: string): number {
+// Телефон (< md): колонка «Номенклатура» 172px − px-2 (16) − кнопка «Открыть
+// строку» 44 − зазор 4 = 108; берём 104 — с тем же запасом вниз.
+const NAME_MEASURE_W_MOBILE = 104;
+const NAME_FONT = "500 14px Inter, ui-sans-serif, system-ui, sans-serif";
+// Строка под названием на телефоне: фамилия КМ (text-xs) + пометки строки
+// («Черновик», «дубль», «Удалено», часы 1С). Пометка ≈ 19px — считаем 20.
+const META_LINE_H = 20;
+const META_GAP_Y = 2; // gap-y-0.5 между перенесёнными строками пометок
+const META_TOP = 2; // mt-0.5 над строкой пометок
+const META_GAP_X = 4; // gap-x-1
+// Фактическая ширина текстовой колонки на телефоне (172 − 16 − 44 − 4); ширины
+// фамилии и пометок уже взяты с запасом вверх.
+const META_MEASURE_W = 108;
+const META_FONT = "400 12px Inter, ui-sans-serif, system-ui, sans-serif";
+const CHIP_FONT = "500 10px Inter, ui-sans-serif, system-ui, sans-serif";
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+function textWidth(text: string, font: string): number | null {
+  if (typeof document === "undefined") return null;
+  if (measureCtx === undefined)
+    measureCtx = document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return null;
+  measureCtx.font = font;
+  return measureCtx.measureText(text).width;
+}
+function nameLineCount(name: string, measureW = NAME_MEASURE_W): number {
   if (typeof document === "undefined") return 2;
-  if (!nameCtx) {
-    nameCtx = document.createElement("canvas").getContext("2d");
-    if (nameCtx)
-      nameCtx.font = "500 14px Inter, ui-sans-serif, system-ui, sans-serif";
-  }
-  if (!nameCtx) return Math.max(1, Math.ceil(name.length / 22));
+  if (textWidth("", NAME_FONT) === null)
+    return Math.max(1, Math.ceil(name.length / Math.floor(measureW / 7.7)));
   let lines = 1;
   let current = "";
   for (const word of name.split(/\s+/)) {
     const probe = current ? `${current} ${word}` : word;
-    if (nameCtx.measureText(probe).width <= NAME_MEASURE_W) {
+    if ((textWidth(probe, NAME_FONT) ?? 0) <= measureW) {
       current = probe;
     } else {
       if (current) lines += 1;
       // Слово длиннее строки переносится браузером само (break-words) — считаем
       // его отдельными строками по ширине.
       current = word;
-      const w = nameCtx.measureText(word).width;
-      if (w > NAME_MEASURE_W) {
-        lines += Math.floor(w / NAME_MEASURE_W);
+      const w = textWidth(word, NAME_FONT) ?? 0;
+      if (w > measureW) {
+        lines += Math.floor(w / measureW);
         current = "";
       }
+    }
+  }
+  return lines;
+}
+
+/** Пометка строки (text-[10px], px-1.5) — ширина с запасом; `icon` — иконка 10px + зазор. */
+function chipWidth(label: string, icon: boolean): number {
+  const w = textWidth(label, CHIP_FONT) ?? label.length * 6.5;
+  return Math.ceil(w) + 12 + (icon ? 12 : 0) + 2;
+}
+
+/**
+ * Телефон: сколько строк займёт «фамилия КМ + пометки» под названием (flex-wrap,
+ * тот же порядок, что в разметке). Жадный перенос, ширины — с запасом вверх.
+ */
+function mobileMetaLines(campaign: PromoCampaign, line: PromoLine): number {
+  const km = getCategoryManager(line.kmId);
+  const surname = km ? lastName(km.name) : "—";
+  const items: number[] = [
+    Math.ceil(textWidth(surname, META_FONT) ?? surname.length * 7) + 2,
+  ];
+  // `LineMarkers` — ОДИН неразрывный flex-элемент («дубль» + часы 1С внутри,
+  // gap-1), и он есть в разметке всегда — пустой занимает 0px, но получает зазор.
+  const dup = line.duplicate ? chipWidth("дубль", true) : 0;
+  const clock = line.pending1CCheck ? 16 : 0;
+  items.push(dup + clock + (dup && clock ? META_GAP_X : 0));
+  const status = lineDisplayStatus(campaign, line);
+  if (status === "Черновик") items.push(chipWidth("Черновик", false));
+  else if (status === "Отменена / Удалена")
+    items.push(chipWidth(line.removed ? "Удалено" : "Отменено", true));
+  let lines = 1;
+  let used = 0;
+  for (const w of items) {
+    const next = used === 0 ? w : used + META_GAP_X + w;
+    if (used === 0 || next <= META_MEASURE_W) {
+      used = next;
+    } else {
+      lines += 1;
+      used = w;
     }
   }
   return lines;
@@ -134,10 +202,24 @@ function nameLineCount(name: string): number {
  * R43: подпись-строка «Подарок на выбор» внутри ячейки упразднена — её роль
  * выполняет заголовок блока столбцов «Подарок на выбор (1)».
  * 11-я часть: высота учитывает и полное (необрезанное) наименование номенклатуры.
+ * Телефон (`mobileMeta` > 0): имя в узкой колонке + строка(и) «фамилия КМ + пометки».
  */
-function lineHeightPx(line: PromoLine, isChoice: boolean, editable: boolean): number {
+function lineHeightPx(
+  line: PromoLine,
+  isChoice: boolean,
+  editable: boolean,
+  mobileMeta = 0
+): number {
   const nom = getNomenclatureItem(line.nomenclatureId);
-  const nameH = nom ? nameLineCount(nom.name) * NAME_LINE_H + 16 : 0;
+  const nameH = !nom
+    ? 0
+    : mobileMeta > 0
+      ? nameLineCount(nom.name, NAME_MEASURE_W_MOBILE) * NAME_LINE_H +
+        META_TOP +
+        mobileMeta * META_LINE_H +
+        (mobileMeta - 1) * META_GAP_Y +
+        16
+      : nameLineCount(nom.name) * NAME_LINE_H + 16;
   const base = Math.max(ROW_H_PX, nameH);
   if (!isChoice) return base;
   const giftCount = line.gifts?.length ?? 0;
@@ -158,6 +240,85 @@ const FROZEN = {
   // 11-я часть (Блок 3): полное наименование без обрезки — колонке нужно больше места.
   nomenclature: 320,
 };
+// Телефон (< md): закреплённая панель — только выбор + «Номенклатура» (ФИО КМ —
+// второй строкой под названием, № промо уже есть на полосе акции). Иначе 618px
+// закреплённой панели не оставляли прокручиваемой ни пикселя (Promo №1, 30.09).
+const FROZEN_MOBILE = {
+  select: 40,
+  promo: 0,
+  km: 0,
+  nomenclature: 172,
+};
+
+/**
+ * Правила строки полного календаря — единственное место: «правится» (лист
+ * «Редактировать строку» + инлайн-ячейки) и «удаляется» (жёсткое удаление).
+ *  • §3: жёсткое добавление/удаление — только до отправки (свежий черновик акции);
+ *    «Изменить» служит и корректировкам согласованной акции.
+ *  • №13 п.1: неотправленная позиция КМ (`draft`) правится и удаляется владельцем
+ *    при любом статусе акции. Добавление в согласованную акцию, пока его не
+ *    согласовали (или отклонили), владелец тоже может убрать — это отзыв запроса.
+ */
+export function lineRowAccess(
+  access: FullCalendarAccess,
+  campaign: PromoCampaign,
+  line: PromoLine
+): { editable: boolean; deletable: boolean } {
+  if (!access.canEditOwnLines) return { editable: false, deletable: false };
+  const fresh = isCampaignFreshEditable(campaign);
+  const ownDraft = Boolean(line.draft);
+  const ownUnapprovedAddition = line.pending?.action === "addition";
+  return {
+    editable: fresh || isApprovedCampaign(campaign) || ownDraft,
+    deletable: fresh || ownDraft || ownUnapprovedAddition,
+  };
+}
+
+/**
+ * Высота строки для ОБЕИХ панелей Pattern F — один вызов с одинаковыми аргументами
+ * в закреплённой и в прокручиваемой панели, иначе строки разъедутся.
+ */
+function rowHeightPx(
+  campaign: PromoCampaign,
+  line: PromoLine,
+  isChoice: boolean,
+  editable: boolean,
+  mobile: boolean
+): number {
+  return lineHeightPx(
+    line,
+    isChoice,
+    editable,
+    mobile ? mobileMetaLines(campaign, line) : 0
+  );
+}
+
+/**
+ * Ширина < lg (1024) — по медиа-запросу, как у Tailwind `lg:`. Порог lg, а не md:
+ * с md боковое меню AppShell уже на экране, и на 800px контенту остаётся ≈544px —
+ * десктопная закреплённая панель (579–618px) съедала прокручиваемую до 0.
+ * Не `useIsMobile()` из `@texnomart/ui`: тот читает `window.innerWidth` (визуальный
+ * вьюпорт) и только после первой отрисовки. На телефоне первая — десктопная —
+ * отрисовка шире экрана, Chrome уменьшает масштаб, `innerWidth` становится ≈1560, и
+ * флаг навсегда остаётся `false` (медиа-запрос при этом не меняется — события
+ * `change` нет). Медиа-запрос считается по ширине макета (device-width) и известен
+ * уже на первой отрисовке.
+ */
+// `(width < 64rem)` — точное дополнение к Tailwind `lg:` (`width >= 64rem`): при
+// дробной ширине (1023–1024px под масштабом) `max-width: 1023px` и `lg:` оба ложны.
+const NARROW_QUERY = "(width < 64rem)";
+function subscribeNarrow(onChange: () => void) {
+  const mql = window.matchMedia(NARROW_QUERY);
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+function useNarrowGrid(): boolean {
+  return React.useSyncExternalStore(
+    subscribeNarrow,
+    () => window.matchMedia(NARROW_QUERY).matches,
+    () => false
+  );
+}
 
 function colStyle(width: number): React.CSSProperties {
   return { width, minWidth: width };
@@ -466,6 +627,15 @@ function CellValue({
   }
 }
 
+/** Действие полосы акции (десктопная полоса и мобильное меню «Действия акции»). */
+interface BandAction {
+  key: "add" | "period" | "edit" | "history" | "cancel";
+  label: string;
+  icon: LucideIcon;
+  onSelect: () => void;
+  destructive?: boolean;
+}
+
 interface FullCalendarGridProps {
   campaigns: PromoCampaign[];
   visibleGroups: ColumnGroupKey[];
@@ -529,6 +699,67 @@ export function FullCalendarGrid({
   onToggleGroup,
 }: FullCalendarGridProps) {
   const editorMode = access.canEditOwnLines || access.marketingFlagOnly;
+  // < lg (телефон и планшет): узкая закреплённая панель, одна кнопка строки,
+  // действия акции — в меню. Инлайн-ширины колонок классами не перебить — нужен флаг в JS.
+  const isMobile = useNarrowGrid();
+  const F = isMobile ? FROZEN_MOBILE : FROZEN;
+  // Ширина закреплённой панели задаётся явно и одинаково в шапке и в теле: иначе
+  // длинная полоса акции («26-115 · 12 позиций» + «⋯») раздвинула бы тело шире
+  // шапки, и колонки прокручиваемой части разъехались бы со своими заголовками.
+  // У телефонной раскладки promo/km = 0.
+  const frozenTotal = (editorMode ? F.select : 0) + F.promo + F.km + F.nomenclature;
+
+  /**
+   * Действия полосы акции — одно место условий для десктопной полосы (кнопки
+   * прежней разметки) и мобильного меню «Действия акции».
+   */
+  const bandActions = (campaign: PromoCampaign): BandAction[] => {
+    const out: BandAction[] = [];
+    if (access.canEditOwnLines && !campaign.cancelled)
+      out.push({
+        key: "add",
+        label: "Добавить номенклатуру",
+        icon: Plus,
+        onSelect: () => onAddRequest(campaign.id),
+      });
+    if (onEditPeriod && campaign.planned && isApprovedCampaign(campaign))
+      out.push({
+        key: "period",
+        label: "Изменить период",
+        icon: CalendarClock,
+        onSelect: () => onEditPeriod(campaign.id),
+      });
+    if (
+      onEditCampaign &&
+      !campaign.planned &&
+      !campaign.firstSendDone &&
+      !campaign.cancelled &&
+      access.canEditOwnLines
+    )
+      out.push({
+        key: "edit",
+        label: "Изменить акцию",
+        icon: Pencil,
+        onSelect: () => onEditCampaign(campaign.id),
+      });
+    if (onHistory)
+      out.push({
+        key: "history",
+        label: "История",
+        icon: History,
+        onSelect: () => onHistory(campaign.id),
+      });
+    // КД: cancel the whole campaign (§5.3).
+    if (onCancelCampaign && !campaign.cancelled)
+      out.push({
+        key: "cancel",
+        label: "Отменить акцию",
+        icon: Ban,
+        destructive: true,
+        onSelect: () => onCancelCampaign(campaign.id),
+      });
+    return out;
+  };
 
   const cols = React.useMemo(
     () => COLUMNS.filter((c) => visibleGroups.includes(c.group)),
@@ -568,7 +799,7 @@ export function FullCalendarGrid({
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [campaigns, cols, editorMode]);
+  }, [campaigns, cols, editorMode, isMobile]);
 
   // Mirror one scroller's scrollLeft onto the other two. Idempotent writes → the
   // resulting scroll events self-terminate (no re-entrancy flag needed).
@@ -607,17 +838,26 @@ export function FullCalendarGrid({
               "flex shrink-0 items-center border-r text-xs font-semibold text-gray-700 dark:text-gray-200",
               HEADER_H
             )}
+            style={colStyle(frozenTotal)}
           >
-            {editorMode && <span style={colStyle(FROZEN.select)} />}
-            <span className="px-3 text-center" style={colStyle(FROZEN.promo)}>
-              № промо
-            </span>
-            <span className="px-3" style={colStyle(FROZEN.km)}>
-              ФИО КМ
-            </span>
-            <span className="px-3" style={colStyle(FROZEN.nomenclature)}>
-              Номенклатура
-            </span>
+            {editorMode && <span style={colStyle(F.select)} />}
+            {isMobile ? (
+              <span className="px-2" style={colStyle(F.nomenclature)}>
+                Номенклатура / КМ
+              </span>
+            ) : (
+              <>
+                <span className="px-3 text-center" style={colStyle(FROZEN.promo)}>
+                  № промо
+                </span>
+                <span className="px-3" style={colStyle(FROZEN.km)}>
+                  ФИО КМ
+                </span>
+                <span className="px-3" style={colStyle(FROZEN.nomenclature)}>
+                  Номенклатура
+                </span>
+              </>
+            )}
           </div>
           <div ref={headRef} className="min-w-0 flex-1 overflow-hidden">
             <div
@@ -669,7 +909,10 @@ export function FullCalendarGrid({
       {/* ── BODY band ─────────────────────────────────────────────────────────── */}
       <div className="flex">
         {/* Frozen identity pane (select · № промо · ФИО КМ · Номенклатура) */}
-        <div className="shrink-0 border-r bg-white dark:bg-card">
+        <div
+          className="shrink-0 border-r bg-white dark:bg-card"
+          style={colStyle(frozenTotal)}
+        >
           {groups.map(({ campaign, lines }) => {
             const ids = lines.map((l) => l.id);
             const selCount = ids.filter((id) => selectedIds.has(id)).length;
@@ -679,20 +922,16 @@ export function FullCalendarGrid({
                 : selCount === ids.length
                   ? true
                   : "indeterminate";
-            // §3: hard add/delete only before submit (fresh draft); «Изменить»
-            // (the per-line Sheet) also serves approved-campaign corrections.
-            const freshEditable =
-              access.canEditOwnLines && isCampaignFreshEditable(campaign);
-            const lineEditable =
-              access.canEditOwnLines &&
-              (isCampaignFreshEditable(campaign) || isApprovedCampaign(campaign));
             const choice = isGiftChoiceType(campaign.type);
+            const actions = bandActions(campaign);
+            const addAction = actions.find((a) => a.key === "add");
             return (
               <div key={campaign.id}>
                 {/* group band (frozen side) — № промо once + count (§13) */}
                 <div
                   className={cn(
-                    "flex items-center gap-2 border-b bg-gray-50 dark:bg-muted/40 px-3 text-xs font-semibold text-gray-700 dark:text-gray-200",
+                    "flex items-center border-b bg-gray-50 dark:bg-muted/40 text-xs font-semibold text-gray-700 dark:text-gray-200",
+                    isMobile ? "gap-1.5 pl-2" : "gap-2 px-3",
                     BAND_H,
                     campaign.cancelled && "bg-red-50 dark:bg-red-500/15"
                   )}
@@ -704,38 +943,74 @@ export function FullCalendarGrid({
                       aria-label="Выбрать все строки акции"
                     />
                   )}
-                  <span className="tabular-nums">{formatPromoNo(campaign.id)}</span>
-                  <span className="font-normal text-muted-foreground">
+                  <span className={cn("tabular-nums", isMobile && "shrink-0")}>
+                    {formatPromoNo(campaign.id)}
+                  </span>
+                  <span
+                    className={cn(
+                      "font-normal text-muted-foreground",
+                      isMobile && "min-w-0 truncate"
+                    )}
+                  >
                     · {lines.length} {pluralPositions(lines.length)}
                   </span>
-                  {access.canEditOwnLines && !campaign.cancelled && (
-                    <button
-                      type="button"
-                      onClick={() => onAddRequest(campaign.id)}
-                      className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
-                    >
-                      <Plus className="size-3" />
-                      Добавить номенклатуру
-                    </button>
+                  {isMobile ? (
+                    actions.length > 0 && (
+                      <DropdownMenu>
+                        {/* Нативный <button> + buttonVariants, не общий <Button>:
+                            иначе ref asChild не цепляется и меню открывается за
+                            экраном (урок Волны 1). */}
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label={`Действия акции ${formatPromoNo(campaign.id)}`}
+                            className={cn(
+                              buttonVariants({ variant: "ghost", size: "icon" }),
+                              "ml-auto size-11 shrink-0 text-muted-foreground"
+                            )}
+                          >
+                            <MoreHorizontal className="size-5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                          {actions.map((a) => (
+                            <DropdownMenuItem
+                              key={a.key}
+                              variant={a.destructive ? "destructive" : "default"}
+                              className="min-h-11"
+                              onSelect={a.onSelect}
+                            >
+                              <a.icon className="size-4" />
+                              {a.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )
+                  ) : (
+                    addAction && (
+                      <button
+                        type="button"
+                        onClick={addAction.onSelect}
+                        className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
+                      >
+                        <Plus className="size-3" />
+                        {addAction.label}
+                      </button>
+                    )
                   )}
                 </div>
 
                 {/* lines (frozen) */}
                 {lines.map((line) => {
                   const nom = getNomenclatureItem(line.nomenclatureId);
-                  // Неотправленная позиция КМ (№13 п.1) правится и удаляется
-                  // владельцем при любом статусе акции — как черновик. Добавление в
-                  // согласованную акцию, пока его не согласовали (или отклонили),
-                  // владелец тоже может убрать — это отзыв запроса.
-                  const ownDraft = access.canEditOwnLines && Boolean(line.draft);
-                  const ownUnapprovedAddition =
-                    access.canEditOwnLines && line.pending?.action === "addition";
-                  const rowEditable = lineEditable || ownDraft;
-                  const rowDeletable = freshEditable || ownDraft || ownUnapprovedAddition;
+                  // Правила «правится/удаляется» — lineRowAccess (единое место).
+                  const { editable: rowEditable, deletable: rowDeletable } =
+                    lineRowAccess(access, campaign, line);
                   // Merged height for a «подарок на выбор» line — the main nomenclature
                   // shows once, centered, spanning all its gift sub-rows (§8). The
-                  // scrolling pane passes the SAME per-line flag (pane alignment).
-                  const h = lineHeightPx(line, choice, rowEditable);
+                  // scrolling pane makes the SAME rowHeightPx call (pane alignment).
+                  const h = rowHeightPx(campaign, line, choice, rowEditable, isMobile);
                   // 10-я часть: light-orange ONLY for repeat actions awaiting approval
                   // (Блок 1.3/1.4); cancelled/excluded → gray + strikethrough (Блок 5.5).
                   const status = lineDisplayStatus(campaign, line);
@@ -758,7 +1033,7 @@ export function FullCalendarGrid({
                       {editorMode && (
                         <span
                           className="flex items-center justify-center"
-                          style={colStyle(FROZEN.select)}
+                          style={colStyle(F.select)}
                         >
                           <Checkbox
                             checked={selectedIds.has(line.id)}
@@ -767,100 +1042,120 @@ export function FullCalendarGrid({
                           />
                         </span>
                       )}
-                      <span
-                        className="flex items-center justify-center px-3 text-xs tabular-nums text-muted-foreground"
-                        style={colStyle(FROZEN.promo)}
-                      >
-                        {formatPromoNo(campaign.id)}
-                      </span>
-                      <KmCell kmId={line.kmId} width={FROZEN.km} />
-                      <div
-                        className="flex min-w-0 items-center gap-1.5 px-3"
-                        style={colStyle(FROZEN.nomenclature)}
-                      >
-                        {/* 11-я часть (06.08, Блок 3): полное наименование без
-                            обрезки; внутренний код 1С рядом с именем не выводится
-                            (высота строки подстроена в lineHeightPx). */}
-                        <span className="min-w-0 break-words text-sm font-medium leading-tight text-gray-900 dark:text-gray-100">
-                          {nom?.name ?? line.nomenclatureId}
-                        </span>
-                        <LineMarkers line={line} />
-                        {/* Компактная пометка «Черновик» (10-я Блок 3.1). */}
-                        {status === "Черновик" && (
-                          <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-muted dark:text-gray-300">
-                            Черновик
+                      {isMobile ? (
+                        <MobileNomenclatureCell
+                          width={F.nomenclature}
+                          name={nom?.name ?? line.nomenclatureId}
+                          line={line}
+                          status={status}
+                          isCancelled={isCancelled}
+                          showRejectDot={showRejectDot}
+                          onOpen={
+                            rowEditable && !line.removed && onLineTap
+                              ? () => onLineTap(line.id)
+                              : onOpenDetails
+                                ? () => onOpenDetails(line.id)
+                                : undefined
+                          }
+                        />
+                      ) : (
+                        <>
+                          <span
+                            className="flex items-center justify-center px-3 text-xs tabular-nums text-muted-foreground"
+                            style={colStyle(FROZEN.promo)}
+                          >
+                            {formatPromoNo(campaign.id)}
                           </span>
-                        )}
-                        {/* Пометка отменённой/удалённой позиции (10-я Блок 5.5):
-                            «Удалено» для исключённой строки, «Отменено» для строки
-                            отменённой акции. */}
-                        {isCancelled && (
-                          <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-muted dark:text-gray-300">
-                            <Ban className="size-2.5" />
-                            {line.removed ? "Удалено" : "Отменено"}
-                          </span>
-                        )}
-                        <span className="ml-auto flex shrink-0 items-center gap-0.5">
-                          {/* Иконка-глаз «просмотр деталей» (10-я Блок 1.1) + красный
-                              индикатор отклонения для КМ (Блок 6). */}
-                          {onOpenDetails && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  onClick={() => onOpenDetails(line.id)}
-                                  aria-label="Просмотр деталей"
-                                  className="relative inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-accent dark:hover:text-gray-100"
-                                >
-                                  <Eye className="size-4" />
-                                  {showRejectDot && (
-                                    <span className="absolute right-0.5 top-0.5 size-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-card" />
-                                  )}
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>Просмотр деталей</TooltipContent>
-                            </Tooltip>
-                          )}
-                          <LineRowActions
-                            line={line}
-                            campaign={campaign}
-                            onRequestRemoval={onRequestRemoval}
-                          />
-                          {/* §3: «Изменить» + «Удалить» — near the row, no scroll.
-                              Изменить = the per-line Sheet (fresh draft or approved
-                              correction); Удалить = hard delete, drafts only. */}
-                          {rowEditable && !line.removed && onLineTap && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  onClick={() => onLineTap(line.id)}
-                                  aria-label="Изменить строку"
-                                  className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
-                                >
-                                  <Pencil className="size-4" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>Изменить номенклатуру</TooltipContent>
-                            </Tooltip>
-                          )}
-                          {rowDeletable && !line.removed && onDeleteLine && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  onClick={() => onDeleteLine(line.id)}
-                                  aria-label="Удалить строку"
-                                  className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400"
-                                >
-                                  <Trash2 className="size-4" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>Удалить номенклатуру</TooltipContent>
-                            </Tooltip>
-                          )}
-                        </span>
-                      </div>
+                          <KmCell kmId={line.kmId} width={FROZEN.km} />
+                          <div
+                            className="flex min-w-0 items-center gap-1.5 px-3"
+                            style={colStyle(FROZEN.nomenclature)}
+                          >
+                            {/* 11-я часть (06.08, Блок 3): полное наименование без
+                                обрезки; внутренний код 1С рядом с именем не выводится
+                                (высота строки подстроена в lineHeightPx). */}
+                            <span className="min-w-0 break-words text-sm font-medium leading-tight text-gray-900 dark:text-gray-100">
+                              {nom?.name ?? line.nomenclatureId}
+                            </span>
+                            <LineMarkers line={line} />
+                            {/* Компактная пометка «Черновик» (10-я Блок 3.1). */}
+                            {status === "Черновик" && (
+                              <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-muted dark:text-gray-300">
+                                Черновик
+                              </span>
+                            )}
+                            {/* Пометка отменённой/удалённой позиции (10-я Блок 5.5):
+                                «Удалено» для исключённой строки, «Отменено» для строки
+                                отменённой акции. */}
+                            {isCancelled && (
+                              <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-muted dark:text-gray-300">
+                                <Ban className="size-2.5" />
+                                {line.removed ? "Удалено" : "Отменено"}
+                              </span>
+                            )}
+                            <span className="ml-auto flex shrink-0 items-center gap-0.5">
+                              {/* Иконка-глаз «просмотр деталей» (10-я Блок 1.1) + красный
+                                  индикатор отклонения для КМ (Блок 6). */}
+                              {onOpenDetails && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenDetails(line.id)}
+                                      aria-label="Просмотр деталей"
+                                      className="relative inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-accent dark:hover:text-gray-100"
+                                    >
+                                      <Eye className="size-4" />
+                                      {showRejectDot && (
+                                        <span className="absolute right-0.5 top-0.5 size-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-card" />
+                                      )}
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Просмотр деталей</TooltipContent>
+                                </Tooltip>
+                              )}
+                              <LineRowActions
+                                line={line}
+                                campaign={campaign}
+                                onRequestRemoval={onRequestRemoval}
+                              />
+                              {/* §3: «Изменить» + «Удалить» — near the row, no scroll.
+                                  Изменить = the per-line Sheet (fresh draft or approved
+                                  correction); Удалить = hard delete, drafts only. */}
+                              {rowEditable && !line.removed && onLineTap && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={() => onLineTap(line.id)}
+                                      aria-label="Изменить строку"
+                                      className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
+                                    >
+                                      <Pencil className="size-4" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Изменить номенклатуру</TooltipContent>
+                                </Tooltip>
+                              )}
+                              {rowDeletable && !line.removed && onDeleteLine && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={() => onDeleteLine(line.id)}
+                                      aria-label="Удалить строку"
+                                      className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400"
+                                    >
+                                      <Trash2 className="size-4" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Удалить номенклатуру</TooltipContent>
+                                </Tooltip>
+                              )}
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -925,61 +1220,33 @@ export function FullCalendarGrid({
                           : "Подарки: 2 фиксированных"}
                       </span>
                     )}
-                    <div className="ml-auto flex shrink-0 items-center gap-1">
-                      {onEditPeriod &&
-                        campaign.planned &&
-                        isApprovedCampaign(campaign) && (
-                          <button
-                            type="button"
-                            onClick={() => onEditPeriod(campaign.id)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
-                          >
-                            <CalendarClock className="size-3" />
-                            Изменить период
-                          </button>
-                        )}
-                      {onEditCampaign &&
-                        !campaign.planned &&
-                        !campaign.firstSendDone &&
-                        !campaign.cancelled &&
-                        access.canEditOwnLines && (
-                          <button
-                            type="button"
-                            onClick={() => onEditCampaign(campaign.id)}
-                            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
-                          >
-                            <Pencil className="size-3" />
-                            Изменить акцию
-                          </button>
-                        )}
-                      {onHistory && (
-                        <button
-                          type="button"
-                          onClick={() => onHistory(campaign.id)}
-                          className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
-                        >
-                          <History className="size-3" />
-                          История
-                        </button>
-                      )}
-                      {/* КД: cancel the whole campaign (§5.3). */}
-                      {onCancelCampaign && !campaign.cancelled && (
-                        <button
-                          type="button"
-                          onClick={() => onCancelCampaign(campaign.id)}
-                          className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
-                        >
-                          <Ban className="size-3" />
-                          Отменить акцию
-                        </button>
-                      )}
-                      {campaign.cancelled && (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded bg-red-100 dark:bg-red-500/20 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
-                          <Ban className="size-3" />
-                          Отменена
-                        </span>
-                      )}
-                    </div>
+                    {isMobile ? (
+                      // Телефон: действия — в меню «Действия акции» закреплённой
+                      // полосы; бейдж «Отменена» остаётся здесь, у левого края.
+                      campaign.cancelled && <CancelledBadge />
+                    ) : (
+                      <div className="ml-auto flex shrink-0 items-center gap-1">
+                        {bandActions(campaign)
+                          .filter((a) => a.key !== "add")
+                          .map((a) => (
+                            <button
+                              key={a.key}
+                              type="button"
+                              onClick={a.onSelect}
+                              className={cn(
+                                "inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium",
+                                a.destructive
+                                  ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
+                                  : "text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
+                              )}
+                            >
+                              <a.icon className="size-3" />
+                              {a.label}
+                            </button>
+                          ))}
+                        {campaign.cancelled && <CancelledBadge />}
+                      </div>
+                    )}
                   </div>
 
                   {/* lines (scroll) */}
@@ -987,11 +1254,12 @@ export function FullCalendarGrid({
                     const nom = getNomenclatureItem(line.nomenclatureId);
                     // Та же правка черновика, что во frozen pane (№13 п.1): свой
                     // контекст ячеек и та же высота строки — панели не разъедутся.
+                    const { editable } = lineRowAccess(access, campaign, line);
                     const lineCtx: CellCtx =
-                      !ctx.lineEditable && access.canEditOwnLines && line.draft
-                        ? { ...ctx, lineEditable: true }
+                      editable !== ctx.lineEditable
+                        ? { ...ctx, lineEditable: editable }
                         : ctx;
-                    const h = lineHeightPx(line, choice, lineCtx.lineEditable);
+                    const h = rowHeightPx(campaign, line, choice, editable, isMobile);
                     // 10-я часть: подсветка строки по состоянию (см. frozen pane).
                     const repeatPending = isRepeatActionPending(line);
                     const isCancelled =
@@ -1052,9 +1320,11 @@ export function FullCalendarGrid({
                         ROW_H
                       )}
                     >
-                      {access.canEditOwnLines
-                        ? "Пока нет строк — добавьте номенклатуру кнопкой «+ Добавить номенклатуру»."
-                        : "Нет строк"}
+                      {!access.canEditOwnLines
+                        ? "Нет строк"
+                        : isMobile
+                          ? "Пока нет строк — «⋯» → «Добавить номенклатуру»."
+                          : "Пока нет строк — добавьте номенклатуру кнопкой «+ Добавить номенклатуру»."}
                     </div>
                   )}
                 </div>
@@ -1273,6 +1543,80 @@ function GiftSubCell({
         </button>
       )}
     </span>
+  );
+}
+
+function CancelledBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded bg-red-100 dark:bg-red-500/20 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
+      <Ban className="size-3" />
+      Отменена
+    </span>
+  );
+}
+
+/**
+ * Телефон (< md): единственная колонка закреплённой панели — полное название,
+ * под ним фамилия КМ и пометки строки, справа одна кнопка «Открыть строку» 44px
+ * (лист «Редактировать строку» для правящей роли, иначе «Детали изменений»).
+ * Высоту строки задаёт `rowHeightPx` (`mobileMetaLines` — та же раскладка).
+ */
+function MobileNomenclatureCell({
+  width,
+  name,
+  line,
+  status,
+  isCancelled,
+  showRejectDot,
+  onOpen,
+}: {
+  width: number;
+  name: string;
+  line: PromoLine;
+  status: string;
+  isCancelled: boolean;
+  showRejectDot: boolean;
+  onOpen?: () => void;
+}) {
+  const km = getCategoryManager(line.kmId);
+  return (
+    <div className="flex min-w-0 items-center gap-1 px-2" style={colStyle(width)}>
+      <div className="min-w-0 flex-1">
+        <span className="block break-words text-sm font-medium leading-tight text-gray-900 dark:text-gray-100">
+          {name}
+        </span>
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5">
+          <span className="text-xs text-muted-foreground">
+            {km ? lastName(km.name) : "—"}
+          </span>
+          <LineMarkers line={line} />
+          {status === "Черновик" && (
+            <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-muted dark:text-gray-300">
+              Черновик
+            </span>
+          )}
+          {isCancelled && (
+            <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-muted dark:text-gray-300">
+              <Ban className="size-2.5" />
+              {line.removed ? "Удалено" : "Отменено"}
+            </span>
+          )}
+        </span>
+      </div>
+      {onOpen && (
+        <button
+          type="button"
+          aria-label={`Открыть строку: ${name}`}
+          onClick={onOpen}
+          className="relative inline-flex size-11 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-gray-100 dark:hover:bg-accent"
+        >
+          <ChevronRight className="size-5" />
+          {showRejectDot && (
+            <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-card" />
+          )}
+        </button>
+      )}
+    </div>
   );
 }
 
