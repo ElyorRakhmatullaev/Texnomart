@@ -68,7 +68,12 @@ export const FULLCAL_SCREEN: ScreenSpec = {
   camera: [
     { at: 0, value: { ...WHOLE, cx: -320, ry: -8 } },
     { at: 0.7, value: WHOLE, ease: easeOutExpo },
-    { at: 1.4, value: { ...WHOLE, cx: 720, cy: 495, zoom: 1.334 }, ease: easeInOutCubic },
+    // zoom = 1920 / 1440: окно ровно во всю ширину кадра (tx = 960 − 720 · zoom = 0).
+    // Низ окна — на 0,27 px ниже кадра (cy = 494,8, а не 900 − 540 / zoom = 495):
+    // при целом сдвиге по обеим осям (ty = −120) Chrome считает окно выровненным по
+    // пикселям и переиспользует растр прокрученной таблицы — кадр начинает зависеть
+    // от пути перемотки (тест fullcal падал 3 из 3). ty = −119,73 — не целый.
+    { at: 1.4, value: { ...WHOLE, cx: 720, cy: 494.8, zoom: 1920 / 1440 }, ease: easeInOutCubic },
   ],
 };
 

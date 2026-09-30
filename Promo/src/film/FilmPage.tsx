@@ -39,7 +39,8 @@ export function FilmPage() {
   const params = React.useMemo(() => new URLSearchParams(window.location.search), []);
   const capture = params.get("capture") === "1";
   const lang: Lang = params.get("lang") === "uz" ? "uz" : "ru";
-  const aspect: Aspect = params.get("aspect") === "9x16" ? "9x16" : "16x9";
+  // Раскладки сцен пока только под 16:9: ?aspect=9x16 — второй этап (спецификация §6).
+  const aspect: Aspect = "16x9";
   const stage = STAGE[aspect];
   const timeline = React.useMemo(() => buildTimeline(SCENES), []);
   const [t, setT] = React.useState(0);

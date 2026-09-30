@@ -18,9 +18,9 @@
 // ProRes 4444 — мастер для монтажа, .mov), --crf, --audio.
 // Chrome: $CHROME или стандартные пути Windows/macOS/Linux; ffmpeg: $FFMPEG или PATH.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { extname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 // «pnpm film:promo -- --lang ru» передаёт «--» скрипту: без этой строки
@@ -63,6 +63,11 @@ if (!pix) throw new Error(`--codec h264|hevc|prores, а не ${codec}`);
 const userPath = (p) => resolve(process.env.INIT_CWD ?? process.cwd(), p);
 const OUT_DIR = resolve(import.meta.dirname, "..", "film-out");
 mkdirSync(OUT_DIR, { recursive: true });
+// Заголовок страницы Promo — по нему видно, что --base смотрит на Promo, а не
+// на Dashboard/Broker (все три по умолчанию занимают порт 5173).
+const PROMO_TITLE = /<title>([^<]*)<\/title>/.exec(
+  readFileSync(resolve(import.meta.dirname, "..", "index.html"), "utf8"),
+)?.[1];
 
 const CHROMES = [
   process.env.CHROME,
@@ -103,24 +108,33 @@ const chrome = spawn(chromePath, [
 // Синхронная пауза без новых зависимостей: process.on("exit") не пускает
 // async/await, а retryDelay у fs.rmSync здесь не выжидает между попытками.
 const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-
-// Любой выход (в том числе с ошибкой) не оставляет Chrome и его профиль висеть.
-process.on("exit", () => {
-  try {
-    chrome.kill();
-  } catch {
-    /* уже закрыт */
-  }
-  // Профиль удаляем сами, с паузой: Chrome может ещё секунду держать файлы.
+// Удаление с паузами: Chrome/ffmpeg могут ещё секунду держать файлы.
+const removeSync = (path) => {
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      rmSync(profile, { recursive: true, force: true });
-      break;
+      rmSync(path, { recursive: true, force: true });
+      return;
     } catch {
-      if (attempt === 9) break; /* лучшее усилие — не критично */
+      if (attempt === 9) return; /* лучшее усилие — не критично */
       sleepSync(150);
     }
   }
+};
+// Недописанное видео (.part) и его ffmpeg — пока идёт запись.
+let partial;
+
+// Любой выход (в том числе с ошибкой) не оставляет Chrome, ffmpeg, профиль и
+// недописанный файл висеть.
+process.on("exit", () => {
+  for (const proc of [chrome, partial?.ffmpeg]) {
+    try {
+      proc?.kill();
+    } catch {
+      /* уже закрыт */
+    }
+  }
+  removeSync(profile);
+  if (partial) removeSync(partial.file);
 });
 const wsUrl = await new Promise((resolve, reject) => {
   let log = "";
@@ -136,8 +150,22 @@ const ws = new WebSocket(wsUrl);
 await new Promise((ok) => ws.addEventListener("open", ok, { once: true }));
 let nextId = 0;
 const pending = new Map();
+// Упавший посреди записи Chrome иначе оставил бы ждущие вызовы без ответа —
+// скрипт висел бы вечно. Все ждущие и все следующие вызовы — с понятной ошибкой.
+let lost;
+const failAll = (why) => {
+  lost ??= why;
+  for (const p of pending.values()) p.reject(new Error(lost));
+  pending.clear();
+};
+const dropped = "соединение с Chrome (DevTools) оборвалось — Chrome упал или был закрыт";
+ws.addEventListener("close", () => failAll(dropped));
+ws.addEventListener("error", () => failAll(dropped));
+chrome.on("exit", (code) => failAll(`Chrome завершился (код ${code})`));
+let onEvent = () => {};
 ws.addEventListener("message", (e) => {
   const msg = JSON.parse(e.data);
+  if (msg.method) return onEvent(msg);
   const p = pending.get(msg.id);
   if (!p) return;
   pending.delete(msg.id);
@@ -146,6 +174,7 @@ ws.addEventListener("message", (e) => {
 });
 const send = (method, params = {}, sessionId) =>
   new Promise((resolve, reject) => {
+    if (lost) return reject(new Error(lost));
     const id = ++nextId;
     pending.set(id, { resolve, reject });
     ws.send(JSON.stringify({ id, method, params, sessionId }));
@@ -154,6 +183,24 @@ const send = (method, params = {}, sessionId) =>
 const { targetId } = await send("Target.createTarget", { url: "about:blank" });
 const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
 const page = (method, params) => send(method, params, sessionId);
+
+// Ошибки самой страницы (упавший импорт фильма, проверки посева) — в stderr,
+// каждая по одному разу: иначе запись молча ждала бы __capture.
+const pageErrors = [];
+onEvent = ({ method, params, sessionId: from }) => {
+  if (from !== sessionId) return;
+  let text;
+  if (method === "Runtime.exceptionThrown") {
+    const d = params.exceptionDetails;
+    text = d.exception?.description ?? d.text;
+  } else if (method === "Runtime.consoleAPICalled" && params.type === "error") {
+    text = params.args.map((a) => a.value ?? a.description ?? a.type).join(" ");
+  }
+  if (!text || pageErrors.includes(text)) return;
+  pageErrors.push(text);
+  console.error(`\n[страница] ${text}`);
+};
+await page("Runtime.enable");
 const evaluate = async (expression) => {
   const r = await page("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
   if (r.exceptionDetails) {
@@ -184,11 +231,33 @@ if (nav.errorText) {
 }
 console.log(`запись ${url}`);
 
+// Чужой сервер на том же порту или адрес без /promo отвечает — но не Promo:
+// сказать об этом сразу, а не ждать __capture минуту.
+for (let i = 0; ; i++) {
+  const loaded = 'document.readyState === "complete" && location.href !== "about:blank"';
+  if (await evaluate(loaded).catch(() => false)) break;
+  if (lost) throw new Error(lost);
+  if (i > 600) throw new Error(`страница не загрузилась за 60 с: ${url}`);
+  await new Promise((r) => setTimeout(r, 100));
+}
+const title = await evaluate("document.title");
+if (title !== PROMO_TITLE) {
+  throw new Error(
+    `по адресу ${url} открылась не Promo (заголовок «${title}», ждали «${PROMO_TITLE}»). ` +
+      "Проверьте --base (по умолчанию http://localhost:5173 — этот порт занимают и Dashboard, и Broker; " +
+      "для GitHub Pages — адрес с /promo) и запущен ли dev-сервер Promo: corepack pnpm dev:promo",
+  );
+}
+
 // Страница готова, когда фильм отвечает и шрифты загружены.
 const ready = async () => {
   for (let i = 0; ; i++) {
     if (await evaluate("!!window.__capture").catch(() => false)) return;
-    if (i > 600) throw new Error(`страница не загрузилась за 60 с: ${url}`);
+    if (lost) throw new Error(lost);
+    if (i > 600) {
+      const cause = pageErrors.length ? ` — ошибка страницы: ${pageErrors[0].split("\n")[0]}` : "";
+      throw new Error(`страница не загрузилась за 60 с: ${url}${cause}`);
+    }
     await new Promise((r) => setTimeout(r, 100));
   }
 };
@@ -271,6 +340,11 @@ if (opt.stills) {
     hevc: ["-c:v", "libx265", "-preset", "slow", "-crf", crf, "-tag:v", "hvc1", "-x265-params", "aq-mode=3:log-level=error"],
     prores: ["-c:v", "prores_ks", "-profile:v", "4444", "-vendor", "apl0"],
   }[codec];
+  // Пишем во временный файл рядом (film-ru-16x9.part.mp4: ffmpeg узнаёт
+  // контейнер по расширению) и подменяем им готовый только после успеха —
+  // упавшая запись не затирает прошлый удачный ролик недописанным.
+  const ext = extname(out);
+  const part = `${out.slice(0, out.length - ext.length)}.part${ext}`;
   const ffmpeg = spawn(
     ffmpegPath,
     [
@@ -291,10 +365,11 @@ if (opt.stills) {
       ...encoder,
       "-movflags",
       "+faststart",
-      out,
+      part,
     ],
     { stdio: ["pipe", "inherit", "inherit"] },
   );
+  partial = { file: part, ffmpeg };
   // Без этих обработчиков падение ffmpeg посреди потока (битый --audio,
   // неподдерживаемый кодек) роняет скрипт сырым EPIPE вместо понятной ошибки.
   let ffmpegError;
@@ -305,36 +380,59 @@ if (opt.stills) {
     ffmpegError ??= e;
   });
   const exited = new Promise((r) => ffmpeg.once("exit", (code) => r(code)));
-  const frames = Math.ceil(length * fps);
+  // Кадры в моменты from, from + 1/fps, … строго до to: кадр в момент to — уже
+  // первый кадр следующей главы. Допуск — на погрешность сложения длительностей.
+  const frames = Math.ceil(length * fps - 1e-6);
   const started = Date.now();
-  for (let i = 0; i <= frames; i++) {
-    if (ffmpegError || ffmpeg.exitCode !== null) break;
-    await seek(from + i / fps);
-    const png = await shot();
-    if (ffmpegError || ffmpeg.exitCode !== null) break;
-    if (!ffmpeg.stdin.write(png)) {
-      // Мёртвый ffmpeg никогда не пришлёт «drain» — не ждать его вечно.
-      await Promise.race([new Promise((r) => ffmpeg.stdin.once("drain", r)), exited]);
+  let written = 0;
+  try {
+    for (let i = 0; i < frames; i++) {
+      if (ffmpegError || ffmpeg.exitCode !== null) break;
+      await seek(from + i / fps);
+      const png = await shot();
+      if (ffmpegError || ffmpeg.exitCode !== null) break;
+      if (!ffmpeg.stdin.write(png)) {
+        // Мёртвый ffmpeg никогда не пришлёт «drain» — не ждать его вечно.
+        await Promise.race([new Promise((r) => ffmpeg.stdin.once("drain", r)), exited]);
+      }
+      written++;
+      if (i % fps === 0) {
+        process.stdout.write(
+          `\r${Math.round((i / frames) * 100)}% · ${Math.round((Date.now() - started) / 1000)} с`,
+        );
+      }
     }
-    if (i % fps === 0) {
-      process.stdout.write(
-        `\r${Math.round((i / frames) * 100)}% · ${Math.round((Date.now() - started) / 1000)} с`,
+    if (!ffmpeg.stdin.destroyed) ffmpeg.stdin.end();
+    const code = await exited;
+    if (code !== 0 || ffmpegError) {
+      throw new Error(
+        `ffmpeg завершился с кодом ${code}${ffmpegError ? ` (${ffmpegError.message})` : ""}`,
       );
     }
+  } catch (e) {
+    // Остановить ffmpeg, дождаться, пока он отпустит файл, и убрать недописанное.
+    ffmpeg.kill();
+    await Promise.race([exited, new Promise((r) => setTimeout(r, 5000))]);
+    removeSync(part);
+    partial = undefined;
+    throw e;
   }
-  if (!ffmpeg.stdin.destroyed) ffmpeg.stdin.end();
-  const code = await exited;
-  if (code !== 0 || ffmpegError) {
-    throw new Error(
-      `ffmpeg завершился с кодом ${code}${ffmpegError ? ` (${ffmpegError.message})` : ""}`,
-    );
+  partial = undefined;
+  try {
+    renameSync(part, out);
+  } catch (e) {
+    throw new Error(`не удалось заменить ${out} (открыт в плеере?); запись — в ${part}: ${e.message}`);
   }
   console.log(
-    `\nзаписан ${out} (${length.toFixed(1)} с, ${width * scale}×${height * scale}, ${fps} к/с, ${codec})`,
+    `\nзаписан ${out} (${written} кадров, ${(written / fps).toFixed(2)} с, ${width * scale}×${height * scale}, ${fps} к/с, ${codec})`,
   );
 }
 
+// Профиль Chrome удаляет обработчик выхода — с паузами между попытками:
+// штатный rmSync с maxRetries здесь их не выжидает (tasks/lessons.md).
 ws.close();
-chrome.kill();
-await new Promise((r) => chrome.once("exit", r));
-rmSync(profile, { recursive: true, force: true, maxRetries: 5 });
+if (chrome.exitCode === null && chrome.signalCode === null) {
+  const closed = new Promise((r) => chrome.once("exit", r));
+  chrome.kill();
+  await closed;
+}

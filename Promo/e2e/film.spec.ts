@@ -35,7 +35,7 @@ test.describe('режим кадра', () => {
   test('экран открывается от корня по film-path', async ({ page }) => {
     await page.goto(`?${new URLSearchParams({ 'film-frame': '1', 'film-path': 'audit', role: 'Коммерческий директор', user: 'u-1', theme: 'light' })}`);
     await expect(page.getByRole('heading', { name: 'Аудит-лог и контроль сроков' })).toBeVisible();
-    expect(new URL(page.url()).pathname).toBe('/audit');
+    expect(new URL(page.url()).pathname).toMatch(/\/audit$/); // и под базой GitHub Pages /…/promo/
   });
 
   test('кадр не пишет в хранилища вкладки', async ({ page, context }) => {

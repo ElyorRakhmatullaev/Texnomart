@@ -32,6 +32,11 @@ function pickChange() {
   // Та же формула, что у посева (promo-mock-data.ts): roundTo(старая цена × (1 − скидка), 10 000).
   const newPrice =
     Math.round((item.oldRetailPrice * (1 - Number(discount.value) / 100)) / 10_000) * 10_000;
+  // Без сырого значения скидки (посев вправе его не хранить) цена стала бы NaN —
+  // «NaN сум» в главном кадре фильма. Лучше ошибка на старте.
+  if (discount.value == null || !Number.isFinite(newPrice)) {
+    throw new Error("[film] сцена «change»: у правки L-0015 нет числового значения скидки (value)");
+  }
   return { line, item, campaign, discount, forecast, newPrice };
 }
 const DATA = pickChange();
