@@ -88,6 +88,8 @@ Internal, role-based B2B workspace for planning and approving **planned & unplan
 
 Чек-лист-артефакт «Сверка прототипа Promo» (версия 2): №16 переведён на отчёт 26-15, в №27 — вопрос клиенту о видимости «Распределения» для ОД до согласования КД, новый раздел «Исправления 29.09» (f1–f6).
 
+**30.09 — моушн-фильм для внешнего показа COMPLETE** (запись, проверка, документация): `/embed/film` — 8 сцен, 32 с/60 к/с/16:9 (см. «Моушн-фильм»); RU и UZ ролики записаны (`Promo/film-out/`, вне git, 320 с/~5,3 мин каждый) и проверены (`ffprobe` 1920×1080/60/32.0 с, контрольные кадры без цветовых артефактов, подпуть GitHub Pages с живыми экранами); регрессия зелёная — `test:film` 17, `test:e2e:promo` 156 (141 + 15 фильма), `build:promo` (отдельный чанк `FilmPage-*.js`), `tsc` — 3 известные ошибки. Открыто: этап 2 (вертикальная раскладка 9:16), `STUDIO_CREDIT` (название студии), проверка узбекских титров носителем, музыкальный трек.
+
 ## Commands
 
 ```
@@ -113,7 +115,7 @@ PowerShell (переменная окружения ставится отдел�
 $env:BASE_URL='https://elyorrakhmatullaev.github.io/Texnomart/promo/'; npx playwright test
 ```
 
-- Тесты — `Promo/e2e/` (обвязка `fixtures.ts`, сиды `data.ts`, 8 файлов по разделам — с 29.09 `approvals.spec.ts`); спецификация — `docs/superpowers/specs/2026-09-28-promo-e2e-playwright-design.md`.
+- Тесты — `Promo/e2e/` (обвязка `fixtures.ts`, сиды `data.ts`, 8 файлов по разделам — с 29.09 `approvals.spec.ts`; с 30.09 — `film.spec.ts`, 15, контракт `__capture` моушн-фильма, см. «Моушн-фильм» ниже); спецификация — `docs/superpowers/specs/2026-09-28-promo-e2e-playwright-design.md`.
 - Браузер — установленный Chrome (`channel: 'chrome'`). Без Chrome: `PW_CHANNEL=chromium` + `npx playwright install chromium`.
 - Время зафиксировано на 28.09.2026 12:00 (Ташкент): сиды считают сроки от «сейчас».
 - Известные дефекты — `test.fail` с описанием; когда дефект исправят, прогон сообщит «expected to fail but passed» — снять пометку. С 29.09 таких пометок нет.
@@ -291,6 +293,30 @@ Promo/
 | `/audit` | AuditPage | **Done (S8)** — Аудит-лог (read-only, all roles, spec §11.9): Tab 1 «Аудит-лог» — filterable action log (mono ids, tabular date+time, action chip, object cell, статус до→после, comment; пользователь/роль/тип/объект/диапазон-дат filters; sticky-header table → Mode-B cards + «Фильтры» Sheet below md); Tab 2 «Свод контрольных событий» — per-campaign milestone timeline (horizontal md+/vertical mobile) + red overdue nodes (OverdueTag + responsible) + summary strip (count·overdue·avg раб. дн.) |
 | `/permissions` | PermissionsMatrixPage | **Done (D — 3rd-round, КД + Администратор)** — Матрица прав: read-only role access matrix («документ» = Appendix D, 9×5 level grid + legend + §11.1 note) + «Детальные права» («консолидация» = 17 granular actions with allowed-role chips **derived live** from the real `getXAccess`/`canX` helpers + code-enforcement pointers); Pattern-J Tabs; active role brand-highlighted; in-screen guard + nav-gated to КД/Администратор; dark-aware; mobile per-role cards |
 | `/promo-types` `/promo-types/:ruleId` | PromoTypesPage (under PromoTypesLayout) | **Done (S7)** — two-pane required-field rules: list (search/create/copy/status badges) + editor (name, promo-type chip multi-select, category-grouped checklist, §9.3 effect preview, Черновик→На подтверждении→Утверждено(+Архив) workflow, §9.5 re-confirmation + change history); КД edit+confirm / Администратор edit / others read-only; nav item КД/Администратор-gated |
+| `/embed/film` | FilmPage | **Done (30.09) — моушн-фильм для внешнего показа** — 8 сцен «экран»/«фрагмент», 32 с/60 к/с/16:9, лениво загружаемый маршрут вне защищённой части (отдельный чанк `FilmPage-*.js`, не в основном бандле). См. «Моушн-фильм» ниже |
+
+## Моушн-фильм (`/embed/film`)
+
+Маршрут для внешнего показа продукта (портфолио студии, соцсети) — не часть рабочего приложения. Экраны Promo под запись **не менялись**: если сцене чего-то не хватало, менялась сцена. Код — `src/film/` (+ `scripts/record-film.mjs`, `e2e/film.spec.ts`), загружается лениво (`lazy` у маршрута `/embed/film`) и не входит в основной бандл (`FilmPage-*.js` — отдельный чанк, ~20 kB / gzip ~8 kB).
+
+**Устройство:**
+- **Режим кадра** (`film/frame-mode.ts`) включается только параметром `film-frame=1` у вложенного экрана; импортируется первой строкой `main.tsx`, чтобы подмены действовали раньше кода приложения. Подменяет `Date` (зафиксировано 28.09.2026 12:00 Ташкент — как в e2e) и `localStorage`/`sessionStorage` (объекты в памяти, засеянные входом по параметрам адреса `role`/`user`/`theme`) — вложенный экран не видит и не трогает сохранённое состояние прототипа во вкладке пользователя. Анимации и переходы приложения выключены (`animation: none !important; transition: none !important`).
+- **Сцены** двух видов (`film/scenes.ts`, 8 штук — ключи сцен = ключи глав для `--chapter`): **«экран»** (`ScreenScene.tsx` — iframe с живым экраном Promo 1440×900, камера — `transform` контейнера, курсор поверх окна, клики/прокрутка по сигналам с точным моментом времени; экраны в `film/screens.ts` — `/short-calendar`, `/full-calendar`, `/audit`) и **«фрагмент»** (`film/fragments/*.tsx` — крупные композиции из настоящих примитивов Promo: `PromoStatusBadge`, `Money`, `RuDate`, логотип шапки из `shell-config.tsx`).
+- **`FilmPage.tsx`** — холст 1920×1080 (в записи) или вписанный в окно масштабом (обычный просмотр в браузере, `requestAnimationFrame`), контракт записи `window.__capture` (`duration`, `chapters`, `seek(t): Promise<void>` — детерминированная перемотка вперёд и назад, проверено e2e).
+
+**Команды** (dev-сервер Promo должен быть запущен — `corepack pnpm dev:promo`):
+```bash
+corepack pnpm film:promo                        # film-out/film-ru-16x9.mp4 (32.0 с, 1920×1080, 60 к/с, h264)
+corepack pnpm film:promo --lang uz               # film-out/film-uz-16x9.mp4
+corepack pnpm film:promo --chapter change        # одна сцена
+corepack pnpm film:promo --stills 1.2,8,23       # кадры PNG, без видео
+corepack pnpm film:promo --audio D:\music.mp3    # с треком, затухание 2 с в конце
+corepack pnpm film:promo --4k                    # 3840×2160
+corepack pnpm --filter promo test:film           # node --test, 17 тестов чистой модели времени/сигналов (timeline.ts, cues.ts)
+```
+ffmpeg — `$env:FFMPEG=путь\к\ffmpeg.exe` (не на PATH в этом окружении) или PATH; Chrome — `$env:CHROME` или стандартные пути. Готовые ролики и кадры пишутся в `Promo/film-out/` (в `.gitignore`, вне репозитория). Название студии для финальной карточки — константа `film/credits.ts::STUDIO_CREDIT` (сейчас пустая строка — карточка студии не показывается, пока пользователь её не заполнит). Узбекские титры (`?lang=uz`) — черновой перевод, нужна проверка носителем языка. Второй этап — вертикальная раскладка `--aspect 9x16` (пока принимается только `16x9`), ждёт согласования пользователем текущего 16:9-ролика.
+
+**Проверка:** `e2e/film.spec.ts` (15 тестов — контракт `__capture`, побитовая детерминированность покадровой перемотки экранных сцен, изоляция режима кадра от `Date`/хранилищ основной вкладки) — часть общего набора `corepack pnpm test:e2e:promo` (156 = 141 прежних + 15 фильма). Спецификация — `docs/superpowers/specs/2026-09-30-promo-motion-film-design.md`.
 
 ## Roles (9) — `role-context.tsx`
 
