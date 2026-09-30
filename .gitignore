@@ -16,3 +16,6 @@ DumpStack.log.tmp
 # Playwright e2e (Promo)
 test-results/
 playwright-report/
+
+# Моушн-фильм Promo: готовые ролики и кадры
+Promo/film-out/

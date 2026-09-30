@@ -10,6 +10,7 @@
     "dev:promo": "pnpm --filter promo dev",
     "build:promo": "pnpm --filter promo build",
     "test:e2e:promo": "pnpm --filter promo test:e2e",
+    "film:promo": "pnpm --filter promo film",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev"
   }
