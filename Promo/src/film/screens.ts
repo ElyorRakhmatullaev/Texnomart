@@ -68,7 +68,7 @@ export const FULLCAL_SCREEN: ScreenSpec = {
   camera: [
     { at: 0, value: { ...WHOLE, cx: -320, ry: -8 } },
     { at: 0.7, value: WHOLE, ease: easeOutExpo },
-    { at: 1.4, value: { ...WHOLE, cx: 702, cy: 485, zoom: 1.3 }, ease: easeInOutCubic },
+    { at: 1.4, value: { ...WHOLE, cx: 720, cy: 495, zoom: 1.334 }, ease: easeInOutCubic },
   ],
 };
 
