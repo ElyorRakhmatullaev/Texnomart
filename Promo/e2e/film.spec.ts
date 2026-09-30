@@ -210,6 +210,7 @@ test.describe('фильм: сценарий', () => {
     const b = await shotAt(page, grid.at + 1);
     expect(same(a, b)).toBe(true);
     await expect(page.getByText('Чёрная пятница 2026')).toBeVisible();
+    await expect(page.getByText('Летняя рассрочка на смартфоны')).toBeVisible();
     await seek(page, change.at + 3);
     await expect(page.getByText("Кофемашина De'Longhi Magnifica")).toBeVisible();
     await expect(page.getByText('Согласовано КД')).toBeVisible();
