@@ -97,7 +97,7 @@ export function RelativeFields({ index, value, onChange, onRemove, removable, er
         <div>
           <label className="mb-1 block text-sm text-gray-700">Вид родства</label>
           <Select value={value.type} onValueChange={(type) => onChange({ ...value, type })}>
-            <SelectTrigger>
+            <SelectTrigger className="min-h-11 md:min-h-0">
               <SelectValue placeholder="Выберите" />
             </SelectTrigger>
             <SelectContent>
@@ -116,6 +116,7 @@ export function RelativeFields({ index, value, onChange, onRemove, removable, er
             value={value.name}
             onChange={(e) => onChange({ ...value, name: e.target.value })}
             placeholder="Например, Дилшод"
+            className="h-11 md:h-9"
           />
         </div>
 
@@ -130,6 +131,7 @@ export function RelativeFields({ index, value, onChange, onRemove, removable, er
             onKeyUp={clampPhoneCursor}
             placeholder="+998 __ ___ __ __"
             autoComplete="off"
+            className="h-11 md:h-9"
           />
         </div>
       </div>

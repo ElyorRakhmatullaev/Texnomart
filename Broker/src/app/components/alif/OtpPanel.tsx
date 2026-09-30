@@ -158,7 +158,7 @@ export function OtpPanel({ variant, subtitle, ctaLabel, onSuccess, children }: O
           <button
             type="button"
             onClick={handleResend}
-            className="font-medium text-blue-600 hover:underline"
+            className="inline-flex min-h-11 items-center font-medium text-blue-600 hover:underline md:min-h-0"
           >
             Отправить код повторно
           </button>

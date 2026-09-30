@@ -32,31 +32,34 @@ export interface BankCardProps {
 export function BankCard({ bank, pending, completed = false, rejected = false, status, onCheckout }: BankCardProps) {
   return (
     <div className="flex flex-col gap-4 rounded-lg bg-white p-4 shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:p-6">
-      {/* Хедер: логотип + название + статус-бейдж */}
-      <div className="flex items-center gap-3">
+      {/* Хедер: логотип + название + статус-бейджи. flex-wrap: на телефоне бейджи
+          переносятся под название, а не растягивают карточку шире полосы клиента */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white"
           style={{ background: bank.brandColor }}
         >
           {bank.initial}
         </div>
-        <span className="flex-1 font-semibold text-gray-900">{bank.title}</span>
-        {pending ? (
-          <Badge className="border-transparent bg-amber-50 text-amber-700 hover:bg-amber-50">
-            Рассчитывается…
-          </Badge>
-        ) : completed ? (
-          <Badge className="border-transparent bg-green-50 text-green-700 hover:bg-green-50">
-            ✓ Оформлена
-          </Badge>
-        ) : rejected ? (
-          <Badge className="border-transparent bg-red-50 text-red-700 hover:bg-red-50">Отказано</Badge>
-        ) : (
-          <Badge className="border-transparent bg-green-50 text-green-700 hover:bg-green-50">
-            ✓ Одобрена
-          </Badge>
-        )}
-        {status && <ApplicationStatusBadge status={status} />}
+        <span className="flex-1 whitespace-nowrap font-semibold text-gray-900">{bank.title}</span>
+        <div className="flex flex-wrap gap-1.5 md:gap-3">
+          {pending ? (
+            <Badge className="border-transparent bg-amber-50 text-amber-700 hover:bg-amber-50">
+              Рассчитывается…
+            </Badge>
+          ) : completed ? (
+            <Badge className="border-transparent bg-green-50 text-green-700 hover:bg-green-50">
+              ✓ Оформлена
+            </Badge>
+          ) : rejected ? (
+            <Badge className="border-transparent bg-red-50 text-red-700 hover:bg-red-50">Отказано</Badge>
+          ) : (
+            <Badge className="border-transparent bg-green-50 text-green-700 hover:bg-green-50">
+              ✓ Одобрена
+            </Badge>
+          )}
+          {status && <ApplicationStatusBadge status={status} />}
+        </div>
       </div>
 
       {pending ? (

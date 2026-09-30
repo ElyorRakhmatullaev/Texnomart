@@ -66,7 +66,7 @@ export function CardAttachPhase({ phoneMatch }: CardAttachPhaseProps) {
             ctaLabel="Подтвердить привязку"
             onSuccess={handleSuccess}
           >
-            <div className="grid grid-cols-2 gap-2 rounded-lg border bg-gray-50 px-4 py-3 text-sm">
+            <div className="grid grid-cols-[auto_1fr] gap-2 rounded-lg border bg-gray-50 px-4 py-3 text-sm wrap-anywhere">
               <span className="text-gray-500">Карта</span>
               <span className="text-right font-medium tabular-nums text-gray-900">
                 {maskPanAlif(card.mask)}

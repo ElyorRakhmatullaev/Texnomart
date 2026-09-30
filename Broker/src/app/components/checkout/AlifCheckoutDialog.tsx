@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw, X } from "lucide-react"
 import { toast } from "sonner"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@texnomart/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@texnomart/ui/dialog"
 import { Progress } from "@texnomart/ui/progress"
 import { Button } from "@texnomart/ui/button"
 import { CHECKOUT_STEP_COUNT, PHASE_STEP, checkoutPhaseOf, useScoringFlow } from "@/app/scoring-flow"
@@ -18,6 +18,17 @@ import { SuccessPhase } from "./SuccessPhase"
 import { DemoScenarioBar, readDemoPhoneMatch, writeDemoPhoneMatch } from "./DemoScenarioBar"
 import { PhaseError } from "./PhaseError"
 import { CancelApplicationDialog } from "./CancelApplicationDialog"
+
+// Кандидаты автофокуса при открытии — как у FocusScope Radix: tabbable-элементы
+// без ссылок (Radix при открытии ссылки пропускает).
+const NOT_SKIPPED = ':not([disabled]):not([tabindex="-1"])'
+const AUTOFOCUS_CANDIDATES = [
+  `button${NOT_SKIPPED}`,
+  `input${NOT_SKIPPED}`,
+  `select${NOT_SKIPPED}`,
+  `textarea${NOT_SKIPPED}`,
+  '[tabindex]:not([tabindex="-1"]):not(a)',
+].join(", ")
 
 export function AlifCheckoutDialog() {
   const { state, closeCheckout, refreshSession, cancelOffer, setApplicationStatus, cancelApplication } =
@@ -68,12 +79,29 @@ export function AlifCheckoutDialog() {
         // visible), и на любой фазе, где появляется вертикальный скролл, снизу
         // попапа рисуется лишний горизонтальный скроллбар без реального
         // горизонтального переполнения контента.
-        className="sm:max-w-[640px] max-h-[90dvh] overflow-y-auto overflow-x-hidden"
+        // [&>button:last-child]:hidden — встроенный «×» примитива (всегда последний
+        // ребёнок DialogContent) стоит абсолютом поверх правого края шапки и
+        // накрывал бейдж статуса / «Отменить заявку». Вместо него — DialogClose
+        // в потоке шапки (ниже); закрытие идёт тем же onOpenChange, поэтому
+        // запрет закрытия во время удержания предоплаты действует и на него.
+        className="sm:max-w-[640px] max-h-[90dvh] overflow-y-auto overflow-x-hidden [&>button:last-child]:hidden"
         onPointerDownOutside={(e) => {
           if (held) e.preventDefault()
         }}
         onEscapeKeyDown={(e) => {
           if (held) e.preventDefault()
+        }}
+        // «×» теперь первый в шапке, а Radix при открытии фокусирует первый
+        // tabbable-элемент. Сохраняем прежний порядок (встроенный «×» был
+        // последним): фокус получает первый элемент, кроме «×».
+        onOpenAutoFocus={(e) => {
+          const root = e.currentTarget as HTMLElement
+          const target = [...root.querySelectorAll<HTMLElement>(AUTOFOCUS_CANDIDATES)].find(
+            (el) => el.dataset.slot !== "dialog-close" && el.getClientRects().length > 0,
+          )
+          if (!target) return
+          e.preventDefault()
+          target.focus({ preventScroll: true })
         }}
       >
         <DialogTitle className="sr-only">Оформление рассрочки Alif Nasiya</DialogTitle>
@@ -85,24 +113,36 @@ export function AlifCheckoutDialog() {
         {/* Шапка мастера: прогресс по ветке Alif + статус заявки. Внешний
             степпер описывает весь скоринг, здесь — только эта ветка. */}
         <div className="border-b pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-medium text-gray-700">
-              Шаг {step} из {CHECKOUT_STEP_COUNT} · {title}
-            </p>
-            <div className="flex items-center gap-3">
-              {state.application && <ApplicationStatusBadge status={state.application.status} />}
-              {state.application && canCancelApplication(state.application.status) && (
-                <button
-                  type="button"
-                  onClick={() => setCancelOpen(true)}
-                  // min-h-11 — тап-таргет ≥44px (Pattern K): текст text-xs сам по себе
-                  // даёт кликабельную область в одну строку высотой ~16px.
-                  className="inline-flex min-h-11 items-center text-xs font-medium text-red-600 transition-colors hover:text-red-700"
-                >
-                  Отменить заявку
-                </button>
-              )}
+          <div className="flex items-center gap-3">
+            {/* flex-wrap + ml-auto: на узком телефоне бейдж и «Отменить заявку»
+                переносятся под подпись шага (прижаты вправо), а «×» остаётся в углу */}
+            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3">
+              <p className="text-xs font-medium text-gray-700">
+                Шаг {step} из {CHECKOUT_STEP_COUNT} · {title}
+              </p>
+              <div className="ml-auto flex items-center gap-3">
+                {state.application && <ApplicationStatusBadge status={state.application.status} />}
+                {state.application && canCancelApplication(state.application.status) && (
+                  <button
+                    type="button"
+                    onClick={() => setCancelOpen(true)}
+                    // min-h-11 — тап-таргет ≥44px (Pattern K): текст text-xs сам по себе
+                    // даёт кликабельную область в одну строку высотой ~16px.
+                    className="inline-flex min-h-11 items-center text-xs font-medium text-red-600 transition-colors hover:text-red-700"
+                  >
+                    Отменить заявку
+                  </button>
+                )}
+              </div>
             </div>
+            {/* -my-3.5: тап-таргет 44px, но строка шапки остаётся высотой в подпись (16px);
+                -mr-4: иконка почти там же, где стоял встроенный «×» */}
+            <DialogClose
+              className="-my-3.5 -mr-4 flex size-11 shrink-0 items-center justify-center rounded-md text-gray-500 outline-none transition-colors hover:bg-gray-100 focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <X className="size-4" />
+              <span className="sr-only">Закрыть</span>
+            </DialogClose>
           </div>
           <Progress value={(step / CHECKOUT_STEP_COUNT) * 100} className="mt-2 h-1" />
         </div>

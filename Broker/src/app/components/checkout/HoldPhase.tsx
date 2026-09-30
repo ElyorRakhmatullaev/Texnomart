@@ -107,7 +107,7 @@ export function HoldPhase() {
               </div>
 
               {state.hold && (
-                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-gray-50 px-4 py-3 text-sm">
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-gray-50 px-4 py-3 text-sm wrap-anywhere">
                   <span className="text-gray-500">Удержано</span>
                   <span className="text-right font-medium tabular-nums text-gray-900">
                     {format(new Date(state.hold.at), "dd.MM.yyyy HH:mm", { locale: ru })}

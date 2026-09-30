@@ -16,7 +16,9 @@ export function CardOtpDialog({ open, cardMask, onConfirmed, onOpenChange }: Car
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      {/* Встроенный «×» (последний ребёнок DialogContent) — 44×44 вместо 16×16;
+          top/right-0.5 держат саму иконку на прежнем месте (центр в 24px от угла). */}
+      <DialogContent className="sm:max-w-[480px] [&>button:last-child]:flex [&>button:last-child]:size-11 [&>button:last-child]:items-center [&>button:last-child]:justify-center [&>button:last-child]:top-0.5 [&>button:last-child]:right-0.5">
         <DialogHeader>
           <DialogTitle>Подтверждение карты</DialogTitle>
           <DialogDescription className="sr-only">Введите код из SMS для подтверждения</DialogDescription>

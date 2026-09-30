@@ -35,7 +35,9 @@ export function CreditOtpPhase() {
           ctaLabel="Оформить кредит"
           onSuccess={confirmCredit}
         >
-          <div className="grid grid-cols-2 gap-2 rounded-lg border bg-gray-50 px-4 py-3 text-sm">
+          {/* Колонка значений — по содержимому (auto): IMEI в 15 цифр не рвётся на
+              телефоне; подписи переносятся по словам, но не уже самого длинного слова. */}
+          <div className="grid grid-cols-[minmax(min-content,1fr)_auto] gap-2 rounded-lg border bg-gray-50 px-4 py-3 text-sm">
             <span className="text-gray-500">Банк</span>
             <span className="text-right font-medium text-gray-900">{ALIF.title}</span>
 
@@ -51,7 +53,8 @@ export function CreditOtpPhase() {
                 {state.application.imei && (
                   <>
                     <span className="text-gray-500">IMEI</span>
-                    <span className="text-right font-medium tabular-nums text-gray-900">
+                    {/* IMEI вводится сканером, длина не ограничена — переносим по символам */}
+                    <span className="break-all text-right font-medium tabular-nums text-gray-900">
                       {state.application.imei}
                     </span>
                   </>

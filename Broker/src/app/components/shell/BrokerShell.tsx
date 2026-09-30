@@ -1,22 +1,50 @@
+import { useRef, useState } from "react"
 import { Outlet, useNavigate } from "react-router"
+import { MoreVertical, Send, SquarePlus, X } from "lucide-react"
 import { toast } from "sonner"
+import { buttonVariants } from "@texnomart/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@texnomart/ui/dropdown-menu"
+import { cn } from "@texnomart/ui/utils"
 import { ScoringStepper } from "./ScoringStepper"
 import { ActionRail } from "./ActionRail"
+import { EndScoringDialog } from "./EndScoringDialog"
 
 export function BrokerShell() {
   const navigate = useNavigate()
+  // Одно подтверждение «Завершить скоринг?» на оба входа: ActionRail (≥lg) и меню шапки (<lg).
+  const [endScoringOpen, setEndScoringOpen] = useState(false)
+  // Кнопка, открывшая подтверждение (кнопка ActionRail или триггер меню шапки), —
+  // на неё возвращается фокус после закрытия.
+  const menuTriggerRef = useRef<HTMLButtonElement>(null)
+  const endScoringOpenerRef = useRef<HTMLElement | null>(null)
+  function openEndScoring(opener: HTMLElement | null) {
+    endScoringOpenerRef.current = opener
+    setEndScoringOpen(true)
+  }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-4 md:px-6">
+    // min-h-dvh + flex-1 у <main>: серый фон доходит до низа окна на любой высоте
+    // шапки и степпера (раньше min-h считался от 128px, а на телефоне их 117px —
+    // под короткими страницами оставалась белая полоса).
+    <div className="flex min-h-dvh flex-col">
+      <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b bg-white px-4 md:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={() => navigate("/")}
             aria-label="Texnomart Broker"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+            // Тап-таргет 44×44 с прежним жёлтым квадратом 32px внутри; -mx-1.5
+            // компенсирует поля кнопки, чтобы квадрат и адрес не сдвинулись.
+            className="-mx-1.5 flex size-11 shrink-0 items-center justify-center"
           >
-            <span className="text-lg font-bold leading-none">*</span>
+            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <span className="text-lg font-bold leading-none">*</span>
+            </span>
           </button>
           <span className="truncate text-sm text-gray-700">Ташкент, Янги Шахар, 16а</span>
         </div>
@@ -47,6 +75,40 @@ export function BrokerShell() {
               <span className="text-xs text-gray-900">Миржалол</span>
             </div>
           </div>
+
+          {/* < lg ActionRail скрыт — те же три действия здесь. Триггер — нативный
+              <button> + buttonVariants, не общий <Button> (иначе Radix-меню
+              открывается за экраном). */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                ref={menuTriggerRef}
+                type="button"
+                aria-label="Действия скоринга"
+                className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "-mr-2 size-11 lg:hidden")}
+              >
+                <MoreVertical className="size-5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-56">
+              <DropdownMenuItem className="min-h-11" onSelect={() => toast("Действие вне прототипа")}>
+                <SquarePlus />
+                Новая вкладка
+              </DropdownMenuItem>
+              <DropdownMenuItem className="min-h-11" onSelect={() => toast("Действие вне прототипа")}>
+                <Send />
+                Отправить лимиты в Telegram
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                className="min-h-11"
+                onSelect={() => openEndScoring(menuTriggerRef.current)}
+              >
+                <X />
+                Завершить скоринг
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -54,11 +116,16 @@ export function BrokerShell() {
         <ScoringStepper />
       </div>
 
-      <main className="bg-gray-50 min-h-[calc(100vh-128px)]">
+      <main className="flex-1 bg-gray-50">
         <Outlet />
       </main>
 
-      <ActionRail />
+      <ActionRail onEndScoring={openEndScoring} />
+      <EndScoringDialog
+        open={endScoringOpen}
+        onOpenChange={setEndScoringOpen}
+        returnFocusRef={endScoringOpenerRef}
+      />
     </div>
   )
 }

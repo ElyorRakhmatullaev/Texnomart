@@ -44,7 +44,19 @@ function isValidExpiry(digits: string): boolean {
   return mm >= 1 && mm <= 12
 }
 
-const readOnlyFieldClass = "bg-gray-50 text-gray-700 disabled:opacity-100 disabled:cursor-default"
+function CardStatusBadge({ confirmed, className }: { confirmed: boolean; className?: string }) {
+  return confirmed ? (
+    <Badge className={cn("border-transparent bg-green-50 text-green-700 hover:bg-green-50", className)}>
+      Подтверждена
+    </Badge>
+  ) : (
+    <Badge className={cn("border-transparent bg-gray-100 text-gray-600 hover:bg-gray-100", className)}>
+      Не подтверждена
+    </Badge>
+  )
+}
+
+const readOnlyFieldClass = "h-11 bg-gray-50 text-gray-700 disabled:opacity-100 disabled:cursor-default md:h-9"
 
 export function VerificationPage() {
   const { state, addCard, confirmCard, removeCard } = useScoringFlow()
@@ -115,11 +127,11 @@ export function VerificationPage() {
 
   return (
     <div className="px-4 py-6">
-      <div className="mx-auto max-w-[880px] rounded-lg bg-white p-6 shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:p-8">
+      <div className="mx-auto max-w-[880px] rounded-lg bg-white p-4 shadow-[0px_2px_4px_rgba(204,204,204,0.25)] md:p-8">
         <p className="text-xs text-gray-400">Log Id: 123456</p>
         <h2 className="mt-1 text-xl font-bold text-gray-900">Верификация клиента</h2>
 
-        <div className="mt-6 grid gap-8 md:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-8 md:grid-cols-2">
           {/* Данные клиента — предзаполненные read-only поля */}
           <div>
             <h3 className="font-semibold text-gray-900">Данные клиента</h3>
@@ -168,16 +180,11 @@ export function VerificationPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-gray-900">{card.mask}</p>
                     <p className="text-xs text-gray-500">{card.expiry}</p>
+                    {/* < sm: бейдж под номером — в одну строку с номером и корзиной
+                        на телефоне он не помещается и выталкивал строку за карточку */}
+                    <CardStatusBadge confirmed={card.confirmed} className="mt-1 sm:hidden" />
                   </div>
-                  {card.confirmed ? (
-                    <Badge className="border-transparent bg-green-50 text-green-700 hover:bg-green-50">
-                      Подтверждена
-                    </Badge>
-                  ) : (
-                    <Badge className="border-transparent bg-gray-100 text-gray-600 hover:bg-gray-100">
-                      Не подтверждена
-                    </Badge>
-                  )}
+                  <CardStatusBadge confirmed={card.confirmed} className="hidden sm:inline-flex" />
                   <button
                     type="button"
                     aria-label={`Удалить карту ${card.mask}`}
@@ -185,7 +192,7 @@ export function VerificationPage() {
                       e.stopPropagation()
                       removeCard(card.mask)
                     }}
-                    className="shrink-0 text-gray-400 transition-colors hover:text-red-600"
+                    className="-my-2 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:text-red-600 md:m-0 md:size-auto"
                   >
                     <Trash2 className="size-4" />
                   </button>
@@ -203,7 +210,7 @@ export function VerificationPage() {
                   inputMode="numeric"
                   autoComplete="off"
                   aria-invalid={!!fieldError}
-                  className={fieldError ? "border-red-500 focus-visible:ring-red-500" : undefined}
+                  className={cn("h-11 md:h-9", fieldError && "border-red-500 focus-visible:ring-red-500")}
                 />
                 {fieldError && <p className="mt-1 text-sm text-red-600">{fieldError}</p>}
               </div>
@@ -215,6 +222,7 @@ export function VerificationPage() {
                   placeholder="MM/YY"
                   inputMode="numeric"
                   autoComplete="off"
+                  className="h-11 md:h-9"
                 />
               </div>
             </div>
@@ -227,7 +235,7 @@ export function VerificationPage() {
                 type="button"
                 disabled={!canAdd}
                 onClick={handleAddCard}
-                className="h-9 shrink-0 bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
+                className="h-11 shrink-0 bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 md:h-9"
               >
                 Добавить
               </Button>
@@ -263,7 +271,9 @@ export function VerificationPage() {
               Лимит исчерпан на привязку. Карта заблокирована для привязки.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogAction onClick={() => setBlockedOpen(false)}>Понятно</AlertDialogAction>
+          <AlertDialogAction onClick={() => setBlockedOpen(false)} className="h-11 md:h-9">
+            Понятно
+          </AlertDialogAction>
         </AlertDialogContent>
       </AlertDialog>
     </div>

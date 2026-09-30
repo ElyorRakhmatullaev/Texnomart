@@ -103,7 +103,7 @@ export function OfferPhase() {
                   {selected && <Check className="size-4 text-emerald-600" />}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm wrap-anywhere sm:grid-cols-3">
                 <span className="text-gray-500">Лимит</span>
                 <span className="text-right font-medium tabular-nums text-gray-900 sm:text-left">
                   {plan.amount.toLocaleString("ru-RU")} сум
@@ -133,13 +133,13 @@ export function OfferPhase() {
       </div>
 
       <DialogFooter className="mt-6 w-full sm:justify-center">
-        <Button type="button" variant="outline" onClick={closeCheckout} className="h-11 flex-1 font-semibold">
+        <Button type="button" variant="outline" onClick={closeCheckout} className="h-11 font-semibold sm:flex-1">
           Назад
         </Button>
         <Button
           type="button"
           onClick={handleSubmit}
-          className="h-11 flex-1 font-semibold text-black hover:opacity-90"
+          className="h-11 font-semibold text-black hover:opacity-90 sm:flex-1"
           style={{ background: "#FFD60A" }}
         >
           Продолжить

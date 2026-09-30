@@ -36,7 +36,7 @@ export function BanksPage() {
     <div className="max-w-[880px] mx-auto px-4 py-6 space-y-4">
       <ClientInfoBand />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <BankCard
           bank={alif}
           pending={!alif.instantLimit && state.alifLimitStatus === "pending"}
@@ -55,7 +55,7 @@ export function BanksPage() {
       <div className="flex justify-center">
         <button
           type="button"
-          className="flex items-center gap-1 rounded-xl bg-gray-100 px-4 py-2 text-sm font-medium text-blue-600"
+          className="flex min-h-11 items-center gap-1 rounded-xl bg-gray-100 px-4 py-2 text-sm font-medium text-blue-600 md:min-h-0"
         >
           Запрос лимита у партнеров
           <ChevronDown className="size-4" />

@@ -171,7 +171,7 @@ export function MyIdPhotoPage() {
                 type="button"
                 onClick={() => setDemo(id)}
                 className={cn(
-                  "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  "inline-flex min-h-11 items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-colors md:min-h-0",
                   demo === id
                     ? "border-gray-900 bg-gray-900 text-white"
                     : "border-gray-200 text-gray-500 hover:text-gray-700",
@@ -204,7 +204,7 @@ export function MyIdPhotoPage() {
                 <Button
                   type="button"
                   onClick={handleUseDemo}
-                  className="h-10 font-semibold text-black hover:opacity-90"
+                  className="h-11 font-semibold text-black hover:opacity-90 md:h-10"
                   style={{ background: "#FFD60A" }}
                 >
                   Использовать демо-фото
@@ -341,7 +341,7 @@ export function MyIdPhotoPage() {
           <button
             type="button"
             onClick={() => navigate("/scoring/verification")}
-            className="mt-4 block w-full text-center text-sm text-gray-500 transition-colors hover:text-gray-700"
+            className="mt-4 flex min-h-11 w-full items-center justify-center text-center text-sm text-gray-500 transition-colors hover:text-gray-700 md:block md:min-h-0"
           >
             Вернуться к предыдущему шагу
           </button>

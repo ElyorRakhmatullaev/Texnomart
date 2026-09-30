@@ -102,7 +102,7 @@ export function DetailsPhase() {
           <div>
             <label className="mb-1 block text-sm text-gray-700">Сфера деятельности</label>
             <Select value={activityAreaId} onValueChange={setActivityAreaId}>
-              <SelectTrigger>
+              <SelectTrigger className="min-h-11 md:min-h-0">
                 <SelectValue placeholder="Выберите" />
               </SelectTrigger>
               <SelectContent>
@@ -118,7 +118,7 @@ export function DetailsPhase() {
           <div>
             <label className="mb-1 block text-sm text-gray-700">Предпочитаемый язык</label>
             <Select value={language} onValueChange={(value) => setLanguage(value as "ru" | "uz")}>
-              <SelectTrigger>
+              <SelectTrigger className="min-h-11 md:min-h-0">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

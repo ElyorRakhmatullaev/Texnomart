@@ -97,7 +97,7 @@ export function ApplicationPhase() {
 
       <div className="mt-4 rounded-lg border p-4">
         <p className="font-medium text-gray-900">{ORDER_ITEM.goodName}</p>
-        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+        <div className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm wrap-anywhere">
           <span className="text-gray-500">Категория</span>
           <span className="text-right font-medium text-gray-900">{ORDER_ITEM.goodTypeName}</span>
           <span className="text-gray-500">Цена</span>
@@ -124,6 +124,7 @@ export function ApplicationPhase() {
             inputMode="numeric"
             placeholder="Отсканируйте или введите вручную"
             aria-invalid={errorField === "marking"}
+            className="h-11 md:h-9"
             // На кассе IMEI приходит сканером штрихкода — очередь нажатий,
             // а не одно решённое действие. Сканирование, попавшее в окно
             // APPLICATION_SUBMIT_DELAY_MS, молча терялось бы: поле нигде
@@ -137,7 +138,7 @@ export function ApplicationPhase() {
         <label className="mb-1 block text-sm text-gray-700">Дата первого платежа</label>
         <Input
           type="date"
-          className="max-w-[240px]"
+          className="h-11 max-w-[240px] md:h-9"
           value={firstPaymentDate}
           min={minDate}
           max={maxDate}
@@ -155,7 +156,7 @@ export function ApplicationPhase() {
 
       <div
         className={cn(
-          "mt-4 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg px-4 py-3 text-sm",
+          "mt-4 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg px-4 py-3 text-sm wrap-anywhere",
           errorField === "amount" ? "bg-red-50 ring-1 ring-red-200" : "bg-gray-50",
         )}
       >
