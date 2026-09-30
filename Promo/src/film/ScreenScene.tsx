@@ -71,10 +71,16 @@ async function waitReady(
   }
 }
 
+/** Окно документа; нет — документ отсоединён, и действие дало бы неверный кадр молча. */
+function viewOf(doc: Document, sceneKey: string): Window & typeof globalThis {
+  const win = doc.defaultView;
+  if (!win) throw new Error(`[film] сцена «${sceneKey}»: документ окна отсоединён — действие некуда выполнить`);
+  return win;
+}
+
 /** Полная последовательность указателя: вкладки Radix срабатывают по mousedown, меню — по pointerdown. */
-function pointerClick(el: Element): void {
-  const win = el.ownerDocument.defaultView;
-  if (!win) return;
+function pointerClick(el: Element, sceneKey: string): void {
+  const win = viewOf(el.ownerDocument, sceneKey);
   const r = el.getBoundingClientRect();
   const base = {
     bubbles: true,
@@ -163,9 +169,14 @@ export const ScreenScene = React.forwardRef<ScreenHandle, ScreenSceneProps>(func
   const applied = React.useRef(Number.NaN);
   const busy = React.useRef<Promise<void> | null>(null);
   const wanted = React.useRef<number | null>(null);
+  /** Центры целей курсора по `at` клика: замер один раз, сброс — с документом окна. */
+  const centers = React.useRef(new Map<number, Point>());
   const [points, setPoints] = React.useState<(Point & { at: number })[]>([]);
   const cursorClicks = React.useMemo(
-    () => cues.filter((c): c is ClickCue => c.kind === "click" && c.cursor === true),
+    () =>
+      cues
+        .filter((c): c is ClickCue => c.kind === "click" && c.cursor === true)
+        .sort((a, b) => a.at - b.at),
     [cues],
   );
 
@@ -175,32 +186,57 @@ export const ScreenScene = React.forwardRef<ScreenHandle, ScreenSceneProps>(func
       if (!frame) throw new Error(`[film] сцена «${scene.key}»: окно не смонтировано`);
       ready.current ??= waitReady(frame, scene, null);
       let doc = await ready.current;
-      const plan = planSettle(cues, applied.current, local);
-      if (plan.reload) {
+      // Окно само сменило документ (например, полная перезагрузка Vite в dev):
+      // прежний отсоединён — экран проигрывается заново, как после перезагрузки.
+      if (frame.contentDocument !== doc) {
         ready.current = waitReady(frame, scene, doc);
         applied.current = Number.NaN;
-        frame.contentWindow?.location.reload();
+        centers.current.clear();
         doc = await ready.current;
       }
-      for (const cue of plan.clicks) pointerClick(resolveTarget(doc, cue, scene.key));
+      const plan = planSettle(cues, applied.current, local);
+      if (plan.reload) {
+        // От корня с film-path, как при первой загрузке: адрес окна уже переставлен
+        // на глубокую ссылку, а она на GitHub Pages шла бы через 404.html.
+        ready.current = waitReady(frame, scene, doc);
+        applied.current = Number.NaN;
+        centers.current.clear();
+        viewOf(doc, scene.key).location.replace(src);
+        doc = await ready.current;
+      }
+      // Центр цели курсора замеряется один раз: по раскладке после кликов, сделанных
+      // до начала подъезда (at − CURSOR_LEAD), — до клика `before` и до своего клика.
+      const measure = (before: number) => {
+        for (const c of cursorClicks) {
+          const start = c.at - CURSOR_LEAD;
+          if (start > local || start >= before || centers.current.has(c.at)) continue;
+          const r = resolveTarget(doc, c, scene.key).getBoundingClientRect();
+          centers.current.set(c.at, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
+        }
+      };
+      // Клики — по одному, с кадром между ними: React фиксирует обновление клика
+      // в микрозадаче, и цель следующего (строка после вкладки, пункт после меню)
+      // появляется только после отрисовки.
+      for (const cue of plan.clicks) {
+        measure(cue.at);
+        pointerClick(resolveTarget(doc, cue, scene.key), scene.key);
+        await nextFrames(viewOf(doc, scene.key), 1);
+      }
       for (const { cue, p } of plan.scrolls) {
         const el = resolveTarget(doc, cue, scene.key);
         el.scrollLeft = cue.left(p, el);
       }
+      measure(Number.POSITIVE_INFINITY);
       applied.current = local;
-      // Центры целей курсора — только у кликов, чьё окно курсора уже началось.
+      // Курсор — только у кликов, чьё окно уже началось; центры — из замеров.
       const measured = cursorClicks
         .filter((c) => local >= c.at - CURSOR_LEAD)
-        .map((c) => {
-          const r = resolveTarget(doc, c, scene.key).getBoundingClientRect();
-          return { at: c.at, x: r.left + r.width / 2, y: r.top + r.height / 2 };
-        });
+        .map((c) => ({ at: c.at, ...centers.current.get(c.at)! }));
       flushSync(() => setPoints(measured));
       await doc.fonts.ready;
-      const win = doc.defaultView;
-      if (win) await nextFrames(win, 2);
+      await nextFrames(viewOf(doc, scene.key), 2);
     },
-    [cues, cursorClicks, scene],
+    [cues, cursorClicks, scene, src],
   );
 
   // Запросы склеиваются: пока идёт переход, новый момент ждёт, промежуточные отбрасываются.
