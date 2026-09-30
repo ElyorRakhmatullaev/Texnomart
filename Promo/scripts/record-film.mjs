@@ -100,12 +100,26 @@ const chrome = spawn(chromePath, [
   `--window-size=${width},${height}`,
   "about:blank",
 ]);
-// Любой выход (в том числе с ошибкой) не оставляет Chrome висеть.
+// Синхронная пауза без новых зависимостей: process.on("exit") не пускает
+// async/await, а retryDelay у fs.rmSync здесь не выжидает между попытками.
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+// Любой выход (в том числе с ошибкой) не оставляет Chrome и его профиль висеть.
 process.on("exit", () => {
   try {
     chrome.kill();
   } catch {
     /* уже закрыт */
+  }
+  // Профиль удаляем сами, с паузой: Chrome может ещё секунду держать файлы.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      rmSync(profile, { recursive: true, force: true });
+      break;
+    } catch {
+      if (attempt === 9) break; /* лучшее усилие — не критично */
+      sleepSync(150);
+    }
   }
 });
 const wsUrl = await new Promise((resolve, reject) => {
@@ -281,21 +295,40 @@ if (opt.stills) {
     ],
     { stdio: ["pipe", "inherit", "inherit"] },
   );
+  // Без этих обработчиков падение ffmpeg посреди потока (битый --audio,
+  // неподдерживаемый кодек) роняет скрипт сырым EPIPE вместо понятной ошибки.
+  let ffmpegError;
+  ffmpeg.on("error", (e) => {
+    ffmpegError ??= e;
+  });
+  ffmpeg.stdin.on("error", (e) => {
+    ffmpegError ??= e;
+  });
+  const exited = new Promise((r) => ffmpeg.once("exit", (code) => r(code)));
   const frames = Math.ceil(length * fps);
   const started = Date.now();
   for (let i = 0; i <= frames; i++) {
+    if (ffmpegError || ffmpeg.exitCode !== null) break;
     await seek(from + i / fps);
     const png = await shot();
-    if (!ffmpeg.stdin.write(png)) await new Promise((r) => ffmpeg.stdin.once("drain", r));
+    if (ffmpegError || ffmpeg.exitCode !== null) break;
+    if (!ffmpeg.stdin.write(png)) {
+      // Мёртвый ffmpeg никогда не пришлёт «drain» — не ждать его вечно.
+      await Promise.race([new Promise((r) => ffmpeg.stdin.once("drain", r)), exited]);
+    }
     if (i % fps === 0) {
       process.stdout.write(
         `\r${Math.round((i / frames) * 100)}% · ${Math.round((Date.now() - started) / 1000)} с`,
       );
     }
   }
-  ffmpeg.stdin.end();
-  const code = await new Promise((r) => ffmpeg.on("exit", r));
-  if (code !== 0) throw new Error(`ffmpeg завершился с кодом ${code}`);
+  if (!ffmpeg.stdin.destroyed) ffmpeg.stdin.end();
+  const code = await exited;
+  if (code !== 0 || ffmpegError) {
+    throw new Error(
+      `ffmpeg завершился с кодом ${code}${ffmpegError ? ` (${ffmpegError.message})` : ""}`,
+    );
+  }
   console.log(
     `\nзаписан ${out} (${length.toFixed(1)} с, ${width * scale}×${height * scale}, ${fps} к/с, ${codec})`,
   );
