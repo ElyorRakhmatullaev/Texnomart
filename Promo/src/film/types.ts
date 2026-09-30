@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import type { PromoRole } from "../app/role-context";
 import type { Cue, Point, TargetFn } from "./cues";
+import type { PainKey } from "./story";
 import type { Key } from "./timeline";
 
 export type Lang = "ru" | "uz";
@@ -25,6 +26,10 @@ interface SceneBase {
   duration: number;
   /** Подпись внизу слева; нет — сцена без подписи. */
   caption?: Record<Lang, string>;
+  /** Показывать поверх сцены список болей (второй акт). */
+  tracker?: boolean;
+  /** Боль, которую закрывает сцена: перечёркивается в её конце (story.painStrikes). */
+  solves?: PainKey;
 }
 
 export interface FragmentScene extends SceneBase {
@@ -52,6 +57,8 @@ export interface ScreenSpec {
   /** id пользователя из users-store: u-1 — КД, u-2 — Администратор. */
   user: string;
   theme: "light" | "dark";
+  /** Дополнительные параметры адреса окна, например { promo: "PR-2026-003" }. */
+  query?: Record<string, string>;
   /** По какому элементу понять, что экран отрисован. */
   ready: { label: string; target: TargetFn };
   camera: Key<CameraPose>[];

@@ -5,10 +5,18 @@ import { flushSync } from "react-dom";
 import { Caption } from "./Caption";
 import { nextFrames } from "./frames";
 import { FILM } from "./palette";
+import { PainTracker } from "./PainTracker";
 import { SCENES } from "./scenes";
 import { ScreenScene, type ScreenHandle } from "./ScreenScene";
+import { painStrikes, trackerOpacity, type PainKey } from "./story";
 import { buildTimeline, sceneAt } from "./timeline";
 import { STAGE, type Aspect, type FilmScene, type Lang } from "./types";
+
+/** Какую боль закрывает сцена и над какими сценами висит список болей — из сценария. */
+const SOLVES: Record<string, PainKey> = Object.fromEntries(
+  SCENES.flatMap((s) => (s.solves ? [[s.key, s.solves] as const] : [])),
+);
+const TRACKER_KEYS = SCENES.filter((s) => s.tracker).map((s) => s.key);
 
 /** Холст вписывается в окно (просмотр) или совпадает с ним (запись). */
 function useFit(stage: { w: number; h: number }, capture: boolean) {
@@ -153,10 +161,29 @@ export function FilmPage() {
             );
           }
           const SceneView = scene.Component;
+          // В записи (capture) ключ включает t: фрагмент всегда монтируется заново
+          // на целевой момент, а не обновляется с прежнего. Урок первого акта:
+          // ротация + текст на GPU-слое у Chrome рисуются на волосок иначе, если до
+          // этого слой уже существовал на другом t (кадр расходился по пути
+          // перемотки, хотя пропсы совпадали байт в байт: правки CSS без изменения
+          // структуры монтирования не помогали, помогает только «слоя не было»).
+          // В живом просмотре t растёт непрерывно — пересборка на каждый кадр
+          // была бы дороже без выигрыша, поэтому ключ там прежний.
           return (
-            <SceneView key={scene.key} t={local} duration={scene.duration} aspect={aspect} lang={lang} />
+            <SceneView
+              key={capture ? `${scene.key}-${local}` : scene.key}
+              t={local}
+              duration={scene.duration}
+              aspect={aspect}
+              lang={lang}
+            />
           );
         })}
+        <PainTracker
+          strikes={painStrikes(timeline.chapters, SOLVES, t)}
+          opacity={trackerOpacity(timeline.chapters, TRACKER_KEYS, t)}
+          lang={lang}
+        />
         {current.caption && <Caption text={current.caption[lang]} t={local} duration={current.duration} />}
       </div>
     </div>

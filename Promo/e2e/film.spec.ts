@@ -83,14 +83,16 @@ async function shotAt(page: Page, t: number) {
 }
 const same = (a: Buffer, b: Buffer) => Buffer.compare(a, b) === 0;
 
+const at = async (page: Page, key: string) => (await chapters(page)).find((c) => c.key === key)!;
+
 test.describe('фильм: запись', () => {
-  test('__capture: главы подряд от «hook», длительность — конец последней', async ({ page }) => {
+  test('__capture: главы подряд от «before-files», длительность — конец последней', async ({ page }) => {
     await openFilm(page);
     const cap = await page.evaluate(() => ({
       duration: window.__capture!.duration,
       chapters: window.__capture!.chapters,
     }));
-    expect(cap.chapters[0]).toMatchObject({ key: 'hook', at: 0 });
+    expect(cap.chapters[0]).toMatchObject({ key: 'before-files', at: 0 });
     for (let i = 1; i < cap.chapters.length; i++) {
       expect(cap.chapters[i].at).toBe(cap.chapters[i - 1].end);
     }
@@ -119,9 +121,106 @@ test.describe('фильм: запись', () => {
   test('без capture фильм играет сам и не отдаёт __capture', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('embed/film');
-    await expect(page.getByText('9 ролей.')).toBeVisible();
+    await expect(page.getByText('План акций — в десяти файлах.')).toBeVisible();
     expect(await page.evaluate(() => window.__capture)).toBeUndefined();
-    await expect(page.getByText('Сотни позиций.')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Кто согласовал? Никто не знает.')).toBeVisible({ timeout: 10_000 });
+  });
+});
+
+test.describe('фильм: сценарий', () => {
+  test.setTimeout(120_000);
+
+  test('48 с, тринадцать глав по порядку', async ({ page }) => {
+    await openFilm(page);
+    const cap = await page.evaluate(() => ({
+      duration: window.__capture!.duration,
+      keys: window.__capture!.chapters.map((c) => c.key),
+    }));
+    expect(cap).toEqual({
+      duration: 48,
+      keys: [
+        'before-files', 'before-chat', 'before-deadlines', 'before-depts', 'before-pile',
+        'logo', 'plan', 'fullcal', 'approval', 'deadlines', 'report', 'recap', 'final',
+      ],
+    });
+  });
+
+  test('первый акт: боли по очереди, цена на макете — из посева 26-3', async ({ page }) => {
+    await openFilm(page);
+    await seek(page, (await at(page, 'before-chat')).at + 2.5);
+    await expect(page.getByText('Кто согласовал? Никто не знает.')).toBeVisible();
+    await expect(page.getByText('А кто согласовал? В макете 16%')).toBeVisible();
+    await seek(page, (await at(page, 'before-depts')).at + 2.5);
+    await expect(page.getByText('Маркетинг узнаёт последним.')).toBeVisible();
+    await expect(page.getByText('4 990 000 сум')).toBeVisible();
+    await expect(page.getByText('4 440 000 сум')).toBeVisible();
+    await expect(page.getByText('Цена устарела')).toBeVisible();
+  });
+
+  test('куча обрывается в чёрное на последний удар', async ({ page }) => {
+    await openFilm(page);
+    const pile = await at(page, 'before-pile');
+    await seek(page, pile.at + 1);
+    await expect(page.getByText('И так — каждую акцию.')).toBeVisible();
+    await expect(page.getByText('Цена устарела')).toBeVisible(); // контроль: иллюстрации в куче
+    await seek(page, pile.at + 1.9);
+    await expect(page.getByText('И так — каждую акцию.')).toHaveCount(0);
+    await expect(page.getByText('Цена устарела')).toHaveCount(0);
+  });
+
+  test('список болей: пуст в начале второго акта, перечёркивается по сценам, гаснет к итогу', async ({ page }) => {
+    await openFilm(page);
+    const tracker = page.locator('[data-film="pain-tracker"]');
+    const struck = tracker.locator('[data-struck="true"]');
+    await seek(page, (await at(page, 'before-pile')).at + 1);
+    await expect(tracker).toHaveCount(0);
+    await seek(page, (await at(page, 'plan')).at + 1);
+    await expect(tracker.locator('[data-pain]')).toHaveCount(4);
+    await expect(struck).toHaveCount(0);
+    await seek(page, (await at(page, 'approval')).at + 0.5);
+    await expect(struck).toHaveCount(1);
+    await expect(tracker.locator('[data-pain="files"]')).toHaveAttribute('data-struck', 'true');
+    await seek(page, (await at(page, 'report')).at + 5.5);
+    await expect(struck).toHaveCount(4);
+    await seek(page, (await at(page, 'recap')).at + 1);
+    await expect(tracker).toHaveCount(0);
+  });
+
+  test('итог: гарантии на месте болей', async ({ page }) => {
+    await openFilm(page);
+    const recap = await at(page, 'recap');
+    await seek(page, recap.at + 0.4);
+    await expect(page.getByText('План в десяти файлах')).toBeVisible(); // контроль: сначала — боли
+    await seek(page, recap.at + 3.5);
+    for (const fix of [
+      'Один план. Одна версия.',
+      'Каждая правка — с решением директора',
+      'У каждого срока — ответственный',
+      'Маркетинг видит изменения сразу',
+    ]) {
+      await expect(page.getByText(fix)).toBeVisible();
+    }
+    await expect(page.getByText('План в десяти файлах')).toHaveCount(0);
+  });
+
+  test('фрагменты детерминированы', async ({ page }) => {
+    await openFilm(page);
+    const depts = await at(page, 'before-depts');
+    const recap = await at(page, 'recap');
+    const a = await shotAt(page, depts.at + 2);
+    await seek(page, recap.at + 2);
+    const b = await shotAt(page, depts.at + 2);
+    expect(same(a, b)).toBe(true);
+  });
+
+  test('узбекская версия: переводятся титры, интерфейс и иллюстрации — русские', async ({ page }) => {
+    await openFilm(page, '&lang=uz');
+    await seek(page, (await at(page, 'before-files')).at + 1);
+    await expect(page.getByText("Aksiyalar rejasi — o'nta faylda.")).toBeVisible();
+    await expect(page.getByText('План_акций_октябрь.xlsx')).toBeVisible();
+    await seek(page, (await at(page, 'plan')).at + 1.5);
+    await expect(page.getByText("Bitta reja. Bitta versiya.")).toBeVisible();
+    await expect(page.locator('[data-film="pain-tracker"]')).toContainText("Reja o'nta faylda");
   });
 });
 
@@ -130,13 +229,13 @@ test.describe('фильм: сцены-экраны', () => {
 
   test('plan: живой экран, кадр детерминирован, хранилища вкладки чистые', async ({ page }) => {
     await openFilm(page);
-    const plan = (await chapters(page)).find((c) => c.key === 'plan')!;
-    const a = await shotAt(page, plan.at + 4);
-    await seek(page, plan.at + 5.5);
-    await seek(page, plan.at + 1);
-    const b = await shotAt(page, plan.at + 4);
+    const plan = await at(page, 'plan');
+    const a = await shotAt(page, plan.at + 2.5);
+    await seek(page, plan.at + 2.9);
+    await seek(page, plan.at + 0.5);
+    const b = await shotAt(page, plan.at + 2.5);
     expect(same(a, b)).toBe(true);
-    const c = await shotAt(page, plan.at + 4.5);
+    const c = await shotAt(page, plan.at + 1.5);
     expect(same(a, c)).toBe(false); // контроль: камера движется
     await expect(
       page.frameLocator('iframe[title="plan"]').getByRole('heading', { name: 'Краткий промо-календарь' }),
@@ -149,15 +248,17 @@ test.describe('фильм: сцены-экраны', () => {
     expect(await inner.evaluate(() => sessionStorage.getItem('auth'))).toBe('true');
   });
 
-  test('fullcal: панорама прокручивает таблицу, кадр детерминирован', async ({ page }) => {
+  test('fullcal: только акция 26-3, панорама прокручивает таблицу, кадр детерминирован', async ({ page }) => {
     await openFilm(page);
-    const fc = (await chapters(page)).find((c) => c.key === 'fullcal')!;
+    const fc = await at(page, 'fullcal');
     const a = await shotAt(page, fc.at + 3);
-    await seek(page, fc.at + 5);
+    await seek(page, fc.at + 3.8);
     await seek(page, fc.at + 1.5);
     const b = await shotAt(page, fc.at + 3);
     expect(same(a, b)).toBe(true);
+    await expect(page.frameLocator('iframe[title="fullcal"]').getByText(/Показано: 1 промо/)).toBeVisible();
     const frame = page.frames().find((f) => f.url().includes('/full-calendar?'))!;
+    expect(frame.url()).toContain('promo=PR-2026-003');
     const maxScroll = () =>
       frame.evaluate(() =>
         Math.max(...[...document.querySelectorAll('div.overflow-x-auto')].map((el) => el.scrollLeft)),
@@ -165,63 +266,5 @@ test.describe('фильм: сцены-экраны', () => {
     expect(await maxScroll()).toBeGreaterThan(0);
     await seek(page, fc.at + 0.5); // до начала прокрутки — таблица в начале
     expect(await maxScroll()).toBe(0);
-  });
-
-  test('audit: вкладка и тема переключаются кликами, перемотка назад отменяет тему', async ({ page }) => {
-    await openFilm(page);
-    const au = (await chapters(page)).find((c) => c.key === 'audit')!;
-    const frame = () => page.frames().find((f) => f.url().includes('/audit?'))!;
-    const isDark = () => frame().evaluate(() => document.documentElement.classList.contains('dark'));
-    const activeTab = () =>
-      frame().evaluate(() => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim());
-    const a = await shotAt(page, au.at + 3);
-    expect(await isDark()).toBe(true);
-    expect(await activeTab()).toBe('Сроки по промо и отчётам');
-    await seek(page, au.at + 1); // до клика по теме — окно перезагружается
-    expect(await isDark()).toBe(false);
-    expect(await activeTab()).toBe('Сроки по промо и отчётам');
-    const b = await shotAt(page, au.at + 3);
-    expect(same(a, b)).toBe(true);
-  });
-});
-
-test.describe('фильм: сценарий', () => {
-  test.setTimeout(120_000);
-
-  test('32 с, восемь глав по порядку', async ({ page }) => {
-    await openFilm(page);
-    const cap = await page.evaluate(() => ({
-      duration: window.__capture!.duration,
-      keys: window.__capture!.chapters.map((c) => c.key),
-    }));
-    expect(cap).toEqual({
-      duration: 32,
-      keys: ['hook', 'logo', 'plan', 'grid', 'fullcal', 'change', 'audit', 'final'],
-    });
-  });
-
-  test('фрагменты «сетка» и «было → стало» детерминированы и показывают посев', async ({ page }) => {
-    await openFilm(page);
-    const list = await chapters(page);
-    const grid = list.find((c) => c.key === 'grid')!;
-    const change = list.find((c) => c.key === 'change')!;
-    const a = await shotAt(page, grid.at + 1);
-    await seek(page, change.at + 3);
-    const b = await shotAt(page, grid.at + 1);
-    expect(same(a, b)).toBe(true);
-    await expect(page.getByText('Чёрная пятница 2026')).toBeVisible();
-    await expect(page.getByText('Летняя рассрочка на смартфоны')).toBeVisible();
-    await seek(page, change.at + 3);
-    await expect(page.getByText("Кофемашина De'Longhi Magnifica")).toBeVisible();
-    await expect(page.getByText('Согласовано КД')).toBeVisible();
-  });
-
-  test('узбекская версия: переводятся титры, интерфейс остаётся русским', async ({ page }) => {
-    await openFilm(page, '&lang=uz');
-    const list = await chapters(page);
-    await seek(page, list.find((c) => c.key === 'plan')!.at + 2);
-    await expect(page.getByText('Yillik aksiyalar rejasi — bitta oynada')).toBeVisible();
-    await seek(page, list.find((c) => c.key === 'change')!.at + 3);
-    await expect(page.getByText('Цена по акции')).toBeVisible();
   });
 });

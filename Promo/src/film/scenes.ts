@@ -1,51 +1,74 @@
-import { ChangeFragment } from "./fragments/ChangeFragment";
+import { ChatBefore } from "./fragments/before/ChatBefore";
+import { DeadlinesBefore } from "./fragments/before/DeadlinesBefore";
+import { DeptsBefore } from "./fragments/before/DeptsBefore";
+import { FilesBefore } from "./fragments/before/FilesBefore";
+import { PileBefore } from "./fragments/before/PileBefore";
 import { FinalFragment } from "./fragments/FinalFragment";
-import { GridFragment } from "./fragments/GridFragment";
-import { HookFragment } from "./fragments/HookFragment";
 import { LogoFragment } from "./fragments/LogoFragment";
-import { AUDIT_SCREEN, FULLCAL_SCREEN, PLAN_SCREEN } from "./screens";
+import { RecapFragment } from "./fragments/RecapFragment";
+import { APPROVAL_SCREEN, DEADLINES_SCREEN, FULLCAL_SCREEN, PLAN_SCREEN, REPORT_SCREEN } from "./screens";
+import { painOf } from "./story";
 import { bar } from "./timeline";
 import type { FilmScene } from "./types";
 
 /**
- * Сценарий фильма (спецификация §4): 16 тактов по 2 с при 120 BPM = 32 с.
- * Ключи сцен — ключи глав для `--chapter`. Узбекские подписи — черновой
- * перевод, нужна проверка носителем.
+ * Сценарий версии 2 «Хаос → порядок» (спецификация v2 §3): 24 такта по 2 с при
+ * 120 BPM = 48 с. Первый акт — четыре боли и куча, второй — акция 26-3 проходит
+ * путь в Promo (список болей поверх, каждая сцена закрывает свою боль), итог и
+ * финал. Ключи сцен — ключи глав для `--chapter`. Подписи сцен, закрывающих
+ * боль, — её гарантия из story.ts: итог повторяет ровно их.
  */
 export const SCENES: FilmScene[] = [
-  { kind: "fragment", key: "hook", duration: bar(1.5), Component: HookFragment },
+  { kind: "fragment", key: "before-files", duration: bar(1.5), Component: FilesBefore },
+  { kind: "fragment", key: "before-chat", duration: bar(1.5), Component: ChatBefore },
+  { kind: "fragment", key: "before-deadlines", duration: bar(1.5), Component: DeadlinesBefore },
+  { kind: "fragment", key: "before-depts", duration: bar(1.5), Component: DeptsBefore },
+  { kind: "fragment", key: "before-pile", duration: bar(1), Component: PileBefore },
   { kind: "fragment", key: "logo", duration: bar(1), Component: LogoFragment },
   {
     kind: "screen",
     key: "plan",
-    duration: bar(3),
+    duration: bar(1.5),
     screen: PLAN_SCREEN,
-    caption: { ru: "План акций на год — в одном окне", uz: "Yillik aksiyalar rejasi — bitta oynada" },
+    tracker: true,
+    caption: painOf("files").fix,
   },
-  { kind: "fragment", key: "grid", duration: bar(2), Component: GridFragment },
   {
     kind: "screen",
     key: "fullcal",
-    duration: bar(3),
-    screen: FULLCAL_SCREEN,
-    caption: {
-      ru: "Каждая позиция: цена, подарки, рассрочка",
-      uz: "Har bir pozitsiya: narx, sovg'alar, muddatli to'lov",
-    },
-  },
-  {
-    kind: "fragment",
-    key: "change",
     duration: bar(2),
-    Component: ChangeFragment,
-    caption: { ru: "Любая правка — через согласование", uz: "Har qanday o'zgarish — kelishuv orqali" },
+    screen: FULLCAL_SCREEN,
+    tracker: true,
+    solves: "files",
+    caption: { ru: "Все позиции — в одной таблице", uz: "Barcha pozitsiyalar — bitta jadvalda" },
   },
   {
     kind: "screen",
-    key: "audit",
-    duration: bar(2),
-    screen: AUDIT_SCREEN,
-    caption: { ru: "Сроки под контролем", uz: "Muddatlar nazorat ostida" },
+    key: "approval",
+    duration: bar(3),
+    screen: APPROVAL_SCREEN,
+    tracker: true,
+    solves: "chat",
+    caption: painOf("chat").fix,
   },
-  { kind: "fragment", key: "final", duration: bar(1.5), Component: FinalFragment },
+  {
+    kind: "screen",
+    key: "deadlines",
+    duration: bar(2.5),
+    screen: DEADLINES_SCREEN,
+    tracker: true,
+    solves: "deadlines",
+    caption: painOf("deadlines").fix,
+  },
+  {
+    kind: "screen",
+    key: "report",
+    duration: bar(3),
+    screen: REPORT_SCREEN,
+    tracker: true,
+    solves: "depts",
+    caption: painOf("depts").fix,
+  },
+  { kind: "fragment", key: "recap", duration: bar(2), Component: RecapFragment },
+  { kind: "fragment", key: "final", duration: bar(2), Component: FinalFragment },
 ];

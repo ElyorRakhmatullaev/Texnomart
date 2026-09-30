@@ -38,12 +38,14 @@ interface ScreenSceneProps {
 /**
  * Адрес окна — от корня приложения, маршрут в film-path (режим кадра сам
  * переставит адрес): глубокая ссылка на GitHub Pages шла бы через 404.html.
- * BASE_URL — «/» локально и «/Texnomart/promo/» на GitHub Pages.
+ * BASE_URL — «/» локально и «/Texnomart/promo/» на GitHub Pages. Режим кадра
+ * переносит всю строку запроса в адрес экрана, поэтому `query` (например,
+ * `promo`) экран читает как обычно.
  */
 function frameUrl(scene: ScreenSceneDef): string {
-  const { path, role, user, theme } = scene.screen;
-  const query = new URLSearchParams({ "film-frame": "1", "film-path": path, role, user, theme });
-  return `${import.meta.env.BASE_URL}?${query}`;
+  const { path, role, user, theme, query } = scene.screen;
+  const params = new URLSearchParams({ "film-frame": "1", "film-path": path, role, user, theme, ...query });
+  return `${import.meta.env.BASE_URL}?${params}`;
 }
 
 /**

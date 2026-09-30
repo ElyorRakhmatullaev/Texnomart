@@ -6,7 +6,7 @@
 //
 //   corepack pnpm film:promo                        # film-out/film-ru-16x9.mp4
 //   corepack pnpm film:promo --lang uz
-//   corepack pnpm film:promo --chapter change       # одна сцена
+//   corepack pnpm film:promo --chapter approval     # одна сцена
 //   corepack pnpm film:promo --audio D:\music.mp3   # с треком, затухание в конце
 //   corepack pnpm film:promo --4k                   # 3840×2160
 //   corepack pnpm film:promo --stills 1.2,8,23      # кадры PNG, без видео
