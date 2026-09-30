@@ -8,7 +8,7 @@
     "build": "vite build",
     "test:e2e": "playwright test",
     "test:e2e:report": "playwright show-report",
-    "test:film": "node --test scripts/film-timeline.test.ts"
+    "test:film": "node --test scripts/film-timeline.test.ts scripts/film-cues.test.ts"
   },
   "dependencies": {
     "@texnomart/shared": "workspace:*",
