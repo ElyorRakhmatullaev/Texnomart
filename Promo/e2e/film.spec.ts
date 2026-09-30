@@ -206,6 +206,15 @@ test.describe('фильм: запись', () => {
     expect(await page.evaluate(() => window.__capture)).toBeUndefined();
     await expect(page.getByText('Кто согласовал? Никто не знает.')).toBeVisible({ timeout: 10_000 });
   });
+
+  test('просмотр без записи доигрывает сигналы: директор согласует набор', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('embed/film');
+    await expect(
+      page.frameLocator('iframe[title="approval"]').getByText('Набор согласован коммерческим директором.'),
+    ).toBeVisible({ timeout: 90_000 });
+  });
 });
 
 test.describe('фильм: сценарий', () => {
@@ -475,6 +484,30 @@ test.describe('фильм: сцены-экраны', () => {
     await seek(page, dl.at + 1); // до фильтра — окно перезагружается
     await expect(frame.getByRole('combobox').filter({ hasText: 'Все ответственные' })).toBeVisible();
     const b = await shotAt(page, dl.at + 4.5);
+    expectSameFrame(await frameDiff(page, a, b));
+  });
+
+  test('report: маркетинг видит изменения — «Только изменения», цены, рамка на новой цене', async ({ page }) => {
+    await openFilm(page);
+    const rp = await at(page, 'report');
+    const frame = page.frameLocator('iframe[title="report"]');
+    const toggle = frame.getByRole('switch', { name: 'Только изменения' });
+    await seek(page, rp.at + 1);
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await expect(page.locator('[data-film="highlight"]')).toHaveCount(1); // «Изменено: 2»
+    const a = await shotAt(page, rp.at + 4.5);
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    await expect(frame.getByText('Сотрудник маркетинга').first()).toBeVisible();
+    const inner = page.frames().find((f) => f.url().includes('/reports?'))!;
+    expect(
+      await inner.evaluate(() =>
+        Math.max(...[...document.querySelectorAll('div.overflow-x-auto')].map((el) => el.scrollLeft)),
+      ),
+    ).toBeGreaterThan(0);
+    await expect(page.locator('[data-film="highlight"]')).toHaveCount(1); // новая цена
+    await seek(page, rp.at + 1); // до переключателя (1,6 с) — окно перезагружается
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    const b = await shotAt(page, rp.at + 4.5);
     expectSameFrame(await frameDiff(page, a, b));
   });
 });

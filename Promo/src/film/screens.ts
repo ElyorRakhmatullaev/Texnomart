@@ -393,7 +393,43 @@ export const DEADLINES_SCREEN: ScreenSpec = {
 /** Шапка отчёта маркетингу: «Версия 4 · Изменено: 2» и переключатель «Только изменения». */
 const REPORT_HEAD: CameraPose = { cx: 700, cy: 380.3, zoom: 1.45, rx: 0, ry: 0, opacity: 1 };
 
-/** «Маркетинг видит изменения сразу»: отчёт 26-3 под сотрудником маркетинга. Сигналы — Task 7. */
+/**
+ * Таблица отчёта после «Только изменения»: строки De'Longhi и Dyson (741 и 793 px
+ * окна). Страница после фильтра короче окна и не прокручивается, поэтому низ окна
+ * (900 px) виден над подписью — под её затемнением. tx = −240, ty = −480,45.
+ */
+const REPORT_TABLE: CameraPose = { cx: 800, cy: 680.3, zoom: 1.5, rx: 0, ry: 0, opacity: 1 };
+
+/** Тело таблицы отчёта: самый высокий горизонтальный скроллер (шапка и нижняя полоса — низкие). */
+const reportBody: TargetFn = (doc) =>
+  [...doc.querySelectorAll<HTMLElement>("div.overflow-x-auto")]
+    .filter((el) => el.scrollWidth > el.clientWidth && el.clientHeight > 50)
+    .sort((a, b) => b.clientHeight - a.clientHeight)[0] ?? null;
+
+/**
+ * Ячейка изменённого поля отчёта: подчёркнутое значение под подсказкой «было →
+ * стало» (`.cursor-help` в DepartmentReportView.tsx — тот же класс на десктопной
+ * ячейке и на мобильной карточке; на 1440×900 карточка скрыта и отфильтрована
+ * невидимостью, как и в `byText`). Обычный `byText` здесь не годится: измерено
+ * живьём (1440×900, «Только изменения» выключены) — число «4 440 000 сум» в
+ * строке De'Longhi встречается ДВАЖДЫ: один раз — в изменённой ячейке цены
+ * (жёлтая подсветка, `.cursor-help`), второй — случайно, в независимой ячейке
+ * рассрочки дальше в той же строке (месячный платёж на 1 месяц численно
+ * совпадает с самой ценой). `byText` берёт последнее совпадение по документу —
+ * это случайный дубль, а не изменённая цена; `.cursor-help` — однозначный
+ * маркер именно изменённой ячейки.
+ */
+const changedValueCell = (root: ParentNode, text: string): Element | null =>
+  [...root.querySelectorAll<HTMLElement>(".cursor-help")]
+    .filter((e) => e.getClientRects().length > 0 && norm(e.textContent) === text)
+    .at(-1)?.parentElement ?? null;
+
+/**
+ * «Маркетинг видит изменения сразу»: отчёт 26-3 открывается сотруднику маркетинга
+ * по умолчанию — «Версия 4 · Изменено: 2» (рамка). Курсор включает «Только
+ * изменения», таблица прокручивается к ценам, рамка — на новой цене De'Longhi,
+ * той же, что на кассе в первом акте.
+ */
 export const REPORT_SCREEN: ScreenSpec = {
   path: "reports",
   role: "Сотрудник маркетинга",
@@ -401,9 +437,48 @@ export const REPORT_SCREEN: ScreenSpec = {
   theme: "light",
   ready: h1("Отчёты смежным отделам"),
   home: { x: 820, y: 560 },
-  cues: [],
+  cues: [
+    {
+      kind: "highlight",
+      at: 0.8,
+      until: 1.9,
+      label: "«Изменено: 2»",
+      area: (doc) => {
+        const badge = byText(doc, "Изменено: 2");
+        return badge ? rectOf(badge) : null;
+      },
+    },
+    {
+      kind: "click",
+      at: 1.6,
+      cursor: true,
+      label: "переключатель «Только изменения»",
+      target: (doc) => doc.querySelector('[aria-label="Только изменения"]'),
+    },
+    {
+      kind: "scroll",
+      at: 2,
+      until: 3.2,
+      label: "прокрутка таблицы к ценам",
+      target: reportBody,
+      to: (p, el) => easeInOutCubic(p) * Math.min(1400, el.scrollWidth - el.clientWidth),
+    },
+    {
+      kind: "highlight",
+      at: 3.4,
+      until: 6,
+      label: `новая цена «${HERO.priceNow}»`,
+      area: (doc) => {
+        const body = reportBody(doc);
+        const cell = body && changedValueCell(body, HERO.priceNow);
+        return cell ? rectOf(cell) : null;
+      },
+    },
+  ],
   camera: [
     { at: 0, value: { ...REPORT_HEAD, cx: -320, ry: -8 } },
     { at: 0.7, value: REPORT_HEAD, ease: easeOutExpo },
+    { at: 2, value: REPORT_HEAD },
+    { at: 3.2, value: REPORT_TABLE, ease: easeInOutCubic },
   ],
 };
