@@ -430,4 +430,30 @@ test.describe('фильм: сцены-экраны', () => {
     const box = (await highlight.boundingBox())!;
     expect(box.width).toBeGreaterThan(1500); // строка — во всю ширину таблицы (1151 px окна × 1,55)
   });
+
+  test('approval: панель «Было / Стало», директор согласует набор, перемотка назад отменяет', async ({ page }) => {
+    await openFilm(page);
+    const ap = await at(page, 'approval');
+    const frame = page.frameLocator('iframe[title="approval"]');
+    await seek(page, ap.at + 2.5);
+    await expect(frame.getByRole('dialog')).toContainText(/Было\s*\/\s*Стало/i);
+    const box = (await page.locator('[data-film="highlight"]').boundingBox())!;
+    expect(box.height).toBeGreaterThan(150); // рамка — вокруг всего раздела (~99 px окна × 4,571), не одного заголовка
+    const a = await shotAt(page, ap.at + 5.5);
+    await expect(frame.getByRole('dialog')).toHaveCount(0);
+    await expect(frame.getByText('Набор согласован коммерческим директором.')).toBeVisible();
+    await expect(frame.getByRole('row', { name: /De'Longhi/ })).toContainText('Согласовано ранее');
+    await seek(page, ap.at + 2.5); // до решения (4,6 с): окно перезагружается, клики до 2,5 с — заново
+    await expect(frame.getByRole('dialog')).toHaveCount(1);
+    // Пока открыта модальная панель, Radix прячет остальную страницу из дерева
+    // доступности (проверено ariaSnapshot: фон отсутствует целиком) — обычная
+    // getByRole не находит кнопку позади неё. includeHidden возвращает и скрытую
+    // кнопку мобильной нижней панели (lg:hidden) — берём первую (десктопную, она
+    // же видна на холсте на этом вьюпорте 1440×900).
+    await expect(
+      frame.getByRole('button', { name: 'Согласовать все изменения', includeHidden: true }).first(),
+    ).toBeVisible();
+    const b = await shotAt(page, ap.at + 5.5);
+    expectSameFrame(await frameDiff(page, a, b));
+  });
 });
