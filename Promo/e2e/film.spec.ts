@@ -458,4 +458,23 @@ test.describe('фильм: сцены-экраны', () => {
     const b = await shotAt(page, ap.at + 5.5);
     expectSameFrame(await frameDiff(page, a, b));
   });
+
+  test('deadlines: фильтр по ответственному — строки менеджера 26-3, без «раб. дн.»', async ({ page }) => {
+    await openFilm(page);
+    const dl = await at(page, 'deadlines');
+    const frame = page.frameLocator('iframe[title="deadlines"]');
+    await seek(page, dl.at + 1); // до фильтра
+    await expect(frame.getByRole('tab', { name: 'Сроки по промо и отчётам' })).toHaveAttribute('aria-selected', 'true');
+    await expect(frame.locator('tbody')).toContainText('раб. дн.'); // контроль: без фильтра такие строки есть
+    const a = await shotAt(page, dl.at + 4.5);
+    await expect(frame.getByRole('combobox').filter({ hasText: 'Рашидова Дилноза' })).toBeVisible();
+    await expect(frame.locator('tbody tr')).toHaveCount(3);
+    await expect(frame.locator('tbody')).toContainText('+8 кал. дн.');
+    await expect(frame.locator('tbody')).not.toContainText('раб. дн.');
+    await expect(page.locator('[data-film="highlight"]')).toHaveCount(1);
+    await seek(page, dl.at + 1); // до фильтра — окно перезагружается
+    await expect(frame.getByRole('combobox').filter({ hasText: 'Все ответственные' })).toBeVisible();
+    const b = await shotAt(page, dl.at + 4.5);
+    expectSameFrame(await frameDiff(page, a, b));
+  });
 });

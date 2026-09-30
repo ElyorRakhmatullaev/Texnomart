@@ -105,7 +105,17 @@ const waitTarget = (doc: Document, cue: ClickCue | ScrollCue, sceneKey: string):
 const waitArea = (doc: Document, cue: HighlightCue, sceneKey: string): Promise<Rect> =>
   waitFor(doc, sceneKey, () => cue.area(doc), () => resolveArea(doc, cue, sceneKey));
 
-/** Полная последовательность указателя: вкладки Radix срабатывают по mousedown, меню — по pointerdown. */
+/**
+ * Полная последовательность указателя: вкладки Radix срабатывают по mousedown,
+ * меню — по pointerdown. Перед нажатием — свой `pointermove` по документу: Radix
+ * Select (SelectContentImpl) с открытия следит за смещением указателя от точки,
+ * где была нажата кнопка-фильтр, и на pointerup без движения (Δ ≤ 10 px) считает
+ * отпускание «протечкой» того же клика и гасит его через `preventDefault` — пункт
+ * списка не выбирается (проверено живьём: пара pointerdown+pointerup в одной
+ * точке без предшествующего pointermove никогда не выбирает `SelectItem`).
+ * Настоящий курсор перед кликом всегда откуда-то приезжает — это не костыль под
+ * один компонент, а недостающий кусок настоящего взаимодействия.
+ */
 function pointerClick(el: Element, sceneKey: string): void {
   const win = viewOf(el.ownerDocument, sceneKey);
   const r = el.getBoundingClientRect();
@@ -119,6 +129,7 @@ function pointerClick(el: Element, sceneKey: string): void {
     clientY: r.top + r.height / 2,
   };
   const pointer = { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true };
+  el.ownerDocument.dispatchEvent(new win.PointerEvent("pointermove", { ...pointer, buttons: 0 }));
   el.dispatchEvent(new win.PointerEvent("pointerdown", { ...pointer, buttons: 1 }));
   el.dispatchEvent(new win.MouseEvent("mousedown", { ...base, buttons: 1 }));
   el.dispatchEvent(new win.PointerEvent("pointerup", { ...pointer, buttons: 0 }));

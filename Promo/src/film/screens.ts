@@ -280,7 +280,34 @@ const tab = (name: string): { label: string; target: TargetFn } => ({
     [...doc.querySelectorAll('[role="tab"]')].find((el) => el.textContent?.trim() === name) ?? null,
 });
 
-/** «У каждого срока — ответственный»: аудит, вкладка сроков по промо. Фильтр и рамки — Task 6. */
+/**
+ * Строка таблицы сроков, содержащая все `parts`. Таблица шире карточки (1342 px
+ * против 1151 px на 1440×900), поэтому рамка обрезается по видимой части
+ * прокручиваемого блока — тот же приём, что у `clipToScroller`.
+ */
+const deadlineRow = (doc: Document, ...parts: string[]): Rect | null => {
+  const tr = [...doc.querySelectorAll("tbody tr")].find(
+    (row) => row.getClientRects().length > 0 && parts.every((p) => norm(row.textContent).includes(p)),
+  );
+  const box = tr?.closest(".overflow-auto");
+  if (!tr || !box) return null;
+  const r = tr.getBoundingClientRect();
+  const b = box.getBoundingClientRect();
+  const x = Math.max(r.left, b.left);
+  return { x, y: r.top, w: Math.min(r.right, b.right) - x, h: r.height };
+};
+
+/**
+ * «У каждого срока — ответственный»: аудит, вкладка сроков по промо. Курсор
+ * выбирает в фильтре «Все ответственные» менеджера акции-героя — остаются её
+ * сроки: 26-3 «Отправка данных КМ — В срок», 26-3 «Отправка первичного отчёта —
+ * Просрочено +8 кал. дн.», 26-11 «В срок» (единственные три строки, где
+ * ответственный — она). Строки «+55/+59 раб. дн.» (решения директора по 26-3)
+ * лежат глубоко в несортированном списке (индексы 19 и 21 из 63 — измерено
+ * живьём) и никогда не входят в видимую без прокрутки часть таблицы: эта сцена
+ * таблицу не прокручивает — ни до фильтра, ни после. Камера подходит к
+ * отфильтрованной таблице, рамки — на двух строках 26-3.
+ */
 export const DEADLINES_SCREEN: ScreenSpec = {
   path: "audit",
   role: "Коммерческий директор",
@@ -288,10 +315,50 @@ export const DEADLINES_SCREEN: ScreenSpec = {
   theme: "light",
   ready: h1("Аудит-лог и контроль сроков"),
   home: { x: 980, y: 300 },
-  cues: [{ kind: "click", at: 0, ...tab("Сроки по промо и отчётам") }],
+  cues: [
+    { kind: "click", at: 0, ...tab("Сроки по промо и отчётам") },
+    {
+      kind: "click",
+      at: 1.2,
+      cursor: true,
+      label: "фильтр «Все ответственные»",
+      target: (doc) =>
+        [...doc.querySelectorAll('button[role="combobox"]')].find(
+          (b) => norm(b.textContent) === "Все ответственные",
+        ) ?? null,
+    },
+    {
+      kind: "click",
+      at: 2,
+      cursor: true,
+      label: `пункт «${HERO.kmName}»`,
+      target: (doc) =>
+        [...doc.querySelectorAll('[role="option"]')].find((o) => norm(o.textContent) === HERO.kmName) ?? null,
+    },
+    {
+      kind: "highlight",
+      at: 2.9,
+      until: 3.9,
+      label: "строка «Отправка данных КМ»",
+      area: (doc) => deadlineRow(doc, HERO.promoNo, "Отправка данных КМ"),
+    },
+    {
+      kind: "highlight",
+      at: 3.9,
+      until: 5,
+      label: "строка «Отправка первичного отчёта»",
+      area: (doc) => deadlineRow(doc, HERO.promoNo, "Отправка первичного отчёта"),
+    },
+  ],
   camera: [
     { at: 0, value: { ...WHOLE, zoom: 1.3, opacity: 0 } },
     { at: 0.4, value: WHOLE, ease: easeOutExpo },
+    { at: 2.2, value: WHOLE },
+    // Отфильтрованная таблица (шапка 528–560, строки 560–829 px окна); низ
+    // окна (900) — у низа кадра, как в исходном замере. tx = −413,76,
+    // ty = −378,54 — оба нецелые (урок 30.09: при целых обоих Chrome
+    // переиспользует растр, и кадр начинает зависеть от пути перемотки).
+    { at: 2.9, value: { cx: 848, cy: 567, zoom: 1.62, rx: 0, ry: 0, opacity: 1 }, ease: easeInOutCubic },
   ],
 };
 
