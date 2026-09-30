@@ -438,7 +438,9 @@ test.describe('фильм: сцены-экраны', () => {
     await seek(page, ap.at + 2.5);
     await expect(frame.getByRole('dialog')).toContainText(/Было\s*\/\s*Стало/i);
     const box = (await page.locator('[data-film="highlight"]').boundingBox())!;
-    expect(box.height).toBeGreaterThan(150); // рамка — вокруг всего раздела (~99 px окна × 4,571), не одного заголовка
+    // Рамка — вокруг всего раздела (~99 px окна × 4,571 ≈ 506), не одного заголовка
+    // (~28 px окна × 4,571 ≈ 128 — порог 300 разделяет их с запасом).
+    expect(box.height).toBeGreaterThan(300);
     const a = await shotAt(page, ap.at + 5.5);
     await expect(frame.getByRole('dialog')).toHaveCount(0);
     await expect(frame.getByText('Набор согласован коммерческим директором.')).toBeVisible();
