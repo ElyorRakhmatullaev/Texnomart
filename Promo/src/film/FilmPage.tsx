@@ -54,6 +54,13 @@ export function FilmPage() {
   const [t, setT] = React.useState(0);
   const screens = React.useRef(new Map<string, ScreenHandle>());
   const fit = useFit(stage, capture);
+  // Сцены с прокруткой в записи: какие t этой сцены уже отрисовывались обычным
+  // обновлением (см. комментарий у ScreenScene ниже).
+  const seenScrollLocals = React.useRef<{ key: string; locals: Set<number>; gen: number }>({
+    key: "",
+    locals: new Set(),
+    gen: 0,
+  });
 
   // Фильм показывает приложение светлым: класс .dark на <html> перекрасил бы
   // бейджи фрагментов. Страница грузится лениво — после эффекта ThemeProvider,
@@ -146,9 +153,34 @@ export function FilmPage() {
         {mounted.map((scene) => {
           const isCurrent = scene === current;
           if (scene.kind === "screen") {
+            // Прокрутка живого экрана — тот же класс кадровой недетерминированности,
+            // что у первого акта (FilesBefore): Chrome иначе растрирует текст
+            // прокрученной таблицы, если этот <iframe> уже стоял на другом scrollLeft
+            // раньше — даже когда итоговый scrollLeft/DOM совпадают побайтово
+            // (проверено: сама прокрутка, её сброс-и-повтор, перезагрузка документа
+            // через location.reload() и любые правки CSS-слоя окна не помогали;
+            // помогает только новый узел <iframe> — таким же способом, каким
+            // FilesBefore лечится пересборкой на каждый t). Пересборка целиком на
+            // каждый t в записи стоила бы дорого при 60 к/с; пересобирать нужно
+            // только момент, который эта сцена уже показывала обновлением на месте
+            // (иначе он отрисуется иначе, чем в первый раз) — первый показ любого t
+            // всегда свежий уже по естественному монтированию сцены.
+            const hasScroll = scene.screen.cues.some((c) => c.kind === "scroll");
+            let key = scene.key;
+            if (capture && isCurrent && hasScroll) {
+              const seen = seenScrollLocals.current;
+              if (seen.key !== scene.key) {
+                seenScrollLocals.current = { key: scene.key, locals: new Set([local]), gen: 0 };
+              } else if (seen.locals.has(local)) {
+                seenScrollLocals.current = { key: scene.key, locals: new Set([local]), gen: seen.gen + 1 };
+              } else {
+                seen.locals.add(local);
+              }
+              key = `${scene.key}-${seenScrollLocals.current.gen}`;
+            }
             return (
               <ScreenScene
-                key={scene.key}
+                key={key}
                 ref={(h) => {
                   if (h) screens.current.set(scene.key, h);
                   else screens.current.delete(scene.key);
