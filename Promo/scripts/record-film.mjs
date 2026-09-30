@@ -13,7 +13,7 @@
 //
 // Dev-сервер Promo должен быть запущен (corepack pnpm dev:promo).
 // Параметры: --base http://localhost:5173 (dev-сервер или деплой GitHub Pages),
-// --out файл, --fps (60), --aspect 16x9 (9x16 — второй этап), --4k,
+// --out файл, --fps (60; только целое), --aspect 16x9 (9x16 — второй этап), --4k,
 // --codec h264|hevc|prores (H.264 играет везде; HEVC — 10 бит и меньше;
 // ProRes 4444 — мастер для монтажа, .mov), --crf, --audio.
 // Chrome: $CHROME или стандартные пути Windows/macOS/Linux; ffmpeg: $FFMPEG или PATH.
@@ -54,7 +54,12 @@ const [width, height] = { "16x9": [1920, 1080], "9x16": [1080, 1920] }[opt.aspec
 // 4K — тот же холст, нарисованный вдвое плотнее.
 const scale = opt["4k"] ? 2 : 1;
 const fps = Number(opt.fps);
-if (!(fps > 0)) throw new Error(`--fps: положительное число, а не ${opt.fps}`);
+// Только целое: главы начинаются на целых секундах, и сцена-экран повторяет
+// путь записи тактами 1/fps от своего начала (FilmPage.tsx) — при дробном
+// fps (29.97) эти такты не совпали бы с кадрами записи from + i/fps.
+if (!Number.isInteger(fps) || fps <= 0) {
+  throw new Error(`--fps: целое положительное число кадров в секунду (например, 60), а не ${opt.fps}`);
+}
 const codec = opt.codec;
 const pix = { h264: "yuv420p", hevc: "yuv420p10le", prores: "yuva444p10le" }[codec];
 if (!pix) throw new Error(`--codec h264|hevc|prores, а не ${codec}`);

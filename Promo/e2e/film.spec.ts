@@ -1,25 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 
-// Этот файл — по одному воркеру за раз: несколько настоящих Chrome, снимающих
-// кадр одновременно на одной машине, изредка дают разный растр одного и того
-// же кадра фрагмента при совпадающих пропсах (соревнование за GPU/CPU между
-// процессами Chrome — подтверждено измерением: 10/10 при одном воркере,
-// 2/10 при двух, 4–5/10 при четырёх; --disable-gpu и больше кадров ожидания
-// расхождение не убирают, значит это не гонка в коде фильма). Это не гонка
-// кода, поэтому не лечится ни допуском (расширять его запрещено — это
-// нагрузочный шум, а не свойство рендера), ни ожиданием в тесте — только
-// отсутствием конкурентов за GPU. mode: 'serial' держит тесты ЭТОГО файла на
-// одном воркере, когда файл запущен отдельно (как во всех командах проверки
-// этой задачи); он не ограничивает другие spec-файлы или воркеры вовне.
-// Особенность Playwright: под --repeat-each при -g, сужающем выборку до
-// ОДНОГО теста, serial это не держит (повторы всё равно уходят на несколько
-// воркеров) — сама требуемая проверка («сцены-экраны» + --repeat-each=3)
-// фильтрует иную группу тестов (не содержащую кадр фрагмента), так что это
-// не мешает; для одиночного теста под --repeat-each здесь нет надёжного
-// внутрифайлового решения без правки глобального workers в playwright.config.ts
-// (вне области этой правки).
-test.describe.configure({ mode: 'serial' });
-
 /** «Сейчас» режима кадра — FILM_NOW в src/film/frame-mode.ts (= FIXED_NOW e2e). */
 const FILM_NOW = Date.parse('2026-09-28T12:00:00+05:00');
 
@@ -103,31 +83,44 @@ async function shotAt(page: Page, t: number) {
 }
 const at = async (page: Page, key: string) => (await chapters(page)).find((c) => c.key === key)!;
 
+/** Порог «та же картинка» — спецификация v2, §1 п. 3. */
+const SAME_FRAME_PSNR = 40;
+
+type FrameDiff = { psnr: number; maxDelta: number; diffPixels: number };
+
 /**
- * Сравнение двух PNG с допуском спецификации («Уточнено при реализации
- * 30.09», docs/superpowers/specs/2026-09-30-promo-motion-film-v2-design.md
- * §«done when» №3): «до пикселя» недостижимо для живых вложенных экранов —
- * Chrome растрирует их по-разному в зависимости от истории отрисовки
- * страницы (FilmPage.tsx, комментарий у seekTo). Декодирует оба PNG прямо в
- * браузере (data-URL → Image → canvas.getImageData) — без новых npm-пакетов.
+ * Сравнение двух PNG по PSNR (docs/superpowers/specs/2026-09-30-promo-motion-film-v2-design.md,
+ * §1 п. 3): кадры — «та же картинка», если PSNR по каналам RGB ≥ 40 дБ.
+ * Совпадение «до пикселя» и поканальный допуск недостижимы: Chrome растрирует
+ * вложенное окно и его края по-разному в зависимости от истории отрисовки
+ * страницы и нагрузки на видеокарту (до 50 уровней в одном столбце у края
+ * окна, до 5 — на тексте под нагрузкой; PSNR ≈ 46–60 дБ). Другое содержимое
+ * (иной экран, неприменённый клик, другая прокрутка) даёт PSNR заметно ниже 40.
+ *
+ * MSE — по R, G и B всех пикселей, PSNR = 10·log10(255² / MSE); одинаковые
+ * кадры — +∞. maxDelta и diffPixels (по RGB) — только для сообщения об ошибке.
+ * Кадры разного размера не сравниваются (исключение, а не сравнение
+ * перекрытия). Декодирование — прямо в браузере (data-URL → Image →
+ * canvas.getImageData), без новых npm-пакетов.
  */
-async function frameDiff(
-  page: Page,
-  a: Buffer,
-  b: Buffer,
-): Promise<{ maxDelta: number; diffPixels: number }> {
+async function frameDiff(page: Page, a: Buffer, b: Buffer): Promise<FrameDiff> {
   return page.evaluate(
     async ({ aB64, bB64 }) => {
       const load = (b64: string) =>
         new Promise<HTMLImageElement>((resolve, reject) => {
           const img = new Image();
           img.onload = () => resolve(img);
-          img.onerror = reject;
+          img.onerror = () => reject(new Error('frameDiff: PNG не декодируется'));
           img.src = `data:image/png;base64,${b64}`;
         });
       const [imgA, imgB] = await Promise.all([load(aB64), load(bB64)]);
-      const w = imgA.width;
-      const h = imgA.height;
+      if (imgA.naturalWidth !== imgB.naturalWidth || imgA.naturalHeight !== imgB.naturalHeight) {
+        throw new Error(
+          `frameDiff: разный размер кадров — ${imgA.naturalWidth}×${imgA.naturalHeight} и ${imgB.naturalWidth}×${imgB.naturalHeight}`,
+        );
+      }
+      const w = imgA.naturalWidth;
+      const h = imgA.naturalHeight;
       const toPixels = (img: HTMLImageElement) => {
         const canvas = document.createElement('canvas');
         canvas.width = w;
@@ -136,32 +129,41 @@ async function frameDiff(
         ctx.drawImage(img, 0, 0);
         return ctx.getImageData(0, 0, w, h).data;
       };
-      const da = toPixels(imgA);
-      const db = toPixels(imgB);
+      const pa = toPixels(imgA);
+      const pb = toPixels(imgB);
+      let sumSq = 0;
       let maxDelta = 0;
       let diffPixels = 0;
-      for (let i = 0; i < da.length; i += 4) {
-        const d = Math.max(
-          Math.abs(da[i] - db[i]),
-          Math.abs(da[i + 1] - db[i + 1]),
-          Math.abs(da[i + 2] - db[i + 2]),
-          Math.abs(da[i + 3] - db[i + 3]),
-        );
+      for (let i = 0; i < pa.length; i += 4) {
+        const dr = pa[i] - pb[i];
+        const dg = pa[i + 1] - pb[i + 1];
+        const db = pa[i + 2] - pb[i + 2];
+        sumSq += dr * dr + dg * dg + db * db;
+        const d = Math.max(Math.abs(dr), Math.abs(dg), Math.abs(db));
         if (d > 0) {
           diffPixels++;
           if (d > maxDelta) maxDelta = d;
         }
       }
-      return { maxDelta, diffPixels };
+      const mse = sumSq / (w * h * 3);
+      const psnr = mse === 0 ? Infinity : 10 * Math.log10((255 * 255) / mse);
+      return { psnr, maxDelta, diffPixels };
     },
     { aB64: a.toString('base64'), bB64: b.toString('base64') },
   );
 }
 
-/** Канал ≤ 2 уровня из 255, отличающихся пикселей ≤ 0,1 % кадра (≤ 2 073 при 1920×1080). */
-function expectSameFrame(diff: { maxDelta: number; diffPixels: number }) {
-  expect(diff.maxDelta).toBeLessThanOrEqual(2);
-  expect(diff.diffPixels).toBeLessThanOrEqual(2073);
+const describeDiff = (d: FrameDiff) =>
+  `PSNR ${d.psnr.toFixed(2)} дБ, max |Δ| ${d.maxDelta}, отличающихся пикселей ${d.diffPixels}`;
+
+/** Та же картинка: PSNR ≥ 40 дБ. */
+function expectSameFrame(diff: FrameDiff) {
+  expect(diff.psnr, describeDiff(diff)).toBeGreaterThanOrEqual(SAME_FRAME_PSNR);
+}
+
+/** Контроль «кадр меняется»: PSNR < 40 дБ — другая картинка, а не шум растра. */
+function expectDifferentFrame(diff: FrameDiff) {
+  expect(diff.psnr, describeDiff(diff)).toBeLessThan(SAME_FRAME_PSNR);
 }
 
 test.describe('фильм: запись', () => {
@@ -185,9 +187,8 @@ test.describe('фильм: запись', () => {
     await seek(page, 0.2);
     const b = await shotAt(page, 1.2);
     expectSameFrame(await frameDiff(page, a, b));
-    const c = await shotAt(page, 1.5);
-    const diffAC = await frameDiff(page, a, c);
-    expect(diffAC.maxDelta > 2 || diffAC.diffPixels > 2073).toBe(true); // контроль: кадр меняется во времени
+    // Контроль: кадр меняется во времени (1,2 → 1,5 с — въезжает окно-таблица; замер ≈ 14,6 дБ).
+    expectDifferentFrame(await frameDiff(page, a, await shotAt(page, 1.5)));
   });
 
   test('фильм всегда светлый, даже при тёмной теме вкладки', async ({ page }) => {
@@ -315,9 +316,8 @@ test.describe('фильм: сцены-экраны', () => {
     await seek(page, plan.at + 0.5);
     const b = await shotAt(page, plan.at + 2.5);
     expectSameFrame(await frameDiff(page, a, b));
-    const c = await shotAt(page, plan.at + 1.5);
-    const diffAC = await frameDiff(page, a, c);
-    expect(diffAC.maxDelta > 2 || diffAC.diffPixels > 2073).toBe(true); // контроль: камера движется
+    // Контроль: камера движется (2,5 → 1,5 с сцены — другая поза; замер ≈ 14,1 дБ).
+    expectDifferentFrame(await frameDiff(page, a, await shotAt(page, plan.at + 1.5)));
     await expect(
       page.frameLocator('iframe[title="plan"]').getByRole('heading', { name: 'Краткий промо-календарь' }),
     ).toBeVisible();
@@ -327,6 +327,31 @@ test.describe('фильм: сцены-экраны', () => {
     // Контроль: внутри кадра вход есть — в его памяти.
     const inner = page.frames().find((f) => f.url().includes('film-frame=1'))!;
     expect(await inner.evaluate(() => sessionStorage.getItem('auth'))).toBe('true');
+  });
+
+  test('повтор после ошибки начинает заход заново — окно пересобирается', async ({ page }) => {
+    await openFilm(page);
+    const plan = await at(page, 'plan');
+    // Сбой посреди первого захода (прямой переход в сцену): после первого шага
+    // seekTo ждёт document.fonts.ready верхней страницы — пусть он отвергнется.
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'fonts', {
+        configurable: true,
+        get: () => ({ ready: Promise.reject(new Error('проба: сбой шага')) }),
+      });
+    });
+    await expect(seek(page, plan.at + 0.5)).rejects.toThrow('проба: сбой шага');
+    await page.evaluate(() => delete (document as { fonts?: unknown }).fonts);
+    const planFrame = page.locator('iframe[title="plan"]');
+    await expect(planFrame).toHaveCount(1); // окно недошедшего захода в кадре
+    await planFrame.evaluate((el) => (el.dataset.probe = 'failed'));
+    await seek(page, plan.at + 0.5); // повтор
+    await expect(planFrame).toHaveCount(1);
+    await expect(page.locator('iframe[title="plan"][data-probe]')).toHaveCount(0);
+    // Контроль: продолжение вперёд окно не пересобирает — метка на нём выживает.
+    await planFrame.evaluate((el) => (el.dataset.probe = 'kept'));
+    await seek(page, plan.at + 0.8);
+    await expect(page.locator('iframe[title="plan"][data-probe="kept"]')).toHaveCount(1);
   });
 
   test('fullcal: только акция 26-3, панорама прокручивает таблицу, кадр детерминирован', async ({ page }) => {
