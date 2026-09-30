@@ -388,7 +388,7 @@ export function UserDetailPage() {
       />
 
       <Tabs value={tab} onValueChange={setTab} className="gap-4">
-        <TabsList className="h-auto justify-start gap-1 rounded-none border-b bg-transparent p-0">
+        <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-none border-b bg-transparent p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <TabsTrigger value="profile" className={TAB_TRIGGER}>
             <User className="mr-1.5 size-4" />
             Профиль

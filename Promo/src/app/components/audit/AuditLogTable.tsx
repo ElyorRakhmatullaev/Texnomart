@@ -229,10 +229,11 @@ export function AuditLogTable({
   return (
     <div className="flex flex-col gap-3">
       {isAdmin && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant={showAll ? "outline" : "default"} size="sm" className="h-8" onClick={() => setShowAll(false)}>Ключевые действия</Button>
           <Button variant={showAll ? "default" : "outline"} size="sm" className="h-8" onClick={() => setShowAll(true)}>Все действия</Button>
-          <span className="text-[11px] text-muted-foreground">черновики, редактирование и автосохранение — только в «Все действия»</span>
+          {/* Ниже md пояснение уходит на свою строку, а не сжимается в столбик. */}
+          <span className="basis-full text-[11px] text-muted-foreground md:basis-auto">черновики, редактирование и автосохранение — только в «Все действия»</span>
         </div>
       )}
 

@@ -410,7 +410,11 @@ function EnumCheckList({
   );
 }
 
-/** Контрол одной колонки без подписи — подпись даёт вызывающий. */
+/**
+ * Контрол одной колонки без подписи — подпись даёт вызывающий. Стоит на белой
+ * поверхности (Card панели, поповер воронки), где у поля с bg-white нет ни
+ * заливки, ни рамки (`--input: transparent`), — отсюда явный `border-border`.
+ */
 function ColumnFilterBody({
   col,
   filter,
@@ -443,7 +447,7 @@ function ColumnFilterBody({
         onValueChange={(v) => onChange({ selected: v === "all" ? [] : [v] })}
       >
         <SelectTrigger
-          className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[130px]")}
+          className={cn("h-8 border-border bg-white text-sm dark:border-input dark:bg-card", full ? "w-full" : "w-[130px]")}
         >
           <SelectValue />
         </SelectTrigger>
@@ -467,7 +471,7 @@ function ColumnFilterBody({
             onChange({ min: e.target.value === "" ? undefined : Number(e.target.value) })
           }
           placeholder="от"
-          className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[80px]")}
+          className={cn("h-8 border-border bg-white text-sm dark:border-input dark:bg-card", full ? "w-full" : "w-[80px]")}
         />
         <span className="text-muted-foreground">—</span>
         <Input
@@ -478,7 +482,7 @@ function ColumnFilterBody({
             onChange({ max: e.target.value === "" ? undefined : Number(e.target.value) })
           }
           placeholder="до"
-          className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[80px]")}
+          className={cn("h-8 border-border bg-white text-sm dark:border-input dark:bg-card", full ? "w-full" : "w-[80px]")}
         />
       </div>
     );
@@ -512,7 +516,7 @@ function ColumnFilterBody({
       value={filter.text ?? ""}
       onChange={(e) => onChange({ text: e.target.value || undefined })}
       placeholder={col.label}
-      className={cn("h-8 bg-white text-sm dark:bg-card", full ? "w-full" : "w-[170px]")}
+      className={cn("h-8 border-border bg-white text-sm dark:border-input dark:bg-card", full ? "w-full" : "w-[170px]")}
     />
   );
 }
@@ -794,7 +798,7 @@ export function ReportFilters({
                 value={state.ack}
                 onValueChange={(v) => onChange({ ...state, ack: v as ReportFilterState["ack"] })}
               >
-                <SelectTrigger className="h-8 w-[160px] bg-white text-sm dark:bg-card">
+                <SelectTrigger className="h-8 w-[160px] border-border bg-white text-sm dark:border-input dark:bg-card">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

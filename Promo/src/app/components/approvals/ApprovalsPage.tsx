@@ -347,7 +347,7 @@ export function ApprovalsPage() {
               value={statusFilter}
               onValueChange={(v) => setStatusFilter(v as StatusFilter)}
             >
-              <SelectTrigger className="h-8 w-[220px] bg-white text-sm dark:bg-card">
+              <SelectTrigger className="h-8 w-full bg-white text-sm dark:bg-card sm:w-[250px]">
                 <SelectValue placeholder="Статус согласования" />
               </SelectTrigger>
               <SelectContent>

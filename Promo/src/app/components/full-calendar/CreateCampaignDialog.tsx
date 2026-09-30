@@ -37,6 +37,10 @@ import {
   type UnplannedCampaignInput,
 } from "../../../lib/promo-mock-data";
 
+/** Вкладка режима: ниже md — до двух строк и 44px в высоту, на десктопе без изменений. */
+const MODE_TRIGGER =
+  "min-w-0 max-md:h-auto max-md:min-h-11 max-md:whitespace-normal max-md:leading-tight";
+
 /** Local <input type="date"> value (yyyy-mm-dd) ⇄ Date helpers (local-tz safe). */
 function toInputDate(d: Date): string {
   const y = d.getFullYear();
@@ -186,12 +190,14 @@ export function CreateCampaignDialog({
             className="gap-0"
           >
             <div className="px-5 pt-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="integrate">
+              {/* Ниже md подпись переносится на вторую строку (иначе при
+                  whitespace-nowrap иконка наезжает на текст соседней вкладки). */}
+              <TabsList className="grid w-full grid-cols-2 max-md:h-auto">
+                <TabsTrigger value="integrate" className={MODE_TRIGGER}>
                   <Link2 className="size-4" />
                   Выбрать плановое промо
                 </TabsTrigger>
-                <TabsTrigger value="new">
+                <TabsTrigger value="new" className={MODE_TRIGGER}>
                   <CalendarPlus className="size-4" />
                   Новая внеплановая
                 </TabsTrigger>

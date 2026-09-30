@@ -7,6 +7,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@texnomart/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@texnomart/ui/sheet";
+import { cn } from "@texnomart/ui/utils";
 import { DateRangeFilter } from "../../../components/DateRangeFilter";
 import { parseInputDate, toInputDate } from "../../../components/date-input-value";
 import { PromoNoFilter, type PromoNoOption } from "../short-calendar/PromoNoFilter";
@@ -97,15 +98,21 @@ function Fields({
   showPromoPeriod: boolean;
   layout?: "row" | "stack";
 }) {
-  const wrap = layout === "row" ? "flex flex-wrap items-end gap-2" : "flex flex-col gap-3";
+  const stack = layout === "stack";
+  const wrap = stack ? "flex flex-col gap-3" : "flex flex-wrap items-end gap-2";
+  // В листе (белая поверхность) у поля нет серой заливки: без явной рамки оно
+  // невидимо (`--input: transparent`). На странице (bg-gray-50) — как было.
+  const trigger = cn("h-9 w-full bg-white dark:bg-card text-sm", stack && "border-border dark:border-input");
   return (
     <div className={wrap}>
-      <PromoNoFilter
-        options={promoOptions}
-        selected={values.promoIds}
-        onChange={(ids) => onChange({ promoIds: ids })}
-        width={layout === "row" ? "w-[240px]" : "w-full"}
-      />
+      <Field label="№ промо" stack={stack}>
+        <PromoNoFilter
+          options={promoOptions}
+          selected={values.promoIds}
+          onChange={(ids) => onChange({ promoIds: ids })}
+          width={stack ? "w-full" : "w-[240px]"}
+        />
+      </Field>
       {showPromoPeriod && (
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Период акции</span>
@@ -135,42 +142,65 @@ function Fields({
         </div>
       )}
       {planPeriods.length > 0 && (
-        <Select value={values.planPeriod} onValueChange={(v) => onChange({ planPeriod: v })}>
-          <SelectTrigger className="h-9 w-full sm:w-48 bg-white dark:bg-card text-sm"><SelectValue placeholder="Период плана" /></SelectTrigger>
+        <Field label="Период плана" stack={stack}>
+          <Select value={values.planPeriod} onValueChange={(v) => onChange({ planPeriod: v })}>
+            <SelectTrigger className={cn(trigger, "sm:w-48")}><SelectValue placeholder="Период плана" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все периоды плана</SelectItem>
+              {planPeriods.map((o) => (
+                <SelectItem key={o.label} value={o.label}>
+                  <span className="tabular-nums">{ruDate(o.start)} — {ruDate(o.end)}</span>
+                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{o.label}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      )}
+      <Field label="Ответственный" stack={stack}>
+        <Select value={values.responsible} onValueChange={(v) => onChange({ responsible: v })}>
+          <SelectTrigger className={cn(trigger, "sm:w-52")}><SelectValue placeholder="Ответственный" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Все периоды плана</SelectItem>
-            {planPeriods.map((o) => (
-              <SelectItem key={o.label} value={o.label}>
-                <span className="tabular-nums">{ruDate(o.start)} — {ruDate(o.end)}</span>
-                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{o.label}</span>
-              </SelectItem>
-            ))}
+            <SelectItem value="all">Все ответственные</SelectItem>
+            {responsibles.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
           </SelectContent>
         </Select>
-      )}
-      <Select value={values.responsible} onValueChange={(v) => onChange({ responsible: v })}>
-        <SelectTrigger className="h-9 w-full sm:w-52 bg-white dark:bg-card text-sm"><SelectValue placeholder="Ответственный" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Все ответственные</SelectItem>
-          {responsibles.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      <Select value={values.checkpoint} onValueChange={(v) => onChange({ checkpoint: v })}>
-        <SelectTrigger className="h-9 w-full sm:w-64 bg-white dark:bg-card text-sm"><SelectValue placeholder="Контрольная точка" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Все контрольные точки</SelectItem>
-          {checkpoints.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      <Select value={values.result} onValueChange={(v) => onChange({ result: v as ControlFilters["result"] })}>
-        <SelectTrigger className="h-9 w-full sm:w-44 bg-white dark:bg-card text-sm"><SelectValue placeholder="Результат" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Все</SelectItem>
-          <SelectItem value="В срок">В срок</SelectItem>
-          <SelectItem value="Просрочено">Просрочено</SelectItem>
-          <SelectItem value="overdue">Только просроченные</SelectItem>
-        </SelectContent>
-      </Select>
+      </Field>
+      <Field label="Контрольная точка" stack={stack}>
+        <Select value={values.checkpoint} onValueChange={(v) => onChange({ checkpoint: v })}>
+          <SelectTrigger className={cn(trigger, "sm:w-64")}><SelectValue placeholder="Контрольная точка" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все контрольные точки</SelectItem>
+            {checkpoints.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Результат" stack={stack}>
+        <Select value={values.result} onValueChange={(v) => onChange({ result: v as ControlFilters["result"] })}>
+          <SelectTrigger className={cn(trigger, "sm:w-44")}><SelectValue placeholder="Результат" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все результаты</SelectItem>
+            <SelectItem value="В срок">В срок</SelectItem>
+            <SelectItem value="Просрочено">Просрочено</SelectItem>
+            <SelectItem value="overdue">Только просроченные</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+    </div>
+  );
+}
+
+/**
+ * Подпись над полем — только в листе (`stack`): там поля идут столбиком и без
+ * подписи «Все» / «Все ответственные» не говорят, что фильтруется. В строке на
+ * десктопе разметка прежняя (подпись дают плейсхолдеры и значения «Все …»).
+ */
+function Field({ label, stack, children }: { label: string; stack: boolean; children: React.ReactNode }) {
+  if (!stack) return <>{children}</>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      {children}
     </div>
   );
 }

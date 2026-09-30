@@ -68,6 +68,7 @@ function ActionButtons({
   onRejectSet,
   onApproveNonParticipation,
   onRejectNonParticipation,
+  touch = false,
 }: Pick<
   ReviewActionsPanelProps,
   | "item"
@@ -77,17 +78,21 @@ function ActionButtons({
   | "onRejectSet"
   | "onApproveNonParticipation"
   | "onRejectNonParticipation"
->) {
+> & {
+  /** Мобильная нижняя панель — тап-таргеты 44px; десктопная панель остаётся h-9. */
+  touch?: boolean;
+}) {
+  const w = touch ? "h-11 w-full" : "w-full";
   if (item.kind === "non-participation") {
     return (
       <div className="space-y-2">
-        <Button className="w-full" onClick={onApproveNonParticipation}>
+        <Button className={w} onClick={onApproveNonParticipation}>
           <Check className="size-4" />
           Согласовать неучастие
         </Button>
         <Button
           variant="outline"
-          className="w-full border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
+          className={cn(w, "border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300")}
           onClick={onRejectNonParticipation}
         >
           <X className="size-4" />
@@ -101,13 +106,13 @@ function ActionButtons({
   const isRepeat = item.kind === "repeat";
   return (
     <div className="space-y-2">
-      <Button className="w-full" onClick={onApproveAll}>
+      <Button className={w} onClick={onApproveAll}>
         <Check className="size-4" />
         {isRepeat ? "Согласовать все изменения" : "Согласовать всё"}
       </Button>
       <Button
         variant="outline"
-        className="w-full border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
+        className={cn(w, "border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300")}
         disabled={selectedCount === 0}
         onClick={onRejectSelected}
       >
@@ -117,7 +122,7 @@ function ActionButtons({
       {!isRepeat && (
         <Button
           variant="ghost"
-          className="w-full text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300"
+          className={cn(w, "text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-300")}
           onClick={onRejectSet}
         >
           Отклонить весь набор
@@ -318,7 +323,7 @@ export function MobileReviewActionBar(
 ) {
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-white dark:bg-card p-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] lg:hidden">
-      <ActionButtons {...props} />
+      <ActionButtons {...props} touch />
     </div>
   );
 }

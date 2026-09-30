@@ -44,7 +44,8 @@ export function ParticipantTasksDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full max-w-md overflow-y-auto">
-        <SheetHeader>
+        {/* pr-12 — место под встроенный «×» (absolute top-4 right-4). */}
+        <SheetHeader className="pr-12">
           <SheetTitle>
             Задачи: {name} — {title}: {tasks.length}
           </SheetTitle>

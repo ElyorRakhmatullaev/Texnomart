@@ -362,7 +362,9 @@ export function ApprovalDetailPage() {
   const copy = flow ? reasonCopy[flow.kind] : null;
 
   return (
-    <div className={canAct ? "space-y-4 pb-24 lg:pb-6" : "space-y-4 pb-6"}>
+    // pb-52 — запас под фиксированную нижнюю панель (MobileReviewActionBar):
+    // до трёх кнопок по 44px + отступы ≈ 173px, иначе она закрывает последний блок.
+    <div className={canAct ? "space-y-4 pb-52 lg:pb-6" : "space-y-4 pb-6"}>
       <DetailPageHero
         backHref="/approvals"
         backLabel="Согласование"

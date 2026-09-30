@@ -25,6 +25,9 @@ function subtractDays(date: Date, days: number): Date {
 /**
  * Chips for the spec calendar deadlines — all «календарные дни» (tied to a date),
  * never «рабочие». Non-blocking, informational.
+ *
+ * Ниже sm плашка переносится целыми частями (каждая — `whitespace-nowrap`), а не
+ * сжимает каждую часть в столбик; поэтому там и скругление меньше (`rounded-lg`).
  */
 export function DeadlineChips({ startDate, className }: DeadlineChipsProps) {
   return (
@@ -32,17 +35,17 @@ export function DeadlineChips({ startDate, className }: DeadlineChipsProps) {
       {DEADLINES.map((d) => (
         <span
           key={d.label}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground"
+          className="flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg border border-border bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground sm:rounded-full"
         >
           <CalendarClock className="size-3.5 shrink-0" />
-          <span className="font-medium text-foreground">{d.label}</span>
-          <span className="tabular-nums">за {d.days} дн.</span>
+          <span className="whitespace-nowrap font-medium text-foreground">{d.label}</span>
+          <span className="whitespace-nowrap tabular-nums">за {d.days} дн.</span>
           {startDate && (
-            <span className="tabular-nums">
+            <span className="whitespace-nowrap tabular-nums">
               · {formatDateFull(subtractDays(startDate, d.days))}
             </span>
           )}
-          <span className="text-muted-foreground">(календарные)</span>
+          <span className="whitespace-nowrap text-muted-foreground">(календарные)</span>
         </span>
       ))}
     </div>

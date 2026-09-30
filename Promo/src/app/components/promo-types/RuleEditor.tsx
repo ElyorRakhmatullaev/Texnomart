@@ -100,7 +100,7 @@ export function RuleEditor({ rule, access, role }: RuleEditorProps) {
   };
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto pb-6">
+    <div className="flex flex-col gap-4 pb-6 lg:h-full lg:overflow-y-auto">
       {/* ── status banner ── */}
       <Card>
         <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">

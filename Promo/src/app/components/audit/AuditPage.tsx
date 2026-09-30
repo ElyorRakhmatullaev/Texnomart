@@ -69,8 +69,15 @@ export function AuditPage() {
       />
 
       <Tabs value={tab} onValueChange={setTab} className="gap-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <TabsList className="h-auto justify-start gap-1 overflow-x-auto rounded-none border-b bg-transparent p-0">
+        {/* Вкладки — своей строкой, фильтры дедлайна — под ними на всех ширинах:
+            в одну строку с фильтрами (прежний lg:flex-row) 645px вкладок не
+            помещались даже на 1440, и «Аудит-лог» обрезался. */}
+        <div className="flex flex-col gap-3">
+          {/* max-w-full — иначе примитивный w-fit растягивает полосу по содержимому
+              (645px) и overflow-x-auto не срабатывает: на телефоне уезжает вся
+              страница. Полоса прокрутки скрыта только ниже md; на планшете (md–lg,
+              контенту меньше 645px) полоса видна — подсказка, что вкладки дальше. */}
+          <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-none border-b bg-transparent p-0 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="plan" className={TAB_TRIGGER}>Сроки по плану</TabsTrigger>
             <TabsTrigger value="promo" className={TAB_TRIGGER}>Сроки по промо и отчётам</TabsTrigger>
             <TabsTrigger value="metrics" className={TAB_TRIGGER}>Показатели участников</TabsTrigger>

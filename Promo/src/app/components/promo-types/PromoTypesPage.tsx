@@ -41,7 +41,10 @@ export function PromoTypesPage() {
   const subtitle = `${access.note} Всего правил: ${rules.length.toLocaleString("ru-RU")}.`;
 
   return (
-    <div className="flex h-full flex-col">
+    // Высота по экрану и внутренние прокрутки списка/редактора — только с lg
+    // (две колонки). Ниже lg колонка одна и прокручивается сама страница (<main>),
+    // иначе у редактора появляется вторая, вложенная прокрутка.
+    <div className="flex flex-col lg:h-full">
       <PageHeader
         title="Настройки типов промо"
         subtitle={subtitle}
@@ -49,7 +52,7 @@ export function PromoTypesPage() {
         showExport={false}
       />
 
-      <div className="mt-2 grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[340px_1fr]">
+      <div className="mt-2 grid grid-cols-1 gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[340px_1fr]">
         {/* Left: rule list — hidden on mobile once a rule is selected. */}
         <div className={cn("min-h-0", selected && "hidden lg:block")}>
           <RuleListPanel

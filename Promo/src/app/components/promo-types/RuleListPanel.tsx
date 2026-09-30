@@ -57,7 +57,7 @@ export function RuleListPanel({
   };
 
   return (
-    <div className="flex h-full min-h-[320px] flex-col rounded-xl border border-gray-200 dark:border-border bg-white dark:bg-card">
+    <div className="flex min-h-[320px] flex-col rounded-xl border border-gray-200 dark:border-border bg-white dark:bg-card lg:h-full">
       {/* Header: search + create */}
       <div className="space-y-2 border-b border-gray-100 dark:border-border p-3">
         <div className="relative">

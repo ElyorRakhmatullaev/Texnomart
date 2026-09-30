@@ -296,14 +296,14 @@ export function LineChangeDrawer({
             {canAct && row.requiresDecision && (
               <div className="sticky bottom-0 -mx-6 mt-2 space-y-2 border-t bg-white dark:bg-card px-6 py-3">
                 {isRepeatView ? (
-                  <div className="flex gap-2">
-                    <Button className="flex-1" onClick={() => onApprove?.(line.id)}>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button className="h-11 sm:h-9 sm:flex-1" onClick={() => onApprove?.(line.id)}>
                       <Check className="size-4" />
                       Согласовать строку
                     </Button>
                     <Button
                       variant="outline"
-                      className="flex-1 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15"
+                      className="h-11 text-red-700 sm:h-9 sm:flex-1 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15"
                       onClick={() => onReject?.(line.id)}
                     >
                       <X className="size-4" />

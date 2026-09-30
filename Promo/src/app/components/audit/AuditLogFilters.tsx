@@ -62,9 +62,6 @@ interface AuditLogFiltersProps {
   layout?: "row" | "stack";
 }
 
-const FIELD =
-  "h-8 rounded-md border border-input bg-white dark:bg-card px-2 text-sm text-gray-900 dark:text-gray-100 shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
-
 export function AuditLogFilters({
   values,
   onChange,
@@ -75,6 +72,9 @@ export function AuditLogFilters({
 }: AuditLogFiltersProps) {
   const stack = layout === "stack";
   const triggerW = stack ? "w-full" : "w-[150px]";
+  // В листе (белая поверхность) полю нужна явная рамка: `--input` прозрачный,
+  // а серой заливки у поля с bg-white нет. На странице (bg-gray-50) — как было.
+  const trigger = `${triggerW} h-8 bg-white dark:bg-card text-sm${stack ? " border-border dark:border-input" : ""}`;
 
   return (
     <div
@@ -86,7 +86,7 @@ export function AuditLogFilters({
     >
       <Field label="Пользователь" stack={stack}>
         <Select value={values.user} onValueChange={(v) => onChange({ user: v })}>
-          <SelectTrigger className={`${triggerW} h-8 bg-white dark:bg-card text-sm`}>
+          <SelectTrigger className={trigger}>
             <SelectValue placeholder="Пользователь" />
           </SelectTrigger>
           <SelectContent>
@@ -102,7 +102,7 @@ export function AuditLogFilters({
 
       <Field label="Роль" stack={stack}>
         <Select value={values.role} onValueChange={(v) => onChange({ role: v })}>
-          <SelectTrigger className={`${triggerW} h-8 bg-white dark:bg-card text-sm`}>
+          <SelectTrigger className={trigger}>
             <SelectValue placeholder="Роль" />
           </SelectTrigger>
           <SelectContent>
@@ -121,7 +121,7 @@ export function AuditLogFilters({
           value={values.action}
           onValueChange={(v) => onChange({ action: v })}
         >
-          <SelectTrigger className={`${triggerW} h-8 bg-white dark:bg-card text-sm`}>
+          <SelectTrigger className={trigger}>
             <SelectValue placeholder="Тип действия" />
           </SelectTrigger>
           <SelectContent>
@@ -140,7 +140,7 @@ export function AuditLogFilters({
           value={values.object}
           onValueChange={(v) => onChange({ object: v })}
         >
-          <SelectTrigger className={`${triggerW} h-8 bg-white dark:bg-card text-sm`}>
+          <SelectTrigger className={trigger}>
             <SelectValue placeholder="Объект" />
           </SelectTrigger>
           <SelectContent>

@@ -183,7 +183,7 @@ export function VersionHistoryDrawer({
           onValueChange={(v) => setView(v as ViewKey)}
           className="flex min-h-0 flex-1 flex-col gap-0"
         >
-          <TabsList className="h-auto w-full justify-start gap-1 rounded-none border-b bg-transparent p-0 px-4">
+          <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-none border-b bg-transparent p-0 px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <ViewTab value="changes" label="Только изменения" />
             <ViewTab value="report" label="Полный актуальный отчёт" />
             <ViewTab value="history" label="История версий" />

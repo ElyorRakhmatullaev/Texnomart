@@ -86,6 +86,63 @@ function RowMarker({ row }: { row: ApprovalRow }) {
   );
 }
 
+/** Маркер строки + «дубль» + «отклонено» — общие для таблицы и мобильных карточек. */
+function RowBadges({
+  row,
+  rejected,
+  comment,
+}: {
+  row: ApprovalRow;
+  rejected: boolean;
+  comment?: string;
+}) {
+  const line = row.line;
+  return (
+    <>
+      <RowMarker row={row} />
+      {line.duplicate && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 dark:bg-amber-500/20 px-1 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300">
+              <Copy className="size-3" />
+              дубль
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[260px]">
+            {line.duplicateInfo?.samePromo
+              ? "Номенклатура уже добавлена в эту акцию."
+              : `Дубль с акцией ${line.duplicateInfo?.promoName ?? ""}.`}
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {rejected && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-0.5 rounded bg-red-100 dark:bg-red-500/20 px-1 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
+              <AlertTriangle className="size-3" />
+              отклонено
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[280px]">
+            {comment ?? "Строка отклонена."}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </>
+  );
+}
+
+/** Прогноз продаж или красная пометка «не заполнено». */
+function ForecastValue({ line }: { line: PromoLine }) {
+  return line.salesForecast != null ? (
+    <>{line.salesForecast.toLocaleString("ru-RU")}</>
+  ) : (
+    <span className="text-xs font-medium text-red-600 dark:text-red-400">
+      не заполнено
+    </span>
+  );
+}
+
 /**
  * Список номенклатур промо в карточке согласования (Волна 3, R57 §4–§6, §11–§14).
  *
@@ -176,7 +233,19 @@ export function SubmittedLinesPanel({
         )}
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-white dark:bg-card">
+      {/* Ниже md чекбокс «выбрать все» из шапки таблицы скрыт вместе с ней. */}
+      {selectable && decidableIds.length > 0 && (
+        <label className="flex min-h-11 items-center gap-2.5 text-sm text-gray-700 dark:text-gray-200 md:hidden">
+          <Checkbox
+            checked={headerChecked}
+            onCheckedChange={(c) => onToggleAll?.(c === true)}
+            aria-label="Выбрать все строки, требующие решения"
+          />
+          Выбрать все строки, требующие решения
+        </label>
+      )}
+
+      <div className="hidden overflow-hidden rounded-lg border bg-white dark:bg-card md:block">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader className="bg-gray-50 dark:bg-muted/40">
@@ -252,35 +321,7 @@ export function SubmittedLinesPanel({
                         <span className="min-w-0 break-words font-medium text-gray-900 dark:text-gray-100">
                           {nom?.name ?? line.nomenclatureId}
                         </span>
-                        <RowMarker row={row} />
-                        {line.duplicate && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 dark:bg-amber-500/20 px-1 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300">
-                                <Copy className="size-3" />
-                                дубль
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-[260px]">
-                              {line.duplicateInfo?.samePromo
-                                ? "Номенклатура уже добавлена в эту акцию."
-                                : `Дубль с акцией ${line.duplicateInfo?.promoName ?? ""}.`}
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                        {rejected && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex items-center gap-0.5 rounded bg-red-100 dark:bg-red-500/20 px-1 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
-                                <AlertTriangle className="size-3" />
-                                отклонено
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-[280px]">
-                              {comment ?? "Строка отклонена."}
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
+                        <RowBadges row={row} rejected={rejected} comment={comment} />
                       </div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
@@ -293,13 +334,7 @@ export function SubmittedLinesPanel({
                       {line.discountPct}%
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {line.salesForecast != null ? (
-                        line.salesForecast.toLocaleString("ru-RU")
-                      ) : (
-                        <span className="text-xs font-medium text-red-600 dark:text-red-400">
-                          не заполнено
-                        </span>
-                      )}
+                      <ForecastValue line={line} />
                     </TableCell>
                     {/* 11-я часть (Блок 4): в строке — только иконка просмотра;
                         решения принимаются из открывшейся панели деталей. */}
@@ -333,6 +368,108 @@ export function SubmittedLinesPanel({
           </Table>
         </div>
       </div>
+
+      {/* Ниже md — карточки вместо таблицы (878px в 314px): те же данные и то же
+          открытие панели деталей (карточка целиком или кнопка-глаз 44px). */}
+      <ul className="space-y-2 md:hidden">
+        {visible.map((row) => {
+          const line = row.line;
+          const nom = getNomenclatureItem(line.nomenclatureId);
+          const fb = feedback[line.id];
+          const rejected = isRejected(line, fb);
+          const comment = rejectComment(line, fb);
+          const decidable = selectable && row.requiresDecision;
+          const clickable = Boolean(onOpenRow);
+          const hasBadges = row.kind !== "primary" || line.duplicate || rejected;
+          return (
+            <li
+              key={line.id}
+              onClick={clickable ? () => onOpenRow?.(line.id) : undefined}
+              className={cn(
+                "rounded-lg border bg-white dark:bg-card p-3",
+                row.isRepeat && "bg-orange-50/70 dark:bg-orange-500/10",
+                rejected && "bg-red-50/70 dark:bg-red-500/10",
+                row.kind === "context" &&
+                  line.removed &&
+                  "text-muted-foreground line-through",
+                clickable && "cursor-pointer"
+              )}
+            >
+              <div className="flex items-start gap-2">
+                {selectable && (
+                  <label
+                    onClick={(e) => e.stopPropagation()}
+                    className="-my-2.5 -ml-2.5 flex size-11 shrink-0 items-center justify-center"
+                  >
+                    {decidable ? (
+                      <Checkbox
+                        checked={selectedIds?.has(line.id) ?? false}
+                        onCheckedChange={() => onToggle?.(line.id)}
+                        aria-label="Выбрать строку"
+                      />
+                    ) : (
+                      <Lock
+                        className="size-3.5 text-muted-foreground/60"
+                        aria-label="Строка не требует решения на этом этапе"
+                      />
+                    )}
+                  </label>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="break-words text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {nom?.name ?? line.nomenclatureId}
+                  </p>
+                  {hasBadges && (
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <RowBadges row={row} rejected={rejected} comment={comment} />
+                    </div>
+                  )}
+                </div>
+                {onOpenRow && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenRow(line.id);
+                    }}
+                    className={cn(
+                      "-my-2.5 -mr-2.5 inline-flex size-11 shrink-0 items-center justify-center rounded-md",
+                      "text-muted-foreground hover:bg-gray-100 dark:hover:bg-accent hover:text-gray-900 dark:hover:text-gray-100"
+                    )}
+                    aria-label="Просмотр деталей строки"
+                  >
+                    <Eye className="size-4" />
+                  </button>
+                )}
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                <div>
+                  <dt className="text-muted-foreground">Остаток</dt>
+                  <dd className="mt-0.5 text-sm tabular-nums">
+                    {line.stock.toLocaleString("ru-RU")}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Новая цена</dt>
+                  <dd className="mt-0.5 text-sm">
+                    <Money value={line.newPrice} />
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Скидка</dt>
+                  <dd className="mt-0.5 text-sm tabular-nums">{line.discountPct}%</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Прогноз продаж</dt>
+                  <dd className="mt-0.5 text-sm tabular-nums">
+                    <ForecastValue line={line} />
+                  </dd>
+                </div>
+              </dl>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
