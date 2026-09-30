@@ -72,8 +72,9 @@ Texnomart/
 │   ├── package.json
 │   ├── vite.config.ts
 │   ├── playwright.config.ts
-│   ├── e2e/                    # Playwright e2e (fixtures, data, 8 section specs + harness self-check)
-│   └── src/                    # app/ (shell, routes, role-context), components/ (primitives), lib/ (mock data)
+│   ├── e2e/                    # Playwright e2e (fixtures, data, 8 section specs + harness self-check + film.spec.ts — контракт `__capture` моушн-фильма)
+│   ├── scripts/                # моушн-фильм: record-film.mjs (запись в MP4) + film-*.test.ts (node --test)
+│   └── src/                    # app/ (shell, routes, role-context), components/ (primitives), lib/ (mock data), film/ (моушн-фильм /embed/film)
 ├── Broker/                     # Client Broker app (операторский скоринг, ветка Alif)
 │   ├── CLAUDE.md               # Broker-specific context (routes, попап оформления, mock conventions)
 │   ├── package.json
@@ -117,6 +118,8 @@ pnpm dev                        # Start all dev servers in parallel
 ```
 
 > **Note**: `pnpm` may not be on PATH; if so, prefix commands with `corepack` (e.g. `corepack pnpm install`). corepack ships with Node.
+
+> **Note**: Node version — this repo runs on **Node 24**. The Promo film recorder (`Promo/scripts/record-film.mjs`) needs Node ≥ 22 (global `WebSocket`, `import.meta.dirname`); `test:film` runs `.ts` files through Node's built-in type stripping (on by default since Node 22.18 / 23.6), with no TypeScript package.
 
 > **Note**: pnpm v11 requires build script approvals. `pnpm-workspace.yaml` has `allowBuilds` set to `true` for `@tailwindcss/oxide` and `esbuild`. If `pnpm install` fails with `ERR_PNPM_IGNORED_BUILDS`, check that file.
 
