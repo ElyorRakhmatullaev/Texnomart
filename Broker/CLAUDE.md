@@ -36,9 +36,10 @@ Broker/
       scoring-flow.tsx                # ScoringFlowProvider — flow state in sessionStorage + checkoutPhaseOf() phase derivation
       components/
         shell/
-          BrokerShell.tsx             # Own top-bar shell (NOT the shared AppShell — operator terminal layout) + Outlet
+          BrokerShell.tsx             # Own top-bar shell (NOT the shared AppShell — operator terminal layout) + Outlet; below lg a «⋮ Действия скоринга» header menu (same three actions as ActionRail); owns the EndScoringDialog state + the opener ref for focus return
           ScoringStepper.tsx          # Constant 5-step stepper; highlights by popup phase (checkoutPhaseOf → PHASE_INDEX) when checkoutOpen on /scoring/banks
-          ActionRail.tsx              # Floating right-side action rail (new tab / send to Telegram / end scoring)
+          ActionRail.tsx              # Floating right-side action rail, ≥lg only (new tab / send to Telegram / end scoring → `onEndScoring(opener)`)
+          EndScoringDialog.tsx        # Controlled «Завершить скоринг?» confirmation shared by ActionRail and the header menu → resetFlow() + /scoring/verification; `returnFocusRef` (no AlertDialogTrigger, so Radix can't return focus itself)
         scoring/
           VerificationPage.tsx        # Screen 1 — client data + card list/add + OTP modal host (unchanged this iteration — general card attach, not Alif's own)
           CardOtpDialog.tsx           # Card-confirmation OTP modal (hosts OtpPanel, variant="card") — unchanged
@@ -147,7 +148,9 @@ The seeded Alif `prepayment` (`ALIF_PREPAYMENT`) is `1_000_000` (non-zero), so `
 
 **Stepper highlight (`ScoringStepper.tsx`).** For the 3 real routes, the active step index comes from the pathname (`activeIndexFor`, steps 0/1/2). While `state.checkoutOpen` is true **and the current route is `/scoring/banks`** (the only route that hosts the popup — a browser-Back to `/scoring/myid` with `checkoutOpen` still true falls back to pathname mapping), the index instead comes from `PHASE_INDEX[checkoutPhaseOf(state, ALIF_PREPAYMENT)]` — `offer`/`card` → step 3 (index 2, same as «Выбор рассрочки»), `details`/`application`/`hold` → step 4 (index 3), `otp`/`success` → step 5 (index 4). So opening the popup visually advances the outer stepper through steps 3→4→5 without the URL ever leaving `/scoring/banks` — steps 4–5 have no route/page of their own, they are reachable only as popup-phase highlights. The finer «Шаг N из 7» progress inside the popup header (`PHASE_STEP`) is a separate, more granular indicator layered on top of this.
 
-The floating `ActionRail` (right edge, ≥lg only) is available on every screen, but not interactive while the popup is open — the modal overlay (`z-50`) sits above it (`z-10`) and disables pointer events on the rest of the page; reset while the popup is open happens via the popup's own controls, or by closing the popup first. Otherwise: «Завершить скоринг» opens an AlertDialog confirmation and, on confirm, does the same `resetFlow()` + navigate-to-verification as the success phase's green button.
+The floating `ActionRail` (right edge, ≥lg only) is available on every screen, but not interactive while the popup is open — the modal overlay (`z-50`) sits above it (`z-10`) and disables pointer events on the rest of the page; reset while the popup is open happens via the popup's own controls, or by closing the popup first. Otherwise: «Завершить скоринг» opens an AlertDialog confirmation and, on confirm, does the same `resetFlow()` + navigate-to-verification as the success phase's green button. Below lg (phones and tablets — the rail is hidden there) the same three actions live in the header menu «⋮ Действия скоринга»; both entry points open one shared `EndScoringDialog` (30.09, mobile layout round).
+
+**Mobile layout (30.09).** Pages switch at `md`, dialogs at `sm`; at 390px: the verification grid is `grid-cols-1` (an implicit `auto` column grew to the widest card row), the card status badge moves under the number below `sm`; the Alif popup hides the primitive's built-in «×» (`[&>button:last-child]:hidden`) and renders an in-flow 44px `DialogClose` in the header (still goes through `handleOpenChange`, so the held-prepayment guard works), plus an `onOpenAutoFocus` that skips that button so initial focus lands where it did before; label/value boxes use `grid-cols-[auto_1fr]` + `wrap-anywhere` (IMEI `break-all`); inputs/selects/links are 44px below `md` with `md:` rollbacks.
 
 ## State — `ScoringFlowProvider`
 
