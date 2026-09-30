@@ -93,8 +93,11 @@ Internal, role-based B2B workspace for planning and approving **planned & unplan
 ## Commands
 
 ```
-pnpm dev:promo      # start dev server (Vite)
-pnpm build:promo    # production build
+pnpm dev:promo                     # start dev server (Vite)
+pnpm build:promo                   # production build
+pnpm test:e2e:promo                # Playwright e2e (Promo/e2e, own Vite on 5183)
+pnpm film:promo                    # record the motion film to film-out/ (dev server must run; see «Моушн-фильм»)
+pnpm --filter promo test:film      # node --test for the film's pure modules
 ```
 
 > pnpm is invoked via `corepack pnpm …` in this environment (pnpm is not on PATH; corepack ships with Node).
