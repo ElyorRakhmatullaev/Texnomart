@@ -18,6 +18,24 @@ const SOLVES: Record<string, PainKey> = Object.fromEntries(
 );
 const TRACKER_KEYS = SCENES.filter((s) => s.tracker).map((s) => s.key);
 
+/** Допуск на погрешность плавающей точки при сравнении с тактом записи (1/60 с). */
+const GRID_EPS = 1e-6;
+
+/**
+ * Такты записи (1/60 с, спецификация §3.3 «60 к/с») от `from` (не включая) до
+ * `to` (включая); `from === null` — от начала сцены (сетка от 0). Последним
+ * добавляется само `to`, если оно не легло на такт, — сцена-экран в записи
+ * всегда доигрывается ровно до запрошенного момента, а не до ближайшего такта.
+ */
+function gridSteps(from: number | null, to: number): number[] {
+  const steps: number[] = [];
+  for (let g = from === null ? 0 : Math.floor(from * 60 + GRID_EPS) + 1; g / 60 <= to + GRID_EPS; g++) {
+    steps.push(g / 60);
+  }
+  if (steps.length === 0 || Math.abs(to - steps[steps.length - 1]) > GRID_EPS) steps.push(to);
+  return steps;
+}
+
 /** Холст вписывается в окно (просмотр) или совпадает с ним (запись). */
 function useFit(stage: { w: number; h: number }, capture: boolean) {
   const calc = React.useCallback(() => {
@@ -41,7 +59,8 @@ function useFit(stage: { w: number; h: number }, capture: boolean) {
 /**
  * Страница-фильм /embed/film (спецификация §3.4). Кадр — чистая функция от t.
  * ?capture=1 — запись: отдаёт window.__capture; иначе фильм играет в цикле.
- * Смонтированы текущая сцена и следующая сцена-экран (скрыто — предзагрузка).
+ * Смонтированы текущая сцена и следующая сцена-экран (скрыто — предзагрузка) —
+ * кроме записи: там сцена-экран предзагрузки не получает (см. `seekTo`).
  */
 export function FilmPage() {
   const params = React.useMemo(() => new URLSearchParams(window.location.search), []);
@@ -54,13 +73,14 @@ export function FilmPage() {
   const [t, setT] = React.useState(0);
   const screens = React.useRef(new Map<string, ScreenHandle>());
   const fit = useFit(stage, capture);
-  // Сцены с прокруткой в записи: какие t этой сцены уже отрисовывались обычным
-  // обновлением (см. комментарий у ScreenScene ниже).
-  const seenScrollLocals = React.useRef<{ key: string; locals: Set<number>; gen: number }>({
-    key: "",
-    locals: new Set(),
-    gen: 0,
-  });
+  // Заход в сцену-экран в записи: какую сцену и с какого t занимает текущий
+  // заход (для решения — продолжать обновлением или начать заново). Только
+  // бухгалтерия для seekTo; никогда не читается и не пишется во время рендера.
+  const occupancy = React.useRef<{ sceneKey: string; generation: number; lastLocal: number } | null>(null);
+  // Номер захода — то же число, что occupancy.current.generation, но в состоянии:
+  // ключ сцены-экрана и её оверлеев берёт его отсюда, а не из ref (правило «ключ
+  // — из состояния»), поэтому смена номера всегда даёт настоящую пересборку.
+  const [screenGen, setScreenGen] = React.useState(0);
 
   // Фильм показывает приложение светлым: класс .dark на <html> перекрасил бы
   // бейджи фрагментов. Страница грузится лениво — после эффекта ThemeProvider,
@@ -72,17 +92,54 @@ export function FilmPage() {
   React.useEffect(() => {
     if (!capture) return;
     let queue: Promise<void> = Promise.resolve();
+    /**
+     * Кадр записи — точная функция от t, но только если у сцены-экрана всегда
+     * одна и та же история рендера: собственную запись фильм и делает — идёт
+     * по сцене тактами записи (1/60 с) от начала (или там, где остановился
+     * прошлый заход) до запрошенного t, тем самым **всегда воспроизводя путь
+     * настоящей покадровой записи**, каким бы способом ни попросили этот
+     * момент — прыжком, перемоткой назад-вперёд или почти-тактом с плавающей
+     * погрешностью. Раньше здесь просто прыгали на t и один раз звали
+     * settle(local) — тот же итоговый DOM, но другая история рендера: Chrome
+     * иначе растрирует текст прокрученной таблицы и трансформированный слой
+     * окна, если до этого они уже стояли на другой позе/прокрутке — даже когда
+     * итоговые DOM и transform побайтово совпадают (не помогали ни перезагрузка
+     * document.location.reload(), ни нецелые сдвиги позы, ни повтор попытки —
+     * помогает только пройти те же кадры, что прошла бы запись). Пересборка
+     * (новый generation, «заход» с начала сцены) — только когда сцена сменилась
+     * или перемотка ушла назад внутри той же сцены; продолжение вперёд —
+     * обычные такты без пересборки, поэтому настоящая покадровая запись (i/60,
+     * i = 0, 1, 2, …) не платит за это ничего — каждый её кадр делает ровно
+     * один шаг цикла ниже.
+     */
     const seekTo = async (to: number) => {
-      flushSync(() => setT(to));
-      const at = sceneAt(timeline, to);
-      const scene = SCENES[at.index];
-      if (scene.kind === "screen") {
-        const handle = screens.current.get(scene.key);
-        if (!handle) throw new Error(`[film] сцена «${scene.key}» не смонтирована`);
-        await handle.settle(at.local);
+      const atInfo = sceneAt(timeline, to);
+      const targetScene = SCENES[atInfo.index];
+      if (targetScene.kind !== "screen") {
+        occupancy.current = null; // ушли со сцены-экрана — заход закрыт
+        flushSync(() => setT(to));
+        await document.fonts.ready;
+        await nextFrames(window, 2);
+        return;
       }
-      await document.fonts.ready;
-      await nextFrames(window, 2);
+      const chapterAt = timeline.chapters[atInfo.index].at;
+      const occ = occupancy.current;
+      const needsFreshEntry = !occ || occ.sceneKey !== targetScene.key || atInfo.local < occ.lastLocal - GRID_EPS;
+      const generation = needsFreshEntry ? (occ ? occ.generation + 1 : 0) : occ!.generation;
+      const steps = gridSteps(needsFreshEntry ? null : occ!.lastLocal, atInfo.local);
+      for (let i = 0; i < steps.length; i++) {
+        const screenLocal = steps[i];
+        flushSync(() => {
+          if (i === 0 && needsFreshEntry) setScreenGen(generation);
+          setT(chapterAt + screenLocal);
+        });
+        const handle = screens.current.get(targetScene.key);
+        if (!handle) throw new Error(`[film] сцена «${targetScene.key}» не смонтирована`);
+        await handle.settle(screenLocal);
+        await document.fonts.ready;
+        await nextFrames(window, 2);
+      }
+      occupancy.current = { sceneKey: targetScene.key, generation, lastLocal: atInfo.local };
     };
     window.__capture = {
       duration: timeline.duration,
@@ -132,8 +189,20 @@ export function FilmPage() {
       .catch((e) => console.error(e));
   }, [capture, current, local]);
 
-  const nextScreen = SCENES.slice(index + 1).find((s) => s.kind === "screen");
+  // Предзагрузка следующей сцены-экрана — только вне записи (просмотр): в
+  // записи вход в сцену-экран должен быть настоящим первым монтированием
+  // (см. seekTo выше), а не превращением уже нагретого предзагруженного окна.
+  const nextScreen = capture ? undefined : SCENES.slice(index + 1).find((s) => s.kind === "screen");
   const mounted: FilmScene[] = nextScreen ? [current, nextScreen] : [current];
+
+  // Ключ оверлеев сцены-экрана (список болей, подпись) в записи включает номер
+  // её захода (screenGen) — их пересборка идёт вместе с пересборкой сцены, см.
+  // комментарий у seekTo. На фрагментах ключ не нужен — undefined оставляет
+  // обычную сверку React, как и до этой правки. PainTracker и Caption ниже
+  // добавляют к нему свой префикс («tracker-»/«caption-») — с одним и тем же
+  // значением React иначе ругается на повтор ключа у соседних элементов.
+  const screenOverlayKey =
+    capture && current.kind === "screen" ? `${current.key}#${screenGen}` : undefined;
 
   return (
     <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: FILM.stage }}>
@@ -153,31 +222,7 @@ export function FilmPage() {
         {mounted.map((scene) => {
           const isCurrent = scene === current;
           if (scene.kind === "screen") {
-            // Прокрутка живого экрана — тот же класс кадровой недетерминированности,
-            // что у первого акта (FilesBefore): Chrome иначе растрирует текст
-            // прокрученной таблицы, если этот <iframe> уже стоял на другом scrollLeft
-            // раньше — даже когда итоговый scrollLeft/DOM совпадают побайтово
-            // (проверено: сама прокрутка, её сброс-и-повтор, перезагрузка документа
-            // через location.reload() и любые правки CSS-слоя окна не помогали;
-            // помогает только новый узел <iframe> — таким же способом, каким
-            // FilesBefore лечится пересборкой на каждый t). Пересборка целиком на
-            // каждый t в записи стоила бы дорого при 60 к/с; пересобирать нужно
-            // только момент, который эта сцена уже показывала обновлением на месте
-            // (иначе он отрисуется иначе, чем в первый раз) — первый показ любого t
-            // всегда свежий уже по естественному монтированию сцены.
-            const hasScroll = scene.screen.cues.some((c) => c.kind === "scroll");
-            let key = scene.key;
-            if (capture && isCurrent && hasScroll) {
-              const seen = seenScrollLocals.current;
-              if (seen.key !== scene.key) {
-                seenScrollLocals.current = { key: scene.key, locals: new Set([local]), gen: 0 };
-              } else if (seen.locals.has(local)) {
-                seenScrollLocals.current = { key: scene.key, locals: new Set([local]), gen: seen.gen + 1 };
-              } else {
-                seen.locals.add(local);
-              }
-              key = `${scene.key}-${seenScrollLocals.current.gen}`;
-            }
+            const key = capture && isCurrent ? `${scene.key}#${screenGen}` : scene.key;
             return (
               <ScreenScene
                 key={key}
@@ -212,11 +257,19 @@ export function FilmPage() {
           );
         })}
         <PainTracker
+          key={screenOverlayKey && `tracker-${screenOverlayKey}`}
           strikes={painStrikes(timeline.chapters, SOLVES, t)}
           opacity={trackerOpacity(timeline.chapters, TRACKER_KEYS, t)}
           lang={lang}
         />
-        {current.caption && <Caption text={current.caption[lang]} t={local} duration={current.duration} />}
+        {current.caption && (
+          <Caption
+            key={screenOverlayKey && `caption-${screenOverlayKey}`}
+            text={current.caption[lang]}
+            t={local}
+            duration={current.duration}
+          />
+        )}
       </div>
     </div>
   );

@@ -257,14 +257,32 @@ test.describe('фильм: сцены-экраны', () => {
     const b = await shotAt(page, fc.at + 3);
     expect(same(a, b)).toBe(true);
     await expect(page.frameLocator('iframe[title="fullcal"]').getByText(/Показано: 1 промо/)).toBeVisible();
-    const frame = page.frames().find((f) => f.url().includes('/full-calendar?'))!;
-    expect(frame.url()).toContain('promo=PR-2026-003');
+    // Сцена-экран с прокруткой перематывается назад пересборкой окна (канонический
+    // повтор пути записи, FilmPage.tsx) — берём текущий <iframe> заново на каждое
+    // обращение, а не один раз: после seek(page, fc.at + 0.5) ниже прежний узел уже
+    // отсоединён.
+    const currentFrame = () => page.frames().find((f) => f.url().includes('/full-calendar?'))!;
+    expect(currentFrame().url()).toContain('promo=PR-2026-003');
     const maxScroll = () =>
-      frame.evaluate(() =>
+      currentFrame().evaluate(() =>
         Math.max(...[...document.querySelectorAll('div.overflow-x-auto')].map((el) => el.scrollLeft)),
       );
     expect(await maxScroll()).toBeGreaterThan(0);
-    await seek(page, fc.at + 0.5); // до начала прокрутки — таблица в начале
+    await seek(page, fc.at + 0.5); // до начала прокрутки — сцена началась заново
     expect(await maxScroll()).toBe(0);
+  });
+
+  test('fullcal: прыжок воспроизводит путь настоящей покадровой записи', async ({ page }) => {
+    await openFilm(page);
+    const fc = await at(page, 'fullcal');
+    let a: Buffer | undefined;
+    for (let i = 0; i <= 180; i++) {
+      await seek(page, fc.at + i / 60); // как запись: такт за тактом от начала сцены
+      if (i === 180) a = await page.screenshot();
+    }
+    await seek(page, fc.at + 3.8);
+    await seek(page, fc.at + 1.5);
+    const b = await shotAt(page, fc.at + 3); // прыжок назад-вперёд к тому же моменту
+    expect(same(a!, b)).toBe(true);
   });
 });
