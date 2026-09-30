@@ -18,17 +18,42 @@ export interface ClickCue {
   cursor?: boolean;
 }
 
-/** Горизонтальная прокрутка на участке [at, until]; `left` — позиция по прогрессу 0..1. */
+/**
+ * Прокрутка на участке [at, until]: `to` — позиция по прогрессу 0..1, `axis` —
+ * ось (по умолчанию "x", горизонтальная; "y" — вертикальная).
+ */
 export interface ScrollCue {
   kind: "scroll";
   at: number;
   until: number;
   label: string;
   target: TargetFn;
-  left: (p: number, el: Element) => number;
+  axis?: "x" | "y";
+  to: (p: number, el: Element) => number;
 }
 
-export type Cue = ClickCue | ScrollCue;
+/** Прямоугольник в координатах окна — как у getBoundingClientRect. */
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Находит область во вложенном документе; null — области нет. */
+export type AreaFn = (doc: Document) => Rect | null;
+
+/** Жёлтая рамка вокруг области на участке [at, until]; `pad` — отступ рамки, пиксели окна. */
+export interface HighlightCue {
+  kind: "highlight";
+  at: number;
+  until: number;
+  label: string;
+  area: AreaFn;
+  pad?: number;
+}
+
+export type Cue = ClickCue | ScrollCue | HighlightCue;
 
 export interface SettlePlan {
   /** Перемотка назад через клик: экран перезагружается и проигрывается заново. */
@@ -64,7 +89,7 @@ export function planSettle(cues: readonly Cue[], applied: number, t: number): Se
 }
 
 /** Элемент сигнала. Не найден — ошибка с именем сцены и сигнала: кадр был бы неверным. */
-export function resolveTarget(doc: Document, cue: Cue, sceneKey: string): Element {
+export function resolveTarget(doc: Document, cue: ClickCue | ScrollCue, sceneKey: string): Element {
   const el = cue.target(doc);
   if (!el) {
     throw new Error(
@@ -72,6 +97,32 @@ export function resolveTarget(doc: Document, cue: Cue, sceneKey: string): Elemen
     );
   }
   return el;
+}
+
+/** Область рамки. Не найдена — ошибка с именем сцены и рамки: кадр был бы неверным. */
+export function resolveArea(doc: Document, cue: HighlightCue, sceneKey: string): Rect {
+  const rect = cue.area(doc);
+  if (!rect) {
+    throw new Error(
+      `[film] сцена «${sceneKey}»: не найдена область «${cue.label}» (рамка на ${cue.at} с)`,
+    );
+  }
+  return rect;
+}
+
+/** Рамка входит за HIGHLIGHT_IN с (из масштаба 1,06) и гаснет за HIGHLIGHT_OUT с до `until`. */
+export const HIGHLIGHT_IN = 0.25;
+export const HIGHLIGHT_OUT = 0.2;
+
+/** Плавность входа рамки; своя копия easeOutExpo — модуль без импортов. */
+const easeOut = (x: number): number => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
+
+/** Вид рамки в момент t: прозрачность и масштаб. Вне [at, until] — null. */
+export function highlightLook(t: number, cue: HighlightCue): { opacity: number; scale: number } | null {
+  if (t < cue.at || t > cue.until) return null;
+  const enter = easeOut(Math.min(1, (t - cue.at) / HIGHLIGHT_IN));
+  const leave = Math.min(1, Math.max(0, (cue.until - t) / HIGHLIGHT_OUT));
+  return { opacity: enter * leave, scale: 1 + 0.06 * (1 - enter) };
 }
 
 export interface Point {

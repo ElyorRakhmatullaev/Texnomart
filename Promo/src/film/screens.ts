@@ -62,7 +62,7 @@ export const FULLCAL_SCREEN: ScreenSpec = {
       until: 5.4,
       label: "прокрутка таблицы",
       target: tableScroller,
-      left: (p, el) => easeInOutCubic(p) * (el.scrollWidth - el.clientWidth),
+      to: (p, el) => easeInOutCubic(p) * (el.scrollWidth - el.clientWidth),
     },
   ],
   camera: [

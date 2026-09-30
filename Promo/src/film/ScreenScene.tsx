@@ -224,7 +224,8 @@ export const ScreenScene = React.forwardRef<ScreenHandle, ScreenSceneProps>(func
       }
       for (const { cue, p } of plan.scrolls) {
         const el = resolveTarget(doc, cue, scene.key);
-        el.scrollLeft = cue.left(p, el);
+        if (cue.axis === "y") el.scrollTop = cue.to(p, el);
+        else el.scrollLeft = cue.to(p, el);
       }
       measure(Number.POSITIVE_INFINITY);
       applied.current = local;
