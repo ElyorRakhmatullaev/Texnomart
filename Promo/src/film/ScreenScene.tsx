@@ -245,6 +245,10 @@ export const ScreenScene = React.forwardRef<ScreenHandle, ScreenSceneProps>(func
         doc = await ready.current;
       }
       const plan = planSettle(cues, applied.current, local);
+      // Защитная ветка: из FilmPage сюда не попасть. В записи перемотка назад
+      // монтирует сцену заново (канонический повтор — новый заход, свежий
+      // ScreenScene с applied = NaN), в просмотре локальное время сцены только
+      // растёт. Ветка остаётся на случай другого вызывающего settle().
       if (plan.reload) {
         // От корня с film-path, как при первой загрузке: адрес окна уже переставлен
         // на глубокую ссылку, а она на GitHub Pages шла бы через 404.html.
@@ -383,9 +387,9 @@ export const ScreenScene = React.forwardRef<ScreenHandle, ScreenSceneProps>(func
                 width: rect.w + pad * 2,
                 height: rect.h + pad * 2,
                 boxSizing: "border-box",
-                // 3 px на холсте при любом наезде камеры.
+                // 3 px и скругление 10 px на холсте при любом наезде камеры.
                 border: `${3 / pose.zoom}px solid ${FILM.accent}`,
-                borderRadius: 10,
+                borderRadius: 10 / pose.zoom,
                 opacity: look.opacity,
                 transform: `scale(${look.scale})`,
                 pointerEvents: "none",

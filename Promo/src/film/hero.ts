@@ -27,6 +27,9 @@ function pickHero() {
       "[film] герой: в посеве нет акции PR-2026-003, строки L-0015, её менеджера или изменения её цены в отчёте",
     );
   }
+  if (line.campaignId !== campaign.id) {
+    throw new Error(`[film] герой: строка L-0015 принадлежит акции ${line.campaignId}, а не ${campaign.id}`);
+  }
   return {
     campaignId: campaign.id,
     promoNo: formatPromoNo(campaign.id),

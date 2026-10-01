@@ -8,6 +8,9 @@ import { easeOutBack, easeOutExpo, progress } from "../../timeline";
 import type { SceneProps } from "../../types";
 import { BeforeFrame } from "./BeforeFrame";
 
+/** Центр штампа в координатах карточки макета (цифры старой цены — ≈ 350–418 по y). */
+const STAMP_CENTER = { x: 620, y: 480 };
+
 /**
  * Рекламный макет со старой ценой De'Longhi, штамп «Цена устарела», сбоку — цена
  * на кассе. Цены — из отчёта 26-3 (HERO): второй акт показывает, как это
@@ -74,20 +77,26 @@ export function DeptsIllustration({ t }: { t: number }) {
           <span
             style={{
               position: "absolute",
-              left: 480,
-              top: 330,
+              // Центр штампа — под ценой, а не на ней: верхний правый угол
+              // (выше всего при наклоне −10°) остаётся ниже цифр старой цены,
+              // нижний левый — внутри карточки, и к 1,9 с сцены обе цены —
+              // макета и кассы — читаются рядом.
+              left: STAMP_CENTER.x,
+              top: STAMP_CENTER.y,
               padding: "10px 22px",
               border: `5px solid ${INK.red}`,
               borderRadius: 10,
-              fontSize: 40,
+              fontSize: 34,
               fontWeight: 800,
               letterSpacing: "0.04em",
               textTransform: "uppercase",
               whiteSpace: "nowrap",
               color: INK.red,
-              background: "rgba(255, 255, 255, 0.85)",
+              // Почти прозрачная заливка: при ударе штамп въезжает крупным
+              // (scale 1,8) и не должен гасить старую цену под собой.
+              background: "rgba(255, 255, 255, 0.2)",
               opacity: Math.min(1, stamp),
-              transform: `rotate(-12deg) scale(${1.8 - 0.8 * stamp})`,
+              transform: `translate(-50%, -50%) rotate(-10deg) scale(${1.8 - 0.8 * stamp})`,
             }}
           >
             Цена устарела

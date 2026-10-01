@@ -239,7 +239,7 @@ test.describe('фильм: сценарий', () => {
     await openFilm(page);
     await seek(page, (await at(page, 'before-chat')).at + 2.5);
     await expect(page.getByText('Кто согласовал? Никто не знает.')).toBeVisible();
-    await expect(page.getByText('А кто согласовал? В макете 16%')).toBeVisible();
+    await expect(page.getByText('А кто согласовал? В макете другая цена')).toBeVisible();
     await seek(page, (await at(page, 'before-depts')).at + 2.5);
     await expect(page.getByText('Маркетинг узнаёт последним.')).toBeVisible();
     await expect(page.getByText('4 990 000 сум')).toBeVisible();
@@ -315,7 +315,10 @@ test.describe('фильм: сценарий', () => {
 });
 
 test.describe('фильм: сцены-экраны', () => {
-  test.setTimeout(120_000);
+  // Каждый прямой переход в сцену-экран повторяет её с начала тактами 1/60
+  // (канонический повтор, FilmPage.tsx) — под нагрузкой полного набора на это
+  // уходят десятки секунд на тест.
+  test.setTimeout(180_000);
 
   test('plan: живой экран, кадр детерминирован, хранилища вкладки чистые', async ({ page }) => {
     await openFilm(page);
@@ -454,7 +457,7 @@ test.describe('фильм: сцены-экраны', () => {
     await expect(frame.getByRole('dialog')).toHaveCount(0);
     await expect(frame.getByText('Набор согласован коммерческим директором.')).toBeVisible();
     await expect(frame.getByRole('row', { name: /De'Longhi/ })).toContainText('Согласовано ранее');
-    await seek(page, ap.at + 2.5); // до решения (4,6 с): окно перезагружается, клики до 2,5 с — заново
+    await seek(page, ap.at + 2.5); // до решения (4,6 с): сцена монтируется заново (канонический повтор), клики до 2,5 с — заново
     await expect(frame.getByRole('dialog')).toHaveCount(1);
     // Пока открыта модальная панель, Radix прячет остальную страницу из дерева
     // доступности (проверено ariaSnapshot: фон отсутствует целиком) — обычная
@@ -481,7 +484,7 @@ test.describe('фильм: сцены-экраны', () => {
     await expect(frame.locator('tbody')).toContainText('+8 кал. дн.');
     await expect(frame.locator('tbody')).not.toContainText('раб. дн.');
     await expect(page.locator('[data-film="highlight"]')).toHaveCount(1);
-    await seek(page, dl.at + 1); // до фильтра — окно перезагружается
+    await seek(page, dl.at + 1); // до фильтра — сцена монтируется заново (канонический повтор)
     await expect(frame.getByRole('combobox').filter({ hasText: 'Все ответственные' })).toBeVisible();
     const b = await shotAt(page, dl.at + 4.5);
     expectSameFrame(await frameDiff(page, a, b));
@@ -504,8 +507,57 @@ test.describe('фильм: сцены-экраны', () => {
         Math.max(...[...document.querySelectorAll('div.overflow-x-auto')].map((el) => el.scrollLeft)),
       ),
     ).toBeGreaterThan(0);
-    await expect(page.locator('[data-film="highlight"]')).toHaveCount(1); // новая цена
-    await seek(page, rp.at + 1); // до переключателя (1,6 с) — окно перезагружается
+    const highlight = page.locator('[data-film="highlight"]');
+    await expect(highlight).toHaveCount(1); // новая цена
+    // Рамка — над изменённой ячейкой «Новая цена», а не над случайным дублем
+    // «4 440 000 сум» в колонке рассрочки той же строки; следующая колонка
+    // «Скидка, %» — за правым краем видимой части тела таблицы.
+    const cells = await inner.evaluate(() => {
+      const norm = (s: string | null) => (s ?? '').replace(/\s+/g, ' ').trim();
+      const rect = (el: Element) => {
+        const b = el.getBoundingClientRect();
+        return { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+      };
+      const body = [...document.querySelectorAll<HTMLElement>('div.overflow-x-auto')]
+        .filter((el) => el.scrollWidth > el.clientWidth && el.clientHeight > 50)
+        .sort((a, b) => b.clientHeight - a.clientHeight)[0];
+      const help = [...body.querySelectorAll('.cursor-help')].find(
+        (e) => e.getClientRects().length > 0 && norm(e.textContent) === '4 440 000 сум',
+      )!;
+      const cell = help.parentElement!;
+      const discount = cell.nextElementSibling!;
+      return {
+        pane: rect(body),
+        help: rect(help),
+        cell: rect(cell),
+        discount: { ...rect(discount), text: norm(discount.textContent) },
+        duplicates: [...cell.parentElement!.children]
+          .filter((c) => c !== cell && norm(c.textContent) === '4 440 000 сум')
+          .map(rect),
+      };
+    });
+    // Координаты окна → холст: окно сцены в этой позе только масштабировано и сдвинуто.
+    const win = (await page.locator('iframe[title="report"]').boundingBox())!;
+    const k = win.width / 1440;
+    const mapX = (x: number) => win.x + x * k;
+    const mapY = (y: number) => win.y + y * k;
+    const box = (await highlight.boundingBox())!;
+    const centerX = box.x + box.width / 2;
+    expect(box.x).toBeLessThanOrEqual(mapX(cells.help.left));
+    expect(box.x + box.width).toBeGreaterThanOrEqual(mapX(cells.help.right));
+    expect(box.y).toBeLessThanOrEqual(mapY(cells.help.top));
+    expect(box.y + box.height).toBeGreaterThanOrEqual(mapY(cells.help.bottom));
+    expect(centerX).toBeGreaterThan(mapX(cells.cell.left));
+    expect(centerX).toBeLessThan(mapX(cells.cell.right));
+    // Контроль: дубль в строке есть — и рамка не над ним.
+    expect(cells.duplicates).toHaveLength(1);
+    expect(centerX < mapX(cells.duplicates[0].left) || centerX > mapX(cells.duplicates[0].right)).toBe(true);
+    // Цена — целиком в видимой части, «Скидка, %» (16%) — за её правым краем.
+    expect(cells.cell.left).toBeGreaterThanOrEqual(cells.pane.left);
+    expect(cells.cell.right).toBeLessThanOrEqual(cells.pane.right + 0.5);
+    expect(cells.discount.text).toBe('16%');
+    expect(cells.discount.left).toBeGreaterThanOrEqual(cells.pane.right - 0.5);
+    await seek(page, rp.at + 1); // до переключателя (1,6 с) — сцена монтируется заново (канонический повтор)
     await expect(toggle).toHaveAttribute('aria-checked', 'false');
     const b = await shotAt(page, rp.at + 4.5);
     expectSameFrame(await frameDiff(page, a, b));
